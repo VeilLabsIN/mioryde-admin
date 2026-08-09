@@ -1,7 +1,12 @@
 export const THEMES = ["midnight", "daylight", "system"] as const;
 export type Theme = (typeof THEMES)[number];
 
-export const DEFAULT_THEME: Theme = "midnight";
+/**
+ * `system` by default: a new operator gets whatever their OS is already set to,
+ * and their accent colour where the browser exposes it. Someone who prefers a
+ * fixed look picks midnight or daylight, and that choice is remembered.
+ */
+export const DEFAULT_THEME: Theme = "system";
 export const THEME_STORAGE_KEY = "mioryde-admin-theme";
 
 export function isTheme(value: unknown): value is Theme {
