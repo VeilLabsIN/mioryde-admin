@@ -1,0 +1,309 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Mioryde Admin — design tokens
+
+   Three themes, resolved to the same variable names so every component styles
+   itself once:
+
+     midnight  pitch black (#000) — the default, matches mioryde.com
+     daylight  light
+     system    follows the OS light/dark preference, and picks up the OS accent
+               colour where the browser exposes it (see the note on
+               `AccentColor` below)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/*
+ * Fonts must be `@theme inline`, not `@theme`.
+ *
+ * next/font defines --font-poppins / --font-jetbrains on <body>, not :root.
+ * Plain `@theme` resolves its values at :root, where those variables do not
+ * exist yet — so --font-sans resolves to nothing and every element silently
+ * falls back to the system stack. `inline` emits the var() reference into the
+ * utility instead, resolving it on the element that actually uses it.
+ */
+@theme inline {
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "Cascadia Mono", monospace;
+}
+
+@theme {
+  /* Motion. One scale, so nothing in the app invents its own timing. */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+}
+
+/* ── midnight (default) ─────────────────────────────────────────────────── */
+:root,
+:root[data-theme="midnight"] {
+  --bg: #000000;
+  --surface: #0b0b0b;
+  --raised: #141414;
+  --panel: #1a1a1a;
+  --line: #232323;
+  --edge: #313131;
+  --edge-strong: #444444;
+
+  --fg: #ffffff;
+  --fg-soft: #e6e6e6;
+  --fg-mid: #b9b9b9;
+  --fg-muted: #8a8a8a;
+  --fg-faint: #5f5f5f;
+
+  --accent: #ffc107;
+  --accent-deep: #ff9800;
+  --on-accent: #000000;
+
+  --ok: #7bd88f;
+  --warn: #ffb020;
+  --danger: #ff6b6b;
+
+  --shadow-panel: 0 1px 0 0 rgb(255 255 255 / 0.03) inset;
+  color-scheme: dark;
+}
+
+/* ── daylight ───────────────────────────────────────────────────────────── */
+:root[data-theme="daylight"] {
+  --bg: #f4f4f5;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --panel: #fafafa;
+  --line: #e4e4e7;
+  --edge: #d4d4d8;
+  --edge-strong: #a1a1aa;
+
+  --fg: #09090b;
+  --fg-soft: #18181b;
+  --fg-mid: #3f3f46;
+  --fg-muted: #71717a;
+  --fg-faint: #a1a1aa;
+
+  --accent: #b45309;
+  --accent-deep: #92400e;
+  --on-accent: #ffffff;
+
+  --ok: #15803d;
+  --warn: #b45309;
+  --danger: #b91c1c;
+
+  --shadow-panel: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  color-scheme: light;
+}
+
+/* ── system ─────────────────────────────────────────────────────────────────
+   Follows the OS light/dark preference. The accent is overridden at runtime
+   by ThemeProvider when the browser exposes the OS accent colour.
+
+   `AccentColor` is a CSS system colour keyword (Color Level 4). Firefox and
+   Safari 16.4+ resolve it to the real OS accent; Chromium does not, and there
+   is no JS API for it either. So this is best-effort by design: where the
+   browser cooperates the panel adopts the user's Windows accent, and where it
+   does not it falls back to Mioryde amber. Both look deliberate.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root[data-theme="system"] {
+  color-scheme: light dark;
+
+  --bg: light-dark(#f4f4f5, #000000);
+  --surface: light-dark(#ffffff, #0b0b0b);
+  --raised: light-dark(#ffffff, #141414);
+  --panel: light-dark(#fafafa, #1a1a1a);
+  --line: light-dark(#e4e4e7, #232323);
+  --edge: light-dark(#d4d4d8, #313131);
+  --edge-strong: light-dark(#a1a1aa, #444444);
+
+  --fg: light-dark(#09090b, #ffffff);
+  --fg-soft: light-dark(#18181b, #e6e6e6);
+  --fg-mid: light-dark(#3f3f46, #b9b9b9);
+  --fg-muted: light-dark(#71717a, #8a8a8a);
+  --fg-faint: light-dark(#a1a1aa, #5f5f5f);
+
+  /* Overridden by ThemeProvider with the real OS accent where available. */
+  --accent: light-dark(#b45309, #ffc107);
+  --accent-deep: light-dark(#92400e, #ff9800);
+  --on-accent: light-dark(#ffffff, #000000);
+
+  --ok: light-dark(#15803d, #7bd88f);
+  --warn: light-dark(#b45309, #ffb020);
+  --danger: light-dark(#b91c1c, #ff6b6b);
+
+  --shadow-panel: light-dark(0 1px 2px 0 rgb(0 0 0 / 0.04),
+                             0 1px 0 0 rgb(255 255 255 / 0.03) inset);
+}
+
+/* Expose the tokens to Tailwind so `bg-surface`, `text-fg-muted` etc. work. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-panel: var(--panel);
+  --color-line: var(--line);
+  --color-edge: var(--edge);
+  --color-edge-strong: var(--edge-strong);
+
+  --color-fg: var(--fg);
+  --color-fg-soft: var(--fg-soft);
+  --color-fg-mid: var(--fg-mid);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+
+  --color-accent: var(--accent);
+  --color-accent-deep: var(--accent-deep);
+  --color-on-accent: var(--on-accent);
+
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+}
+
+/* ── Brand shapes ───────────────────────────────────────────────────────────
+   Carried over from mioryde.com so the panel is recognisably the same product.
+   `clip-path` is composited, so these cost nothing to animate.
+   ─────────────────────────────────────────────────────────────────────────── */
+@utility chamfer {
+  clip-path: polygon(
+    10px 0, 100% 0, 100% calc(100% - 10px),
+    calc(100% - 10px) 100%, 0 100%, 0 10px
+  );
+}
+@utility chamfer-sm {
+  clip-path: polygon(
+    7px 0, 100% 0, 100% calc(100% - 7px),
+    calc(100% - 7px) 100%, 0 100%, 0 7px
+  );
+}
+@utility corner-cut {
+  clip-path: polygon(
+    0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%
+  );
+}
+@utility hazard {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--accent) 0 8px,
+    color-mix(in oklab, var(--bg) 88%, transparent) 8px 16px
+  );
+}
+@utility grad-accent {
+  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    /*
+     * References --font-poppins directly, not var(--font-sans).
+     * `@theme inline` does not emit a --font-sans custom property — it inlines
+     * the value into utilities like `font-sans`. So var(--font-sans) resolves
+     * to nothing here and the page silently falls back to the system stack,
+     * which is exactly what happened before this comment existed.
+     */
+    font-family: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  /* Native form controls adopt the theme accent — this one *is* supported
+     everywhere, unlike the AccentColor keyword above. */
+  input,
+  select,
+  textarea {
+    accent-color: var(--accent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+/* ── Motion ─────────────────────────────────────────────────────────────────
+   Everything animated below is `transform` or `opacity` only. Both are handled
+   by the compositor, so they never trigger layout or paint and stay at 60fps
+   on the low-end laptops an ops team actually uses.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+@keyframes rise {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes slide-in {
+  from { opacity: 0; transform: translate3d(-10px, 0, 0); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes sweep {
+  from { transform: translate3d(-100%, 0, 0); }
+  to   { transform: translate3d(200%, 0, 0); }
+}
+@keyframes pulse-ring {
+  0%   { transform: scale(0.9); opacity: 0.7; }
+  70%  { transform: scale(1.6); opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.animate-rise {
+  animation: rise var(--dur-slow) var(--ease-out-quint) both;
+}
+.animate-slide-in {
+  animation: slide-in var(--dur-base) var(--ease-out-quint) both;
+}
+
+/* Staggered list entrance. Capped at 8 so a 500-row table does not schedule
+   500 delayed animations — beyond that everything appears together. */
+.stagger > * { animation: rise var(--dur-slow) var(--ease-out-quint) both; }
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 30ms; }
+.stagger > *:nth-child(3) { animation-delay: 60ms; }
+.stagger > *:nth-child(4) { animation-delay: 90ms; }
+.stagger > *:nth-child(5) { animation-delay: 120ms; }
+.stagger > *:nth-child(6) { animation-delay: 150ms; }
+.stagger > *:nth-child(7) { animation-delay: 180ms; }
+.stagger > *:nth-child(n + 8) { animation-delay: 210ms; }
+
+/* Shimmer for loading rows. */
+.shimmer { position: relative; overflow: hidden; }
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 50%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--fg) 6%, transparent),
+    transparent
+  );
+  animation: sweep 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Scrollbars, themed. Chromium only; Firefox uses scrollbar-color. */
+* {
+  scrollbar-color: var(--edge) transparent;
+  scrollbar-width: thin;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--edge);
+  border: 3px solid var(--bg);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--edge-strong); }

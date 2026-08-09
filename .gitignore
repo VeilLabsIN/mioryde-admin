@@ -1,0 +1,22 @@
+# Secrets
+.env
+.env.local
+.env*.local
+!.env.example
+
+# Dependencies / build
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log

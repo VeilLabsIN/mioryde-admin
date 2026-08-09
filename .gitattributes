@@ -1,0 +1,43 @@
+# Normalize text to LF in the repository, check out native.
+# Without this, a mixed Windows/macOS team produces whole-file diffs.
+* text=auto
+
+# Shell scripts must stay LF or they break on Linux hosts
+gradlew         text eol=lf
+*.sh            text eol=lf
+
+# Windows scripts must stay CRLF
+gradlew.bat     text eol=crlf
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+
+# Explicit text types
+*.java          text
+*.php           text
+*.xml           text
+*.json          text
+*.sql           text
+*.gradle        text
+*.properties    text
+*.pro           text
+*.md            text
+
+# Binary — never touch, never diff
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.webp          binary
+*.ico           binary
+*.ttf           binary
+*.otf           binary
+*.woff          binary
+*.woff2         binary
+*.jar           binary
+*.apk           binary
+*.aab           binary
+*.keystore      binary
+*.jks           binary
+*.phar          binary
+
+
