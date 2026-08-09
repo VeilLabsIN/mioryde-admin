@@ -243,7 +243,50 @@ export const api = {
   rateCards: () => request<{ results: RateCard[] }>("/admin/rate-cards"),
   zones: () => request<{ results: Zone[] }>("/admin/zones"),
   auditLog: () => request<{ results: AuditEntry[] }>("/admin/audit-log"),
+
+  payouts: (params: { page?: number; status?: string } = {}) => {
+    const query = new URLSearchParams();
+    if (params.page) query.set("page", String(params.page));
+    if (params.status) query.set("status", params.status);
+    const qs = query.toString();
+    return request<{ results: Payout[]; pending: PayoutTotals }>(
+      `/admin/payouts${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  settlePayout: (
+    id: string,
+    action: "start" | "paid" | "reject",
+    options: { reference?: string; note?: string } = {},
+  ) =>
+    request<{ status: string }>(`/admin/payouts/${id}/settle`, {
+      method: "POST",
+      body: JSON.stringify({ action, ...options }),
+    }),
 };
+
+export interface Payout {
+  id: string;
+  rider: {
+    id: string;
+    name: string;
+    phone: string;
+    /** Lifetime earned, for context on whether a request looks reasonable. */
+    lifetimeEarned: { minor: number; currency: string };
+  };
+  amount: { minor: number; currency: string };
+  status: "requested" | "processing" | "paid" | "rejected";
+  /** Bank or UPI reference, once the transfer has been made. */
+  reference: string | null;
+  note: string | null;
+  requestedAt: string;
+  settledAt: string | null;
+}
+
+export interface PayoutTotals {
+  total: { minor: number; currency: string };
+  count: number;
+}
 
 export interface AdminRider {
   id: string;

@@ -19,6 +19,7 @@ const NAV: NavItem[] = [
   { href: "/orders", label: "Deliveries", mark: "DL" },
   { href: "/customers", label: "Customers", mark: "CU" },
   { href: "/riders", label: "Partners", mark: "PT" },
+  { href: "/payouts", label: "Payouts", mark: "PO" },
   { href: "/pricing", label: "Rate cards", mark: "RC" },
 ];
 
