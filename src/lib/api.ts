@@ -222,7 +222,74 @@ export const api = {
       `/admin/customers${qs ? `?${qs}` : ""}`,
     );
   },
+
+  riders: (params: { page?: number; status?: string; search?: string } = {}) => {
+    const query = new URLSearchParams();
+    if (params.page) query.set("page", String(params.page));
+    if (params.status) query.set("status", params.status);
+    if (params.search) query.set("search", params.search);
+    const qs = query.toString();
+    return request<{ results: AdminRider[] }>(
+      `/admin/riders${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  reviewRider: (id: string, action: string, note?: string) =>
+    request<{ status: string }>(`/admin/riders/${id}/review`, {
+      method: "POST",
+      body: JSON.stringify({ action, ...(note ? { note } : {}) }),
+    }),
+
+  rateCards: () => request<{ results: RateCard[] }>("/admin/rate-cards"),
+  zones: () => request<{ results: Zone[] }>("/admin/zones"),
+  auditLog: () => request<{ results: AuditEntry[] }>("/admin/audit-log"),
 };
+
+export interface AdminRider {
+  id: string;
+  name: string;
+  phone: string;
+  status: string;
+  isOnline: boolean;
+  commissionPct: number;
+  rating: number | null;
+  joinedAt: string;
+  completed: number;
+  cancelled: number;
+  vehicles: string;
+  zones: string;
+}
+
+export interface RateCard {
+  id: string;
+  zone: { id: string; name: string; city: string };
+  vehicle: { id: string; name: string; code: string };
+  baseFare: { minor: number; currency: string };
+  perKm: { minor: number; currency: string };
+  perMinute: { minor: number; currency: string };
+  minFare: { minor: number; currency: string };
+  includedKm: number;
+  gstPercent: number;
+  effectiveFrom: string;
+}
+
+export interface Zone {
+  id: string;
+  name: string;
+  city: string;
+  isActive: boolean;
+  riders: number;
+  orders: number;
+}
+
+export interface AuditEntry {
+  id: string;
+  action: string;
+  subjectType: string | null;
+  subjectId: string | null;
+  admin: string;
+  at: string;
+}
 
 export interface AdminOrder {
   id: string;
