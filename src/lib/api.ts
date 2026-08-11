@@ -242,7 +242,23 @@ export const api = {
 
   rateCards: () => request<{ results: RateCard[] }>("/admin/rate-cards"),
   zones: () => request<{ results: Zone[] }>("/admin/zones"),
-  auditLog: () => request<{ results: AuditEntry[] }>("/admin/audit-log"),
+  auditLog: (
+    params: { page?: number; action?: string; subjectId?: string } = {},
+  ) => {
+    const query = new URLSearchParams();
+    if (params.page) query.set("page", String(params.page));
+    if (params.action) query.set("action", params.action);
+    if (params.subjectId) query.set("subjectId", params.subjectId);
+    const qs = query.toString();
+    return request<{ results: AuditEntry[] }>(
+      `/admin/audit-log${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  /** Distinct actions present in the log, for the filter control. */
+  auditActions: () => request<{ results: string[] }>("/admin/audit-log/actions"),
+
+  riderById: (id: string) => request<RiderDetail>(`/admin/riders/${id}`),
 
   payouts: (params: { page?: number; status?: string } = {}) => {
     const query = new URLSearchParams();
@@ -323,6 +339,23 @@ export interface Zone {
   isActive: boolean;
   riders: number;
   orders: number;
+}
+
+export interface RiderDetail {
+  id: string;
+  name: string;
+  phone: string;
+  status: string;
+  isOnline: boolean;
+  commissionPct: number;
+  rating: number | null;
+  joinedAt: string;
+  /** Whether bank details exist. Never the details — they are encrypted at
+   * rest and an operator has no reason to read a partner's account number. */
+  hasBankDetails: boolean;
+  completed: number;
+  cancelled: number;
+  earnings: { minor: number; currency: string };
 }
 
 export interface AuditEntry {

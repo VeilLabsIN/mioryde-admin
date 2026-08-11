@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -145,7 +146,13 @@ export default function RidersPage() {
               >
                 <div className="min-w-[180px] flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-medium">{rider.name}</span>
+                    <Link
+                      href={`/riders/${rider.id}`}
+                      className="text-[13px] font-medium underline-offset-2
+                                 hover:text-accent hover:underline"
+                    >
+                      {rider.name}
+                    </Link>
                     {rider.isOnline && (
                       <span
                         title="Online"

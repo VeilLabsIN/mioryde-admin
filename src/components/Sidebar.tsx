@@ -21,6 +21,7 @@ const NAV: NavItem[] = [
   { href: "/riders", label: "Partners", mark: "PT" },
   { href: "/payouts", label: "Payouts", mark: "PO" },
   { href: "/pricing", label: "Rate cards", mark: "RC" },
+  { href: "/audit", label: "Audit log", mark: "AU" },
 ];
 
 /**
