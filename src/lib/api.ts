@@ -279,6 +279,20 @@ export const api = {
 
   riderById: (id: string) => request<RiderDetail>(`/admin/riders/${id}`),
 
+  /**
+   * Trades a masked number for the real one, and is recorded doing it.
+   *
+   * The server writes an audit row naming the operator, the time, the address
+   * and the reason. Nothing about that is enforced here — the panel cannot
+   * choose not to be logged, which is the property that makes the log worth
+   * having.
+   */
+  revealRiderPhone: (id: string, reason?: string) =>
+    request<{ phone: string }>(`/admin/riders/${id}/reveal-phone`, {
+      method: "POST",
+      body: JSON.stringify(reason ? { reason } : {}),
+    }),
+
   payouts: (params: { page?: number; status?: string } = {}) => {
     const query = new URLSearchParams();
     if (params.page) query.set("page", String(params.page));

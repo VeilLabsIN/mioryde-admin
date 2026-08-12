@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { RevealPhone } from "@/components/RevealPhone";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -161,9 +162,11 @@ export default function RidersPage() {
                       />
                     )}
                   </div>
-                  <span className="font-mono text-[11px] text-fg-faint">
-                    {rider.phone}
-                  </span>
+                  <RevealPhone
+                    riderId={rider.id}
+                    masked={rider.phone}
+                    className="mt-0.5"
+                  />
                 </div>
 
                 <div className="min-w-[140px] text-[12px] text-fg-mid">

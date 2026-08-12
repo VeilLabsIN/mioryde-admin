@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { RevealPhone } from "@/components/RevealPhone";
 import {
   Card,
   EmptyState,
@@ -116,7 +117,9 @@ export default function RiderDetailPage() {
               </span>
             )}
           </div>
-          <p className="mt-1 font-mono text-sm text-fg-mid">{rider.phone}</p>
+          <div className="mt-1">
+            <RevealPhone riderId={rider.id} masked={rider.phone} />
+          </div>
         </div>
         <GhostButton onClick={load}>Refresh</GhostButton>
       </header>
