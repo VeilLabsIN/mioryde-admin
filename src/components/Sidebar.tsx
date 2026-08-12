@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLayoutEffect, useRef, useState } from "react";
+import { type AdminRole, type Capability, canAny } from "@/lib/permissions";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 
 interface NavItem {
@@ -12,16 +13,26 @@ interface NavItem {
    *  for something that renders identically as text. */
   mark: string;
   badge?: number;
+  /**
+   * Capabilities that make this destination useful. Shown when the role holds
+   * any of them.
+   *
+   * Filtering navigation is a courtesy, not a control: the API enforces the
+   * same matrix per route, so a hidden link typed directly leads to a page that
+   * loads nothing. Hiding it means an operator is not repeatedly offered doors
+   * that will not open.
+   */
+  needs: readonly Capability[];
 }
 
 const NAV: NavItem[] = [
-  { href: "/", label: "Overview", mark: "OV" },
-  { href: "/orders", label: "Deliveries", mark: "DL" },
-  { href: "/customers", label: "Customers", mark: "CU" },
-  { href: "/riders", label: "Partners", mark: "PT" },
-  { href: "/payouts", label: "Payouts", mark: "PO" },
-  { href: "/pricing", label: "Rate cards", mark: "RC" },
-  { href: "/audit", label: "Audit log", mark: "AU" },
+  { href: "/", label: "Overview", mark: "OV", needs: ["metrics.view"] },
+  { href: "/orders", label: "Deliveries", mark: "DL", needs: ["orders.view"] },
+  { href: "/customers", label: "Customers", mark: "CU", needs: ["customers.view"] },
+  { href: "/riders", label: "Partners", mark: "PT", needs: ["riders.view"] },
+  { href: "/payouts", label: "Payouts", mark: "PO", needs: ["payouts.view"] },
+  { href: "/pricing", label: "Rate cards", mark: "RC", needs: ["pricing.view"] },
+  { href: "/audit", label: "Audit log", mark: "AU", needs: ["audit.view"] },
 ];
 
 /**
@@ -36,8 +47,12 @@ const NAV: NavItem[] = [
  * 2. **Collapse is width-only on a grid track**, and the labels fade rather
  *    than unmount. Unmounting them would reflow the whole rail mid-animation.
  */
-export function Sidebar() {
+export function Sidebar({ role }: { role: AdminRole | undefined }) {
   const pathname = usePathname();
+
+  // Recomputed per render rather than memoised: the list is seven items and
+  // the role changes only on sign-in.
+  const items = NAV.filter((item) => canAny(role, item.needs));
   const [collapsed, setCollapsed] = useState(false);
 
   const listRef = useRef<HTMLUListElement>(null);
@@ -45,7 +60,7 @@ export function Sidebar() {
     null,
   );
 
-  const activeIndex = NAV.findIndex(
+  const activeIndex = items.findIndex(
     (item) =>
       item.href === "/"
         ? pathname === "/"
@@ -115,7 +130,7 @@ export function Sidebar() {
         )}
 
         <ul ref={listRef} className="relative z-10 flex flex-col gap-0.5">
-          {NAV.map((item, i) => {
+          {items.map((item, i) => {
             const active = i === activeIndex;
             return (
               <li key={item.href}>
