@@ -27,31 +27,12 @@ function scriptFetch(
   return { calls };
 }
 
-/**
- * A real in-memory Storage.
- *
- * Installed rather than mocked: the store helper wraps every access in
- * try/catch and degrades to session-only when storage throws, so a mock that
- * silently swallowed calls would make the token tests pass while proving
- * nothing.
- */
-function installStorage(): void {
-  const data = new Map<string, string>();
-  vi.stubGlobal("localStorage", {
-    getItem: (k: string) => data.get(k) ?? null,
-    setItem: (k: string, v: string) => void data.set(k, v),
-    removeItem: (k: string) => void data.delete(k),
-    clear: () => data.clear(),
-    key: (i: number) => [...data.keys()][i] ?? null,
-    get length() {
-      return data.size;
-    },
-  });
-}
-
 describe("admin API client", () => {
   beforeEach(() => {
-    installStorage();
+    // The access token is module-level state, so it survives between tests
+    // unless cleared. A leaked token from an earlier case would make a later
+    // "signed out" assertion pass for the wrong reason.
+    auth.clear();
   });
 
   afterEach(() => {
@@ -60,7 +41,7 @@ describe("admin API client", () => {
 
   describe("token handling", () => {
     it("sends the access token as a bearer header", async () => {
-      auth.save("access-1", "refresh-1");
+      auth.set("access-1");
       const { calls } = scriptFetch([{ status: 200, body: { results: [] } }]);
 
       await api.zones();
@@ -83,7 +64,7 @@ describe("admin API client", () => {
 
   describe("refreshing an expired session", () => {
     it("refreshes on a 401 and retries the original request once", async () => {
-      auth.save("stale", "refresh-1");
+      auth.set("stale");
       const { calls } = scriptFetch([
         { status: 401 },
         {
@@ -107,7 +88,7 @@ describe("admin API client", () => {
     });
 
     it("does not retry a second time, so a persistent 401 cannot loop", async () => {
-      auth.save("stale", "refresh-1");
+      auth.set("stale");
       const { calls } = scriptFetch([
         { status: 401 },
         {
@@ -127,7 +108,7 @@ describe("admin API client", () => {
       // succeeds and the rest present an already-spent token — which the API
       // treats as theft and answers by revoking every session. The operator is
       // signed out for the crime of loading a page.
-      auth.save("stale", "refresh-1");
+      auth.set("stale");
       const { calls } = scriptFetch([
         { status: 401 },
         { status: 401 },
@@ -150,17 +131,17 @@ describe("admin API client", () => {
     });
 
     it("clears tokens when the refresh itself is rejected", async () => {
-      auth.save("stale", "expired-refresh");
+      auth.set("stale");
       scriptFetch([{ status: 401 }, { status: 401 }]);
 
       await expect(api.zones()).rejects.toBeInstanceOf(ApiError);
-      expect(auth.isSignedIn()).toBe(false);
+      expect(auth.hasAccessToken()).toBe(false);
     });
 
     it("keeps tokens when the refresh fails on the network", async () => {
       // A flaky connection is not an authentication failure. Clearing here
       // would sign an operator out mid-payout for a dropped packet.
-      auth.save("stale", "refresh-1");
+      auth.set("stale");
       let call = 0;
       vi.stubGlobal("fetch", () => {
         call += 1;
@@ -175,20 +156,23 @@ describe("admin API client", () => {
       });
 
       await expect(api.zones()).rejects.toBeInstanceOf(ApiError);
-      expect(auth.refreshToken()).toBe("refresh-1");
+      expect(auth.hasAccessToken()).toBe(true);
     });
 
-    it("does not attempt a refresh with no refresh token", async () => {
-      const { calls } = scriptFetch([{ status: 401 }]);
+    it("attempts a refresh even holding no token, because it cannot know", async () => {
+      // The refresh token is an HttpOnly cookie this code cannot read, so
+      // "do I have a session?" is unanswerable locally. Trying is the only way
+      // to find out, and a failed attempt costs one cheap 401.
+      const { calls } = scriptFetch([{ status: 401 }, { status: 401 }]);
 
       await expect(api.zones()).rejects.toBeInstanceOf(ApiError);
-      expect(calls).toHaveLength(1);
+      expect(calls.some((c) => c.url.includes("/admin/auth/refresh"))).toBe(true);
     });
   });
 
   describe("error surfacing", () => {
     it("uses the server's message so the operator sees the real reason", async () => {
-      auth.save("a", "r");
+      auth.set("a");
       scriptFetch([
         { status: 409, body: { message: "That payout is already settled." } },
       ]);
@@ -200,7 +184,7 @@ describe("admin API client", () => {
     });
 
     it("joins the array of messages class-validator returns", async () => {
-      auth.save("a", "r");
+      auth.set("a");
       scriptFetch([
         {
           status: 400,
@@ -214,7 +198,7 @@ describe("admin API client", () => {
     });
 
     it("falls back to the status when the body is not JSON", async () => {
-      auth.save("a", "r");
+      auth.set("a");
       vi.stubGlobal("fetch", () =>
         Promise.resolve({
           ok: false,
@@ -228,6 +212,89 @@ describe("admin API client", () => {
         status: 502,
         message: "Request failed (502)",
       });
+    });
+  });
+  describe("the credential never becomes durable", () => {
+    it("writes nothing to localStorage on sign-in", async () => {
+      // The regression this guards: an admin token in localStorage is readable
+      // by any script on the page and outlives the tab. Moving it into memory
+      // is the entire point of the cookie change, and a well-meaning "remember
+      // me" would quietly undo it.
+      const written: string[] = [];
+      vi.stubGlobal("localStorage", {
+        getItem: () => null,
+        setItem: (k: string) => void written.push(k),
+        removeItem: () => {},
+        clear: () => {},
+        key: () => null,
+        length: 0,
+      });
+
+      scriptFetch([
+        {
+          status: 200,
+          body: {
+            accessToken: "access-1",
+            admin: { id: "1", email: "a@b.c", name: "A", role: "owner" },
+          },
+        },
+      ]);
+
+      await api.login("a@b.c", "password");
+
+      expect(written).toEqual([]);
+      expect(auth.accessToken()).toBe("access-1");
+    });
+
+    it("sends credentials on sign-in so the cookie is stored", async () => {
+      const { calls } = scriptFetch([
+        {
+          status: 200,
+          body: {
+            accessToken: "access-1",
+            admin: { id: "1", email: "a@b.c", name: "A", role: "owner" },
+          },
+        },
+      ]);
+
+      await api.login("a@b.c", "password");
+
+      // Without this the browser discards the Set-Cookie and the session dies
+      // at the first reload — a bug that looks like "it logs me out randomly".
+      expect(calls[0]?.init?.credentials).toBe("include");
+    });
+  });
+
+  describe("restoreSession", () => {
+    it("returns the identity when the cookie still works", async () => {
+      const identity = { id: "1", email: "a@b.c", name: "A", role: "owner" };
+      scriptFetch([
+        { status: 200, body: { accessToken: "access-2" } },
+        { status: 200, body: identity },
+      ]);
+
+      await expect(api.restoreSession()).resolves.toEqual(identity);
+      expect(auth.accessToken()).toBe("access-2");
+    });
+
+    it("returns null rather than throwing when there is no session", async () => {
+      // A first visit is not an error. Throwing here would surface a red
+      // banner on the login screen of someone who has simply never signed in.
+      scriptFetch([{ status: 401 }]);
+      await expect(api.restoreSession()).resolves.toBeNull();
+    });
+
+    it("clears the token when the identity call is rejected", async () => {
+      // Refresh succeeded but /me did not — a deactivated account, or a role
+      // narrowed to nothing. Keeping the token would leave the panel half
+      // signed-in.
+      scriptFetch([
+        { status: 200, body: { accessToken: "access-2" } },
+        { status: 403 },
+      ]);
+
+      await expect(api.restoreSession()).resolves.toBeNull();
+      expect(auth.hasAccessToken()).toBe(false);
     });
   });
 });

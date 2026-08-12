@@ -13,8 +13,19 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   // Already signed in — skip the form.
+  //
+  // Asks the server rather than checking storage: the refresh cookie is
+  // HttpOnly and unreadable here, so the only way to know whether a session
+  // survives is to try to restore it. A failure is the ordinary first-visit
+  // case and leaves the form on screen.
   useEffect(() => {
-    if (auth.isSignedIn()) router.replace("/");
+    let cancelled = false;
+    void api.restoreSession().then((identity) => {
+      if (!cancelled && identity) router.replace("/");
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   async function submit(event: React.FormEvent) {

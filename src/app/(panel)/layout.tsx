@@ -29,17 +29,19 @@ export default function PanelLayout({
   useEffect(() => {
     let cancelled = false;
 
-    if (!auth.isSignedIn()) {
-      router.replace("/login");
-      return;
-    }
-
-    // Verified against the server rather than trusted from storage: a token can
-    // be revoked, expired, or belong to a deactivated account.
+    // The access token lives in memory, so a page load starts with nothing.
+    // restoreSession trades the HttpOnly refresh cookie for a new one and then
+    // verifies the identity against the server — a token can be revoked,
+    // expired, or belong to a deactivated account, so nothing here is trusted
+    // from the client side.
     api
-      .me()
+      .restoreSession()
       .then((identity) => {
         if (cancelled) return;
+        if (!identity) {
+          router.replace("/login");
+          return;
+        }
         setAdmin(identity);
         setChecked(true);
       })

@@ -1,9 +1,6 @@
 const BASE_URL =
   process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3000/v1";
 
-const ACCESS_KEY = "mioryde-admin-access";
-const REFRESH_KEY = "mioryde-admin-refresh";
-
 export interface AdminIdentity {
   id: string;
   email: string;
@@ -22,51 +19,41 @@ export class ApiError extends Error {
 }
 
 /**
- * Token storage.
+ * Session state.
  *
- * `localStorage` rather than a cookie, deliberately: this panel is a pure
- * client that talks to a separate API origin, so cookies would need
- * `SameSite=None` plus CORS credentials — a broader surface than a bearer
- * token an XSS could steal anyway. The real mitigations are the API's short
- * access-token lifetime and refresh-reuse detection.
+ * The access token lives **in memory only** and the refresh token is an
+ * HttpOnly cookie the browser holds and this code can never read. Both halves
+ * of that matter:
  *
- * Wrapped because `localStorage` throws outright in some privacy modes rather
- * than returning null.
+ *   - Nothing durable is in `localStorage`, so a script injected into the page
+ *     cannot walk away with a credential that outlives the tab. It can still
+ *     act as the operator while the tab is open — that is XSS, and no storage
+ *     choice fixes it — but the sixty-day refresh token is out of reach.
+ *   - The access token stays a bearer *header*. A cross-origin page cannot set
+ *     one, so every route except refresh is immune to CSRF by construction.
+ *
+ * The cost is that a page reload loses the access token. `restoreSession`
+ * below trades the cookie for a new one at startup, which is why signing in is
+ * not lost on refresh.
  */
-const store = {
-  get(key: string): string | null {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
-  set(key: string, value: string): void {
-    try {
-      localStorage.setItem(key, value);
-    } catch {
-      /* session-only */
-    }
-  },
-  clear(): void {
-    try {
-      localStorage.removeItem(ACCESS_KEY);
-      localStorage.removeItem(REFRESH_KEY);
-    } catch {
-      /* nothing to clear */
-    }
-  },
-};
+let accessToken: string | null = null;
 
 export const auth = {
-  accessToken: () => store.get(ACCESS_KEY),
-  refreshToken: () => store.get(REFRESH_KEY),
-  save(access: string, refresh: string) {
-    store.set(ACCESS_KEY, access);
-    store.set(REFRESH_KEY, refresh);
+  accessToken: () => accessToken,
+  set(token: string) {
+    accessToken = token;
   },
-  clear: store.clear,
-  isSignedIn: () => store.get(ACCESS_KEY) !== null,
+  clear() {
+    accessToken = null;
+  },
+  /**
+   * Whether this tab currently holds a usable token.
+   *
+   * Deliberately *not* a claim about whether the operator has a session: the
+   * cookie may still be valid after a reload while this is false. Callers that
+   * need the real answer must await `restoreSession`.
+   */
+  hasAccessToken: () => accessToken !== null,
 };
 
 /**
@@ -81,32 +68,33 @@ export const auth = {
 let refreshInFlight: Promise<boolean> | null = null;
 
 async function refreshSession(): Promise<boolean> {
-  const token = auth.refreshToken();
-  if (!token) return false;
-
   try {
     const res = await fetch(`${BASE_URL}/admin/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken: token }),
+      // Sends the HttpOnly cookie. Without this the browser omits it and every
+      // refresh fails with a 401 that looks like an expired session.
+      credentials: "include",
     });
+
     if (!res.ok) {
+      // 401 here means the cookie is missing, spent or revoked — a real
+      // sign-out. Anything else is the server having a bad day, and dropping
+      // the in-memory token for that would sign an operator out mid-task.
+      if (res.status === 401) auth.clear();
+      return false;
+    }
+
+    const body = (await res.json()) as { accessToken?: string };
+    if (!body.accessToken) {
       auth.clear();
       return false;
     }
-    const body = (await res.json()) as {
-      accessToken?: string;
-      refreshToken?: string;
-    };
-    if (!body.accessToken || !body.refreshToken) {
-      auth.clear();
-      return false;
-    }
-    auth.save(body.accessToken, body.refreshToken);
+
+    auth.set(body.accessToken);
     return true;
   } catch {
-    // Network failure, not an auth failure — keep the tokens so a flaky
-    // connection does not sign the user out.
+    // Network failure, not an auth failure. Keep whatever token we have so a
+    // dropped packet does not end the session.
     return false;
   }
 }
@@ -134,7 +122,10 @@ async function request<T>(
     },
   });
 
-  if (res.status === 401 && retry && auth.refreshToken()) {
+  if (res.status === 401 && retry) {
+    // No longer gated on holding a refresh token: it is an HttpOnly cookie now
+    // and this code cannot see whether one exists. Attempting the refresh is
+    // the only way to find out, and a failed attempt is a cheap 401.
     if (await refreshOnce()) return request<T>(path, init, false);
   }
 
@@ -158,29 +149,57 @@ export const api = {
   async login(email: string, password: string) {
     const body = await request<{
       accessToken: string;
-      refreshToken: string;
       admin: AdminIdentity;
     }>(
       "/admin/auth/login",
-      { method: "POST", body: JSON.stringify({ email, password }) },
+      {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+        // The response sets the refresh cookie; without this the browser
+        // discards it and the session dies at the first reload.
+        credentials: "include",
+      },
       false, // a failed login must not attempt a refresh
     );
-    auth.save(body.accessToken, body.refreshToken);
+    auth.set(body.accessToken);
     return body.admin;
   },
 
   async logout() {
-    const token = auth.refreshToken();
+    // Cleared first so the UI cannot keep using the token while the request is
+    // in flight, and so a failed request still signs the operator out locally.
     auth.clear();
-    if (!token) return;
     try {
       await fetch(`${BASE_URL}/admin/auth/logout`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: token }),
+        // Carries the cookie, which is the only thing identifying the session
+        // to revoke, and lets the server clear it.
+        credentials: "include",
       });
     } catch {
       // Local sign-out already happened; the server session expires on its own.
+    }
+  },
+
+  /**
+   * Rebuilds the session after a page load.
+   *
+   * The access token is in memory, so a reload starts with nothing. The refresh
+   * cookie survives, and trading it for a fresh access token is what makes a
+   * reload feel like staying signed in rather than being logged out.
+   *
+   * Returns the identity on success and null when there is no usable session —
+   * the caller routes to login rather than treating it as an error, because
+   * "not signed in" is the ordinary case on a first visit.
+   */
+  async restoreSession(): Promise<AdminIdentity | null> {
+    if (!auth.hasAccessToken() && !(await refreshOnce())) return null;
+
+    try {
+      return await request<AdminIdentity>("/admin/auth/me");
+    } catch {
+      auth.clear();
+      return null;
     }
   },
 
