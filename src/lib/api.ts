@@ -357,6 +357,17 @@ export const api = {
       body: JSON.stringify({ decision, ...options }),
     }),
 
+  // ── Bank verification ──────────────────────────────────────────────────────
+
+  pendingBankAccounts: (page = 0) =>
+    request<{ results: PendingBankAccount[] }>(`/admin/bank/pending?page=${page}`),
+
+  verifyBankAccount: (riderId: string, approve: boolean, note?: string) =>
+    request<{ verified: boolean }>(`/admin/bank/riders/${riderId}/verify`, {
+      method: "POST",
+      body: JSON.stringify({ approve, ...(note ? { note } : {}) }),
+    }),
+
   pendingVehicles: (page = 0) =>
     request<{ results: PendingVehicle[] }>(`/admin/vehicles/pending?page=${page}`),
 
@@ -392,6 +403,18 @@ export interface CountersignItem {
   riderName: string;
   firstReviewerName: string | null;
   firstReviewedAt: string;
+}
+
+export interface PendingBankAccount {
+  riderId: string;
+  riderName: string;
+  holderName: string | null;
+  ifsc: string | null;
+  /** Masked. The full account number never leaves the server. */
+  accountMasked: string;
+  updatedAt: string | null;
+  /** How many times this partner has changed banks. High counts warrant a look. */
+  changeCount: number;
 }
 
 export interface PendingVehicle {

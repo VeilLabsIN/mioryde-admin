@@ -95,6 +95,8 @@ const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   // Verification is the same job as reviewing a partner, so it rides on the
   // same capability rather than inventing a role nobody has been granted.
   ["/kyc", "riders.review"],
+  // Deciding where money is sent belongs with the people who settle it.
+  ["/banking", "payouts.settle"],
   ["/payouts", "payouts.view"],
   ["/pricing", "pricing.view"],
   ["/audit", "audit.view"],
