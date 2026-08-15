@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # --max-warnings is deliberately not set to 0 here.
+      #
+      # The panel carries a known set of set-state-in-effect warnings whose fix
+      # is a data-fetching refactor, not a patch. Failing on warnings today
+      # would mean either a permanently red pipeline or a rushed refactor, and
+      # both are worse than the warnings. Errors still fail the build.
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npx vitest run
+
+      # Next type-checks pages and resolves every route during a build, so this
+      # catches a page that imports something that does not exist — which no
+      # unit test in this repo would touch.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3000/v1
