@@ -92,6 +92,9 @@ const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   ["/orders", "orders.view"],
   ["/customers", "customers.view"],
   ["/riders", "riders.view"],
+  // Verification is the same job as reviewing a partner, so it rides on the
+  // same capability rather than inventing a role nobody has been granted.
+  ["/kyc", "riders.review"],
   ["/payouts", "payouts.view"],
   ["/pricing", "pricing.view"],
   ["/audit", "audit.view"],

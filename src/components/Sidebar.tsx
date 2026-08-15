@@ -30,6 +30,7 @@ const NAV: NavItem[] = [
   { href: "/orders", label: "Deliveries", mark: "DL", needs: ["orders.view"] },
   { href: "/customers", label: "Customers", mark: "CU", needs: ["customers.view"] },
   { href: "/riders", label: "Partners", mark: "PT", needs: ["riders.view"] },
+  { href: "/kyc", label: "Verification", mark: "KY", needs: ["riders.review"] },
   { href: "/payouts", label: "Payouts", mark: "PO", needs: ["payouts.view"] },
   { href: "/pricing", label: "Rate cards", mark: "RC", needs: ["pricing.view"] },
   { href: "/audit", label: "Audit log", mark: "AU", needs: ["audit.view"] },

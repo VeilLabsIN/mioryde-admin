@@ -312,7 +312,101 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ action, ...options }),
     }),
+
+  // ── KYC ────────────────────────────────────────────────────────────────────
+
+  kycQueue: (page = 0) =>
+    request<{ results: KycQueueItem[] }>(`/admin/kyc/queue?page=${page}`),
+
+  /** Documents a first reviewer approved, waiting on a second (§4.10). */
+  kycCountersignQueue: (page = 0) =>
+    request<{ results: CountersignItem[] }>(
+      `/admin/kyc/countersign?page=${page}`,
+    ),
+
+  /**
+   * A short-lived link to look at one document.
+   *
+   * POST for a read because it records an access. A GET could be prefetched by
+   * the browser, manufacturing audit entries for documents nobody opened —
+   * poisoning the record the endpoint exists to create.
+   */
+  viewKycDocument: (id: string) =>
+    request<{ url: string; expiresInSeconds: number }>(
+      `/admin/kyc/documents/${id}/view`,
+      { method: "POST" },
+    ),
+
+  reviewKycDocument: (
+    id: string,
+    decision: "approve" | "reject",
+    options: { rejectCode?: string; note?: string } = {},
+  ) =>
+    request<{ status: string; awaitingSecondSignature?: boolean }>(
+      `/admin/kyc/documents/${id}/review`,
+      { method: "POST", body: JSON.stringify({ decision, ...options }) },
+    ),
+
+  countersignKycDocument: (
+    id: string,
+    decision: "approve" | "reject",
+    options: { rejectCode?: string; note?: string } = {},
+  ) =>
+    request<{ status: string }>(`/admin/kyc/documents/${id}/countersign`, {
+      method: "POST",
+      body: JSON.stringify({ decision, ...options }),
+    }),
+
+  pendingVehicles: (page = 0) =>
+    request<{ results: PendingVehicle[] }>(`/admin/vehicles/pending?page=${page}`),
+
+  reviewVehicle: (
+    id: string,
+    riderId: string,
+    decision: "approve" | "reject",
+    note?: string,
+  ) =>
+    request<{ status: string }>(`/admin/vehicles/${id}/review`, {
+      method: "POST",
+      body: JSON.stringify({ riderId, decision, ...(note ? { note } : {}) }),
+    }),
 };
+
+export interface KycQueueItem {
+  id: string;
+  kind: string;
+  label: string;
+  status: string;
+  riderId: string;
+  riderName: string;
+  riderStage: string;
+  uploadedAt: string;
+  expiresAt: string | null;
+}
+
+export interface CountersignItem {
+  id: string;
+  kind: string;
+  label: string;
+  riderId: string;
+  riderName: string;
+  firstReviewerName: string | null;
+  firstReviewedAt: string;
+}
+
+export interface PendingVehicle {
+  vehicleId: string;
+  registrationNumber: string;
+  vehicleType: string;
+  make: string | null;
+  model: string | null;
+  isThirdParty: boolean;
+  ownerName: string | null;
+  riderId: string;
+  riderName: string;
+  approvedDocuments: number;
+  addedAt: string;
+}
 
 export interface Payout {
   id: string;
