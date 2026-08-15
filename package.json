@@ -2,9 +2,9 @@
   "name": "mioryde-admin",
   "version": "0.1.0",
   "private": true,
-  "description": "Mioryde admin panel — Next.js, talks to mioryde-api",
+  "description": "Mioryde admin panel \u2014 Next.js, talks to mioryde-api",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3100",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
