@@ -33,6 +33,7 @@ const NAV: NavItem[] = [
   { href: "/kyc", label: "Verification", mark: "KY", needs: ["riders.review"] },
   { href: "/payouts", label: "Payouts", mark: "PO", needs: ["payouts.view"] },
   { href: "/banking", label: "Bank checks", mark: "BK", needs: ["payouts.settle"] },
+  { href: "/collections", label: "Collections", mark: "CO", needs: ["payouts.settle"] },
   { href: "/pricing", label: "Rate cards", mark: "RC", needs: ["pricing.view"] },
   { href: "/audit", label: "Audit log", mark: "AU", needs: ["audit.view"] },
 ];

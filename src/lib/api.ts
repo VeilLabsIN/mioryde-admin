@@ -357,6 +357,23 @@ export const api = {
       body: JSON.stringify({ decision, ...options }),
     }),
 
+  // ── Cash collections ───────────────────────────────────────────────────────
+
+  outstandingCash: (page = 0) =>
+    request<{ results: OutstandingCash[] }>(`/admin/cash/outstanding?page=${page}`),
+
+  recordCashDeposit: (
+    riderId: string,
+    body: { amount: number; method: string; reference?: string; note?: string },
+  ) =>
+    request<{
+      credited: { minor: number; currency: string };
+      stillHeld: { minor: number; currency: string };
+    }>(`/admin/cash/riders/${riderId}/deposits`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   // ── Bank verification ──────────────────────────────────────────────────────
 
   pendingBankAccounts: (page = 0) =>
@@ -403,6 +420,17 @@ export interface CountersignItem {
   riderName: string;
   firstReviewerName: string | null;
   firstReviewedAt: string;
+}
+
+export interface OutstandingCash {
+  riderId: string;
+  riderName: string;
+  riderStatus: string;
+  /** Company money this partner is currently holding. */
+  held: { minor: number; currency: string };
+  /** At or over the ceiling — they cannot go online until they deposit. */
+  overLimit: boolean;
+  lastDepositAt: string | null;
 }
 
 export interface PendingBankAccount {

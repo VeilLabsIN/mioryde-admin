@@ -97,6 +97,8 @@ const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   ["/kyc", "riders.review"],
   // Deciding where money is sent belongs with the people who settle it.
   ["/banking", "payouts.settle"],
+  // Clearing what a partner owes the business is a settlement decision.
+  ["/collections", "payouts.settle"],
   ["/payouts", "payouts.view"],
   ["/pricing", "pricing.view"],
   ["/audit", "audit.view"],
