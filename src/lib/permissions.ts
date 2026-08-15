@@ -90,6 +90,11 @@ export function canAny(
  */
 const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   ["/orders", "orders.view"],
+  // Same right as reading deliveries, but listed *after* /orders on purpose:
+  // this list decides where a role lands after signing in, and the live board
+  // starts empty. Support arriving at "Waiting for activity" instead of their
+  // work queue is a worse first screen than the one they came for.
+  ["/live", "orders.view"],
   ["/customers", "customers.view"],
   ["/riders", "riders.view"],
   // Verification is the same job as reviewing a partner, so it rides on the

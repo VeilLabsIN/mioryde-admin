@@ -27,6 +27,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: "/", label: "Overview", mark: "OV", needs: ["metrics.view"] },
+  { href: "/live", label: "Live", mark: "LV", needs: ["orders.view"] },
   { href: "/orders", label: "Deliveries", mark: "DL", needs: ["orders.view"] },
   { href: "/customers", label: "Customers", mark: "CU", needs: ["customers.view"] },
   { href: "/riders", label: "Partners", mark: "PT", needs: ["riders.view"] },
