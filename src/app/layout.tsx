@@ -19,7 +19,12 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mioryde Operations",
+  // A template so each segment supplies only its own name and every tab still
+  // says which product it belongs to — "Payouts · Mioryde", not "Payouts".
+  title: {
+    default: "Mioryde Operations",
+    template: "%s · Mioryde",
+  },
   description: "Internal operations panel for Mioryde.",
   // An internal tool has no business being indexed.
   robots: { index: false, follow: false },

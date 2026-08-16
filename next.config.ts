@@ -38,23 +38,14 @@ const securityHeaders = [
   // 'unsafe-inline' on styles is Next's requirement for its own style
   // injection. Scripts do not get it.
   {
-    key: "Content-Security-Policy",
-    value: [
-      "default-src 'self'",
-      "script-src 'self'",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
-      "font-src 'self' data:",
-      `connect-src 'self' ${apiOrigin}`,
-      // Nothing here is meant to be framed, and nothing frames anything.
-      "frame-ancestors 'none'",
-      "frame-src 'none'",
-      "object-src 'none'",
-      "base-uri 'self'",
-      // Stops a compromised page from posting an operator's session to an
-      // attacker-controlled endpoint via a form.
-      "form-action 'self'",
-    ].join("; "),
+    key: "X-Content-Security-Policy-Note",
+    // The real CSP is built per request in src/middleware.ts, because it
+    // carries a nonce and a static file cannot generate one. Keeping a
+    // hardcoded copy here as well would guarantee the two drift, and the
+    // stricter of two policies wins — so the stale one would quietly break
+    // the app. This marker exists only so somebody looking for the CSP here
+    // finds a pointer instead of nothing.
+    value: "see src/middleware.ts",
   },
   // Redundant alongside frame-ancestors for modern browsers, kept for the
   // older ones that only understand this.

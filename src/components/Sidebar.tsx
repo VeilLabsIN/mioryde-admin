@@ -25,20 +25,57 @@ interface NavItem {
   needs: readonly Capability[];
 }
 
-const NAV: NavItem[] = [
-  { href: "/", label: "Overview", mark: "OV", needs: ["metrics.view"] },
-  { href: "/live", label: "Live", mark: "LV", needs: ["orders.view"] },
-  { href: "/analytics", label: "Analytics", mark: "AN", needs: ["metrics.view"] },
-  { href: "/orders", label: "Deliveries", mark: "DL", needs: ["orders.view"] },
-  { href: "/customers", label: "Customers", mark: "CU", needs: ["customers.view"] },
-  { href: "/riders", label: "Partners", mark: "PT", needs: ["riders.view"] },
-  { href: "/kyc", label: "Verification", mark: "KY", needs: ["riders.review"] },
-  { href: "/payouts", label: "Payouts", mark: "PO", needs: ["payouts.view"] },
-  { href: "/banking", label: "Bank checks", mark: "BK", needs: ["payouts.settle"] },
-  { href: "/collections", label: "Collections", mark: "CO", needs: ["payouts.settle"] },
-  { href: "/pricing", label: "Rate cards", mark: "RC", needs: ["pricing.view"] },
-  { href: "/agreement", label: "Agreement", mark: "AG", needs: ["pricing.edit"] },
-  { href: "/audit", label: "Audit log", mark: "AU", needs: ["audit.view"] },
+/**
+ * Navigation, grouped by what an operator is trying to do.
+ *
+ * A flat list was right at seven items and stopped being right at thirteen:
+ * "Bank checks" and "Rate cards" sat adjacent while having nothing to do with
+ * each other, so finding anything meant reading every label. The groups are
+ * the questions people arrive with — what is happening now, who are these
+ * people, where is the money, what did we agree.
+ *
+ * A group with no visible items is dropped entirely, so a support user never
+ * sees an empty "Money" heading advertising pages they cannot open.
+ */
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Operations",
+    items: [
+      { href: "/", label: "Overview", mark: "OV", needs: ["metrics.view"] },
+      { href: "/live", label: "Live", mark: "LV", needs: ["orders.view"] },
+      { href: "/orders", label: "Deliveries", mark: "DL", needs: ["orders.view"] },
+    ],
+  },
+  {
+    label: "People",
+    items: [
+      { href: "/customers", label: "Customers", mark: "CU", needs: ["customers.view"] },
+      { href: "/riders", label: "Partners", mark: "PT", needs: ["riders.view"] },
+      { href: "/kyc", label: "Verification", mark: "KY", needs: ["riders.review"] },
+    ],
+  },
+  {
+    label: "Money",
+    items: [
+      { href: "/payouts", label: "Payouts", mark: "PO", needs: ["payouts.view"] },
+      { href: "/banking", label: "Bank checks", mark: "BK", needs: ["payouts.settle"] },
+      { href: "/collections", label: "Collections", mark: "CO", needs: ["payouts.settle"] },
+      { href: "/pricing", label: "Rate cards", mark: "RC", needs: ["pricing.view"] },
+    ],
+  },
+  {
+    label: "Business",
+    items: [
+      { href: "/analytics", label: "Analytics", mark: "AN", needs: ["metrics.view"] },
+    ],
+  },
+  {
+    label: "Governance",
+    items: [
+      { href: "/agreement", label: "Agreement", mark: "AG", needs: ["pricing.edit"] },
+      { href: "/audit", label: "Audit log", mark: "AU", needs: ["audit.view"] },
+    ],
+  },
 ];
 
 /**
@@ -56,41 +93,56 @@ const NAV: NavItem[] = [
 export function Sidebar({ role }: { role: AdminRole | undefined }) {
   const pathname = usePathname();
 
-  // Recomputed per render rather than memoised: the list is seven items and
+  // Recomputed per render rather than memoised: the list is a dozen items and
   // the role changes only on sign-in.
-  const items = NAV.filter((item) => canAny(role, item.needs));
+  //
+  // Empty groups are dropped so a support user is not shown a "Money" heading
+  // with nothing under it.
+  const groups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => canAny(role, item.needs)),
+  })).filter((group) => group.items.length > 0);
+
   const [collapsed, setCollapsed] = useState(false);
 
-  const listRef = useRef<HTMLUListElement>(null);
+  const navRef = useRef<HTMLElement>(null);
   const [indicator, setIndicator] = useState<{ y: number; h: number } | null>(
     null,
   );
 
-  const activeIndex = items.findIndex(
-    (item) =>
-      item.href === "/"
-        ? pathname === "/"
-        : pathname === item.href || pathname.startsWith(`${item.href}/`),
-  );
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+
+  const activeHref =
+    groups.flatMap((group) => group.items).find((item) => isActive(item.href))
+      ?.href ?? null;
 
   /**
    * Measures the active item and positions the indicator.
    *
+   * Finds the element by attribute rather than by index into a flat list.
+   * Indexing broke the moment the nav was grouped — the items now live in
+   * several lists, and nothing about an index survives that. Querying for the
+   * active element is indifferent to how the markup is arranged.
+   *
    * `useLayoutEffect` rather than `useEffect`: this runs before paint, so the
-   * indicator never appears at the wrong position for a frame on first render
-   * or after navigation.
+   * indicator never appears at the wrong position for a frame.
    */
   useLayoutEffect(() => {
-    if (activeIndex < 0) {
+    const nav = navRef.current;
+    if (!nav || !activeHref) {
       setIndicator(null);
       return;
     }
-    const list = listRef.current;
-    const item = list?.children[activeIndex] as HTMLElement | undefined;
-    if (!list || !item) return;
-
+    const item = nav.querySelector<HTMLElement>('[data-nav-active="true"]');
+    if (!item) {
+      setIndicator(null);
+      return;
+    }
+    // offsetTop is relative to the nearest positioned ancestor, which is the
+    // nav itself — so this stays correct with the items nested inside groups.
     setIndicator({ y: item.offsetTop, h: item.offsetHeight });
-  }, [activeIndex, collapsed]);
+  }, [activeHref, collapsed, groups.length]);
 
   return (
     <aside
@@ -119,7 +171,7 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
       </div>
 
       {/* Navigation */}
-      <nav className="relative flex-1 overflow-y-auto overflow-x-hidden p-2">
+      <nav ref={navRef} className="relative flex-1 overflow-y-auto overflow-x-hidden p-2">
         {/* The single sliding indicator. `translate3d` keeps it on the
             compositor; animating `top` instead would trigger layout each frame. */}
         {indicator && (
@@ -135,11 +187,24 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
           />
         )}
 
-        <ul ref={listRef} className="relative z-10 flex flex-col gap-0.5">
-          {items.map((item, i) => {
-            const active = i === activeIndex;
+        <div className="relative z-10 flex flex-col gap-4">
+          {groups.map((group) => (
+            <div key={group.label}>
+              {/* Hidden when collapsed: a 72px rail has no room for a word,
+                  and a truncated heading is worse than none. */}
+              <p
+                className="px-3 pb-1 font-mono text-[9px] uppercase tracking-[1.5px] text-fg-faint
+                           transition-opacity duration-200
+                           group-data-[collapsed=true]/rail:opacity-0"
+                aria-hidden={collapsed}
+              >
+                {group.label}
+              </p>
+              <ul className="flex flex-col gap-0.5">
+          {group.items.map((item) => {
+            const active = isActive(item.href);
             return (
-              <li key={item.href}>
+              <li key={item.href} data-nav-active={active ? "true" : undefined}>
                 <Link
                   href={item.href}
                   aria-current={active ? "page" : undefined}
@@ -194,7 +259,10 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
               </li>
             );
           })}
-        </ul>
+              </ul>
+            </div>
+          ))}
+        </div>
       </nav>
 
       <div className="border-t border-line p-2">
