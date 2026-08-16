@@ -8,6 +8,7 @@ import {
   GhostButton,
   SectionLabel,
   SkeletonRows,
+  PageHeader,
 } from "@/components/ui";
 import { ApiError, type PendingBankAccount, api } from "@/lib/api";
 
@@ -61,13 +62,10 @@ export default function BankingPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Bank verification</h1>
-        <p className="text-fg-faint mt-1 text-sm">
-          Partners are paid only into accounts checked here. Anything left
-          unchecked is skipped by the nightly payout run.
-        </p>
-      </div>
+      <PageHeader
+        title="Bank verification"
+        subtitle="Partners are paid only into accounts checked here. Anything left unchecked is skipped by the nightly payout run."
+      />
 
       {error ? (
         <Card>

@@ -9,6 +9,7 @@ import {
   GhostButton,
   Input,
   SkeletonRows,
+  PageHeader,
 } from "@/components/ui";
 import { type AdminRider, ApiError, api } from "@/lib/api";
 
@@ -88,10 +89,10 @@ export default function RidersPage() {
     <div className="mx-auto max-w-[1200px]">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="mb-1 font-sans text-2xl font-semibold">Partners</h1>
-          <p className="text-[13px] text-fg-muted">
-            {riders === null ? "Loading…" : `${riders.length} shown`}
-          </p>
+          <PageHeader
+            title="Partners"
+            subtitle={riders === null ? "Loading…" : `${riders.length} shown`}
+          />
         </div>
         <div className="w-full max-w-[280px]">
           <Input

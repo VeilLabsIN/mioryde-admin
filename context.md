@@ -160,6 +160,8 @@ rewrite.
 
 ## 7. Conventions worth matching
 
+- **One `PageHeader` for every page.** Twelve pages had grown three heading
+  treatments; they now share one component. Add a page, use it.
 - **Comments explain *why*, never *what*.** The codebase is dense with reasoning
   about failure modes. Match that; a comment restating the code is noise.
 - **Feature slices** in Flutter: `lib/features/<name>/{domain,data,presentation}`.

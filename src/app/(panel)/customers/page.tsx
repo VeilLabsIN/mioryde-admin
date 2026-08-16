@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Card, EmptyState, Input, SkeletonRows } from "@/components/ui";
+import {
+  Card,
+  EmptyState,
+  Input,
+  PageHeader,
+  SkeletonRows,
+} from "@/components/ui";
 import { type AdminCustomer, api } from "@/lib/api";
 
 export default function CustomersPage() {
@@ -38,10 +44,10 @@ export default function CustomersPage() {
     <div className="mx-auto max-w-[1200px]">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="mb-1 font-sans text-2xl font-semibold">Customers</h1>
-          <p className="text-[13px] text-fg-muted">
-            {customers === null ? "Loading…" : `${customers.length} shown`}
-          </p>
+          <PageHeader
+            title="Customers"
+            subtitle={customers === null ? "Loading…" : `${customers.length} shown`}
+          />
         </div>
         <div className="w-full max-w-[280px]">
           <Input

@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BarList, Stat, TrendChart } from "@/components/charts";
-import { Card, GhostButton, SectionLabel, SkeletonRows } from "@/components/ui";
+import {
+  Card,
+  GhostButton,
+  PageHeader,
+  SectionLabel,
+  SkeletonRows,
+} from "@/components/ui";
 import { ApiError, type Analytics, api, formatMoney } from "@/lib/api";
 
 const RANGES = [
@@ -63,27 +69,21 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Analytics</h1>
-          <p className="text-fg-faint mt-1 text-sm">
-            Every figure is against the previous period of the same length.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {RANGES.map((range) => (
-            <GhostButton
-              key={range.days}
-              onClick={() => setDays(range.days)}
-              className={
-                days === range.days ? "border-accent text-fg" : "text-fg-faint"
-              }
-            >
-              {range.label}
-            </GhostButton>
-          ))}
-        </div>
-      </div>
+      <PageHeader
+        title="Analytics"
+        subtitle="Every figure is against the previous period of the same length."
+        actions={RANGES.map((range) => (
+          <GhostButton
+            key={range.days}
+            onClick={() => setDays(range.days)}
+            className={
+              days === range.days ? "border-accent text-fg" : "text-fg-faint"
+            }
+          >
+            {range.label}
+          </GhostButton>
+        ))}
+      />
 
       {error ? (
         <Card>

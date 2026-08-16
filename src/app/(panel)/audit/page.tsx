@@ -7,6 +7,7 @@ import {
   GhostButton,
   Input,
   SkeletonRows,
+  PageHeader,
 } from "@/components/ui";
 import { ApiError, type AuditEntry, api } from "@/lib/api";
 
@@ -95,12 +96,10 @@ export default function AuditPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-xl font-medium">Audit log</h1>
-        <p className="mt-1 text-sm text-fg-mid">
-          Every administrative action, newest first. Records are written in the
-          same transaction as the change they describe, so this cannot disagree
-          with what actually happened.
-        </p>
+        <PageHeader
+          title="Audit log"
+          subtitle="Every administrative action, newest first. Records are written in the same transaction as the change they describe, so this cannot disagree with what actually happened."
+        />
       </header>
 
       <div className="flex flex-wrap items-end gap-3">

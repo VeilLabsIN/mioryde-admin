@@ -9,6 +9,7 @@ import {
   Input,
   SectionLabel,
   SkeletonRows,
+  PageHeader,
 } from "@/components/ui";
 import { ApiError, type OutstandingCash, api, formatMoney } from "@/lib/api";
 
@@ -72,13 +73,10 @@ export default function CollectionsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Cash collections</h1>
-        <p className="text-fg-faint mt-1 text-sm">
-          Money partners have collected and not yet returned. It is deducted
-          from what they can withdraw until it comes back.
-        </p>
-      </div>
+      <PageHeader
+        title="Cash collections"
+        subtitle="Money partners have collected and not yet returned. It is deducted from what they can withdraw until it comes back."
+      />
 
       {rows !== null && rows.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2">

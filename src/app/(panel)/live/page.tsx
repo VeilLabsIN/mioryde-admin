@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, EmptyState, GhostButton, SectionLabel } from "@/components/ui";
+import {
+  Card,
+  EmptyState,
+  GhostButton,
+  PageHeader,
+  SectionLabel,
+} from "@/components/ui";
 import { type AdminEvent, useAdminEvents } from "@/lib/useAdminEvents";
 
 /**
@@ -52,13 +58,10 @@ export default function LivePage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Live operations</h1>
-          <p className="text-fg-faint mt-1 text-sm">
-            Deliveries as they happen. This session only — nothing is kept when
-            you close the tab.
-          </p>
-        </div>
+        <PageHeader
+        title="Live operations"
+        subtitle="Deliveries as they happen. This session only — nothing is kept when you close the tab."
+      />
 
         <div className="flex items-center gap-3">
           <ConnectionBadge state={state} />

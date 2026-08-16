@@ -8,6 +8,7 @@ import {
   GhostButton,
   Input,
   SkeletonRows,
+  PageHeader,
 } from "@/components/ui";
 import {
   ApiError,
@@ -81,12 +82,10 @@ export default function PayoutsPage() {
   return (
     <div className="flex flex-col gap-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-sans text-xl font-semibold">Payouts</h1>
-          <p className="mt-1 text-[13px] text-fg-muted">
-            Withdrawal requests from delivery partners.
-          </p>
-        </div>
+        <PageHeader
+          title="Payouts"
+          subtitle="Withdrawal requests from delivery partners."
+        />
         {pending && pending.count > 0 && (
           <div className="chamfer-sm border border-warn/40 bg-panel px-3 py-2">
             <p className="font-mono text-[10px] uppercase tracking-[2px] text-warn">

@@ -8,6 +8,7 @@ import {
   Input,
   SkeletonRows,
   StatusPill,
+  PageHeader,
 } from "@/components/ui";
 import { type AdminOrder, api, formatMoney } from "@/lib/api";
 
@@ -69,12 +70,14 @@ export default function OrdersPage() {
     <div className="mx-auto max-w-[1200px]">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="mb-1 font-sans text-2xl font-semibold">Deliveries</h1>
-          <p className="text-[13px] text-fg-muted">
-            {orders === null
-              ? "Loading…"
-              : `${orders.length} shown · ${activeCount} active`}
-          </p>
+          <PageHeader
+            title="Deliveries"
+            subtitle={
+              orders === null
+                ? "Loading…"
+                : `${orders.length} shown · ${activeCount} active`
+            }
+          />
         </div>
 
         <div className="w-full max-w-[280px]">

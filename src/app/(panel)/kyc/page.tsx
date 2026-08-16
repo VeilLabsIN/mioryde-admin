@@ -8,6 +8,7 @@ import {
   GhostButton,
   SectionLabel,
   SkeletonRows,
+  PageHeader,
 } from "@/components/ui";
 import {
   ApiError,
@@ -100,12 +101,10 @@ export default function KycPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Partner verification</h1>
-        <p className="text-fg-faint mt-1 text-sm">
-          Identity documents need two different people to approve them.
-        </p>
-      </div>
+      <PageHeader
+        title="Partner verification"
+        subtitle="Identity documents need two different people to approve them."
+      />
 
       <div className="flex gap-2">
         {TABS.map((item) => (

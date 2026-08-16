@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, EmptyState, SectionLabel, SkeletonRows } from "@/components/ui";
+import {
+  Card,
+  EmptyState,
+  PageHeader,
+  SectionLabel,
+  SkeletonRows,
+} from "@/components/ui";
 import { type RateCard, api, formatMoney } from "@/lib/api";
 
 export default function PricingPage() {
@@ -35,10 +41,12 @@ export default function PricingPage() {
 
   return (
     <div className="mx-auto max-w-[1200px]">
-      <h1 className="mb-1 font-sans text-2xl font-semibold">Rate cards</h1>
-      <p className="mb-6 text-[13px] text-fg-muted">
-        What customers are charged, per zone and vehicle.
-      </p>
+      <div className="mb-6">
+        <PageHeader
+          title="Rate cards"
+          subtitle="What customers are charged, per zone and vehicle."
+        />
+      </div>
 
       {/*
         These numbers came from the marketing site, not from unit economics.

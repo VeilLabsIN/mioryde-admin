@@ -8,6 +8,7 @@ import {
   Input,
   SectionLabel,
   SkeletonRows,
+  PageHeader,
 } from "@/components/ui";
 import { ApiError, type Agreement, api } from "@/lib/api";
 
@@ -117,13 +118,10 @@ export default function AgreementPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Partner agreement</h1>
-        <p className="text-fg-faint mt-1 text-sm">
-          The contract every delivery partner accepts. Published versions cannot
-          be edited or removed — new terms are a new version.
-        </p>
-      </div>
+      <PageHeader
+        title="Partner agreement"
+        subtitle="The contract every delivery partner accepts. Published versions cannot be edited or removed — new terms are a new version."
+      />
 
       {result ? (
         <Card>

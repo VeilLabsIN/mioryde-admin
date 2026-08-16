@@ -174,3 +174,46 @@ export function SkeletonRows({ rows = 6 }: { rows?: number }) {
     </div>
   );
 }
+
+/**
+ * The heading every page opens with.
+ *
+ * Extracted because twelve pages had grown three different treatments —
+ * `text-2xl font-semibold` on the originals, `text-xl font-semibold` on newer
+ * ones, `text-xl font-medium` on the audit log. Nobody notices any single page
+ * being wrong; what they notice is the panel feeling unfinished as they move
+ * between them.
+ *
+ * The originals' treatment won, on the grounds that four pages already used it
+ * and it was the more deliberate choice — explicit `font-sans` and a subtitle
+ * sized to sit under a 2xl heading rather than beside it.
+ *
+ * `actions` sits opposite the title and wraps beneath on narrow screens rather
+ * than crushing the heading.
+ */
+export function PageHeader({
+  title,
+  subtitle,
+  actions,
+}: {
+  title: string;
+  /**
+   * A node, not a string: several pages count what they are showing
+   * ("128 shown · 4 active") and that has to be live, not a caption written
+   * once at build time.
+   */
+  subtitle?: React.ReactNode;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="mb-1 font-sans text-2xl font-semibold">{title}</h1>
+        {subtitle ? (
+          <p className="text-[13px] text-fg-muted">{subtitle}</p>
+        ) : null}
+      </div>
+      {actions ? <div className="flex shrink-0 gap-2">{actions}</div> : null}
+    </div>
+  );
+}
