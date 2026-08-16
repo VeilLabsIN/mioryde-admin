@@ -1,14 +1,16 @@
 "use client";
 
+import { useState } from "react";
+
 /**
  * Charts, hand-written as SVG.
  *
- * No charting library. This app has three dependencies and the charts it needs
- * are a trend line and a ranked bar list — a library would add more bundle
- * than the whole panel and still need overriding to match the theme tokens.
+ * No charting library. This app has three dependencies and a library would add
+ * more bundle than the whole panel, then need overriding to match the theme
+ * tokens anyway.
  *
- * Everything here draws with `currentColor` and CSS custom properties, so both
- * themes work without the components knowing which one is active.
+ * Everything draws with `currentColor` and CSS custom properties, so both
+ * themes work without any component knowing which one is active.
  */
 
 export interface Point {
@@ -16,109 +18,195 @@ export interface Point {
   value: number;
 }
 
+/** Rounds an axis maximum up to something a person would choose. */
+function niceMax(value: number): number {
+  if (value <= 0) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const normalised = value / magnitude;
+  const step = normalised <= 1 ? 1 : normalised <= 2 ? 2 : normalised <= 5 ? 5 : 10;
+  return step * magnitude;
+}
+
 /**
- * A filled trend line.
+ * A time series, as a filled line or as bars.
  *
- * Deliberately not a bar chart: revenue over time is a continuous quantity and
- * a line reads the shape of it — a slump, a weekend dip — where thirty bars
- * read as thirty separate facts.
+ * Line for continuous quantities — revenue over a month reads as a shape, a
+ * slump, a weekend dip. Bars when the series is sparse or countable, where
+ * thirty separate facts is exactly what it is and a line pretends there were
+ * values in between.
  */
 export function TrendChart({
   points,
-  height = 160,
+  height = 200,
   format,
+  mode = "line",
 }: {
   points: Point[];
   height?: number;
   format: (value: number) => string;
+  mode?: "line" | "bar";
 }) {
+  // Which point the pointer is nearest. An analytics chart you cannot
+  // interrogate is a picture, not a tool — the whole question people bring to
+  // one is "what happened on *that* day".
+  const [hover, setHover] = useState<number | null>(null);
+
   if (points.length === 0) {
-    return (
-      <p className="text-fg-faint py-8 text-center text-sm">No data yet.</p>
-    );
+    return <p className="text-fg-faint py-8 text-center text-sm">No data yet.</p>;
   }
 
-  const width = 720;
-  const pad = { top: 8, right: 8, bottom: 20, left: 8 };
+  const width = 760;
+  // Left padding carries the axis labels; without it they render outside the
+  // viewBox and are simply invisible.
+  const pad = { top: 16, right: 12, bottom: 22, left: 56 };
   const inner = {
     w: width - pad.left - pad.right,
     h: height - pad.top - pad.bottom,
   };
 
-  const max = Math.max(...points.map((p) => p.value), 1);
-  // Baseline is always zero. A chart that starts the axis at the minimum makes
-  // a 2% change look like a cliff, which is how a dashboard misleads without
-  // stating a single false number.
+  const max = niceMax(Math.max(...points.map((p) => p.value), 0));
   const x = (i: number) =>
-    pad.left + (points.length === 1 ? inner.w / 2 : (i / (points.length - 1)) * inner.w);
+    pad.left +
+    (points.length === 1 ? inner.w / 2 : (i / (points.length - 1)) * inner.w);
+  // Baseline is always zero. Starting an axis at the minimum makes a 2% change
+  // look like a cliff, which is how a dashboard misleads without stating a
+  // single false number.
   const y = (v: number) => pad.top + inner.h - (v / max) * inner.h;
 
-  const line = points.map((p, i) => `${x(i)},${y(p.value)}`).join(" ");
-  const area = `${pad.left},${pad.top + inner.h} ${line} ${x(points.length - 1)},${pad.top + inner.h}`;
+  const ticks = [0, 0.25, 0.5, 0.75, 1];
 
-  const peak = points.reduce(
-    (best, p, i) => (p.value > points[best]!.value ? i : best),
-    0,
-  );
+  // At most six date labels, evenly spaced. Thirty-one would overlap into a
+  // smear; two leaves a reader unable to place the middle of the chart.
+  const labelEvery = Math.max(1, Math.ceil(points.length / 6));
+
+  const active = hover === null ? null : points[hover];
+  const barWidth = Math.max(inner.w / points.length - 2, 1);
 
   return (
     <div className="overflow-x-auto">
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="text-accent h-auto w-full min-w-[32rem]"
+        className="text-accent h-auto w-full min-w-[34rem]"
         role="img"
-        aria-label={`Trend from ${points[0]?.label} to ${points[points.length - 1]?.label}`}
+        aria-label={`${points[0]?.label} to ${points[points.length - 1]?.label}`}
+        onPointerLeave={() => setHover(null)}
       >
-        {/* Quartile grid. Faint, because it is a reading aid and not data. */}
-        {[0.25, 0.5, 0.75].map((f) => (
-          <line
-            key={f}
-            x1={pad.left}
-            x2={width - pad.right}
-            y1={pad.top + inner.h * f}
-            y2={pad.top + inner.h * f}
-            className="stroke-edge"
-            strokeWidth="1"
-          />
+        {ticks.map((t) => (
+          <g key={t}>
+            <line
+              x1={pad.left}
+              x2={width - pad.right}
+              y1={pad.top + inner.h * (1 - t)}
+              y2={pad.top + inner.h * (1 - t)}
+              className="stroke-edge"
+              strokeWidth="1"
+            />
+            {/* The values the grid lines stand for. Unlabelled gridlines are
+                decoration — you cannot read a magnitude off them. */}
+            <text
+              x={pad.left - 8}
+              y={pad.top + inner.h * (1 - t) + 3}
+              textAnchor="end"
+              className="fill-fg-faint text-[9px] tabular-nums"
+            >
+              {format(max * t)}
+            </text>
+          </g>
         ))}
 
-        <polygon points={area} fill="currentColor" opacity="0.12" />
-        <polyline
-          points={line}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
+        {mode === "bar"
+          ? points.map((p, i) => (
+              <rect
+                key={p.label}
+                x={x(i) - barWidth / 2}
+                y={p.value === 0 ? pad.top + inner.h - 1 : y(p.value)}
+                width={barWidth}
+                // Zero still draws a hairline, so "nothing happened" is visibly
+                // a day rather than a gap in the chart.
+                height={p.value === 0 ? 1 : pad.top + inner.h - y(p.value)}
+                fill="currentColor"
+                opacity={hover === null || hover === i ? 0.85 : 0.35}
+              />
+            ))
+          : (() => {
+              const line = points.map((p, i) => `${x(i)},${y(p.value)}`).join(" ");
+              return (
+                <>
+                  <polygon
+                    points={`${pad.left},${pad.top + inner.h} ${line} ${x(points.length - 1)},${pad.top + inner.h}`}
+                    fill="currentColor"
+                    opacity="0.12"
+                  />
+                  <polyline
+                    points={line}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                </>
+              );
+            })()}
 
-        {/* The peak is marked because "when was our best day" is the question
-            people actually ask of a revenue chart. */}
-        <circle cx={x(peak)} cy={y(points[peak]!.value)} r="3.5" fill="currentColor" />
+        {/* Date labels, thinned so they never collide. */}
+        {points.map((p, i) =>
+          i % labelEvery === 0 || i === points.length - 1 ? (
+            <text
+              key={p.label}
+              x={x(i)}
+              y={height - 6}
+              textAnchor={i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"}
+              className="fill-fg-faint text-[9px]"
+            >
+              {p.label}
+            </text>
+          ) : null,
+        )}
 
-        <text
-          x={pad.left}
-          y={height - 4}
-          className="fill-fg-faint text-[10px]"
-        >
-          {points[0]?.label}
-        </text>
-        <text
-          x={width - pad.right}
-          y={height - 4}
-          textAnchor="end"
-          className="fill-fg-faint text-[10px]"
-        >
-          {points[points.length - 1]?.label}
-        </text>
-        <text
-          x={x(peak)}
-          y={y(points[peak]!.value) - 8}
-          textAnchor="middle"
-          className="fill-fg text-[10px]"
-        >
-          {format(points[peak]!.value)}
-        </text>
+        {active ? (
+          <g>
+            <line
+              x1={x(hover!)}
+              x2={x(hover!)}
+              y1={pad.top}
+              y2={pad.top + inner.h}
+              className="stroke-edge"
+              strokeWidth="1"
+            />
+            <circle cx={x(hover!)} cy={y(active.value)} r="4" fill="currentColor" />
+            {/* Anchored away from whichever edge it is near, so the readout is
+                never half outside the chart. */}
+            <text
+              x={x(hover!)}
+              y={Math.max(y(active.value) - 10, pad.top + 9)}
+              textAnchor={
+                hover! < points.length / 4
+                  ? "start"
+                  : hover! > (points.length * 3) / 4
+                    ? "end"
+                    : "middle"
+              }
+              className="fill-fg text-[11px] font-medium tabular-nums"
+            >
+              {format(active.value)} · {active.label}
+            </text>
+          </g>
+        ) : null}
+
+        {/* One hit area per point, sized to the gap between them. Invisible,
+            and the only thing that makes hovering work at any width. */}
+        {points.map((p, i) => (
+          <rect
+            key={`hit-${p.label}`}
+            x={x(i) - inner.w / points.length / 2}
+            y={pad.top}
+            width={inner.w / points.length}
+            height={inner.h}
+            fill="transparent"
+            onPointerEnter={() => setHover(i)}
+          />
+        ))}
       </svg>
     </div>
   );
@@ -134,35 +222,57 @@ export function TrendChart({
 export function BarList({
   points,
   format,
+  total,
 }: {
   points: Point[];
   format: (value: number) => string;
+  /** Shows each row's share when the parts make up a whole. */
+  total?: number;
 }) {
   if (points.length === 0) {
     return <p className="text-fg-faint py-4 text-sm">No data yet.</p>;
   }
 
   const max = Math.max(...points.map((p) => p.value), 1);
+  const sum = total ?? points.reduce((acc, p) => acc + p.value, 0);
 
   return (
-    <ul className="space-y-2">
-      {points.map((point) => (
-        <li key={point.label}>
-          <div className="flex items-baseline justify-between gap-3 text-sm">
-            <span className="truncate">{point.label}</span>
-            <span className="font-mono tabular-nums">{format(point.value)}</span>
-          </div>
-          <div
-            className="bg-edge mt-1 h-1.5 w-full overflow-hidden rounded-full"
-            role="presentation"
-          >
-            <div
-              className="bg-accent h-full rounded-full"
-              style={{ width: `${Math.max((point.value / max) * 100, 1)}%` }}
-            />
-          </div>
-        </li>
-      ))}
+    <ul className="space-y-2.5">
+      {points.map((point) => {
+        const empty = point.value === 0;
+        return (
+          <li key={point.label}>
+            <div className="flex items-baseline justify-between gap-3 text-sm">
+              {/* A zero row is dimmed rather than hidden: knowing a vehicle
+                  class earned nothing is a finding, and dropping it would make
+                  the reader think it was never offered. */}
+              <span className={`truncate ${empty ? "text-fg-faint" : ""}`}>
+                {point.label}
+              </span>
+              <span
+                className={`shrink-0 font-mono tabular-nums ${empty ? "text-fg-faint" : ""}`}
+              >
+                {format(point.value)}
+                {sum > 0 && !empty ? (
+                  <span className="text-fg-faint ml-2 text-xs">
+                    {((point.value / sum) * 100).toFixed(0)}%
+                  </span>
+                ) : null}
+              </span>
+            </div>
+            <div className="bg-edge mt-1.5 h-2 w-full overflow-hidden rounded-full">
+              {/* No minimum width on an empty bar. A sliver of colour for zero
+                  reads as "a little", which is the opposite of true. */}
+              {!empty ? (
+                <div
+                  className="bg-accent h-full rounded-full transition-[width] duration-500"
+                  style={{ width: `${(point.value / max) * 100}%` }}
+                />
+              ) : null}
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -188,11 +298,9 @@ export function Stat({
   inverse?: boolean;
   hint?: string;
 }) {
-  const change =
-    previous !== undefined && current !== undefined && previous !== 0
-      ? (current - previous) / previous
-      : null;
-
+  const comparable =
+    previous !== undefined && current !== undefined && previous !== 0;
+  const change = comparable ? (current! - previous!) / previous! : null;
   const good = change === null ? null : inverse ? change < 0 : change > 0;
 
   return (
@@ -205,10 +313,16 @@ export function Stat({
           title="Against the previous period of the same length"
         >
           {change > 0 ? "▲" : "▼"} {Math.abs(change * 100).toFixed(1)}%
+          <span className="text-fg-faint ml-1">vs previous</span>
         </p>
-      ) : hint ? (
-        <p className="text-fg-faint mt-1 text-xs">{hint}</p>
-      ) : null}
+      ) : (
+        // Said out loud rather than left blank. A card with nothing where a
+        // comparison should be reads as a bug, and the page has just promised
+        // every figure is measured against the previous period.
+        <p className="text-fg-faint mt-1 text-xs">
+          {hint ?? "No data for the previous period"}
+        </p>
+      )}
     </div>
   );
 }

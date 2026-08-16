@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BarList, Stat, TrendChart } from "@/components/charts";
 import {
   Card,
@@ -11,11 +11,27 @@ import {
 } from "@/components/ui";
 import { ApiError, type Analytics, api, formatMoney } from "@/lib/api";
 
-const RANGES = [
-  { days: 7, label: "7 days" },
-  { days: 30, label: "30 days" },
-  { days: 90, label: "90 days" },
+const RANGES = [7, 30, 90] as const;
+
+/**
+ * The series a reader can put on the main chart.
+ *
+ * Four separate charts would take four screens of scrolling to compare two
+ * numbers. One chart with a selector puts them in the same frame, which is
+ * where a comparison actually happens.
+ *
+ * Revenue draws as a line — it is a continuous quantity and the shape is the
+ * point. Counts draw as bars, because a day with two deliveries and a day with
+ * none are two facts, and a line invents the values in between.
+ */
+const SERIES = [
+  { key: "revenue", label: "Revenue", money: true, mode: "line" as const },
+  { key: "delivered", label: "Delivered", money: false, mode: "bar" as const },
+  { key: "placed", label: "Placed", money: false, mode: "bar" as const },
+  { key: "cancelled", label: "Cancelled", money: false, mode: "bar" as const },
 ] as const;
+
+type SeriesKey = (typeof SERIES)[number]["key"];
 
 /**
  * How the business is doing.
@@ -28,15 +44,14 @@ const RANGES = [
  * ## The two figures that are not vanity
  *
  * **Cash outstanding** is the platform's uncollected float — money partners
- * are holding right now. It is a real exposure and it does not appear in
- * revenue.
+ * are holding right now. A real exposure, and it appears nowhere in revenue.
  *
  * **Fleet utilisation** is the share of approved partners who actually
- * delivered anything. A large gap means people were onboarded and never
- * worked, which is acquisition spend with nothing behind it.
+ * delivered. A large gap is acquisition spend with nothing behind it.
  */
 export default function AnalyticsPage() {
   const [days, setDays] = useState<number>(30);
+  const [series, setSeries] = useState<SeriesKey>("revenue");
   const [data, setData] = useState<Analytics | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,6 +81,27 @@ export default function AnalyticsPage() {
   useEffect(load, [load]);
 
   const rupees = (minor: number) => formatMoney({ minor, currency: "INR" });
+  const active = SERIES.find((option) => option.key === series)!;
+
+  const points = useMemo(() => {
+    if (!data) return [];
+    return data.daily.map((day) => ({
+      label: day.date.slice(5),
+      value:
+        series === "revenue"
+          ? day.revenue.minor
+          : series === "delivered"
+            ? day.delivered
+            : series === "placed"
+              ? day.placed
+              : day.cancelled,
+    }));
+  }, [data, series]);
+
+  // Said out loud, because a chart of thirty mostly-empty days looks broken
+  // rather than quiet — a reader cannot otherwise tell "no trade" from "no
+  // data", and those need very different reactions.
+  const activeDays = points.filter((point) => point.value > 0).length;
 
   return (
     <div className="space-y-6">
@@ -74,13 +110,13 @@ export default function AnalyticsPage() {
         subtitle="Every figure is against the previous period of the same length."
         actions={RANGES.map((range) => (
           <GhostButton
-            key={range.days}
-            onClick={() => setDays(range.days)}
+            key={range}
+            onClick={() => setDays(range)}
             className={
-              days === range.days ? "border-accent text-fg" : "text-fg-faint"
+              days === range ? "border-accent text-fg" : "text-fg-faint"
             }
           >
-            {range.label}
+            {range} days
           </GhostButton>
         ))}
       />
@@ -113,7 +149,6 @@ export default function AnalyticsPage() {
               value={`${(data.summary.cancellationRate.now * 100).toFixed(1)}%`}
               current={data.summary.cancellationRate.now}
               previous={data.summary.cancellationRate.previous}
-              // Down is good here.
               inverse
             />
             <Stat
@@ -124,30 +159,39 @@ export default function AnalyticsPage() {
           </div>
 
           <Card>
-            <SectionLabel>Revenue per day</SectionLabel>
-            <div className="mt-3">
-              <TrendChart
-                points={data.daily.map((day) => ({
-                  label: day.date.slice(5),
-                  value: day.revenue.minor,
-                }))}
-                format={(minor) => rupees(minor)}
-              />
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <SectionLabel>Per day</SectionLabel>
+                <p className="text-fg-faint mt-1 text-xs">
+                  {activeDays === 0
+                    ? "Nothing recorded in this period."
+                    : `${activeDays} of ${points.length} days had activity.`}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {SERIES.map((option) => (
+                  <GhostButton
+                    key={option.key}
+                    onClick={() => setSeries(option.key)}
+                    className={
+                      series === option.key
+                        ? "border-accent text-fg"
+                        : "text-fg-faint"
+                    }
+                  >
+                    {option.label}
+                  </GhostButton>
+                ))}
+              </div>
             </div>
-          </Card>
 
-          <Card>
-            <SectionLabel>Deliveries per day</SectionLabel>
-            <div className="mt-3">
-              <TrendChart
-                points={data.daily.map((day) => ({
-                  label: day.date.slice(5),
-                  value: day.delivered,
-                }))}
-                height={120}
-                format={(value) => String(Math.round(value))}
-              />
-            </div>
+            <TrendChart
+              points={points}
+              mode={active.mode}
+              format={(value) =>
+                active.money ? rupees(value) : String(Math.round(value))
+              }
+            />
           </Card>
 
           <div className="grid gap-3 lg:grid-cols-3">
@@ -159,7 +203,7 @@ export default function AnalyticsPage() {
                     label: zone.label,
                     value: zone.revenue.minor,
                   }))}
-                  format={(minor) => rupees(minor)}
+                  format={rupees}
                 />
               </div>
             </Card>
@@ -171,7 +215,7 @@ export default function AnalyticsPage() {
                     label: vehicle.label,
                     value: vehicle.revenue.minor,
                   }))}
-                  format={(minor) => rupees(minor)}
+                  format={rupees}
                 />
               </div>
             </Card>
@@ -221,9 +265,8 @@ export default function AnalyticsPage() {
 
             {data.fleet.docExpired > 0 || data.fleet.suspended > 0 ? (
               <p className="text-fg-faint mt-4 text-xs">
-                {data.fleet.docExpired} partner
-                {data.fleet.docExpired === 1 ? "" : "s"} off duty with expired
-                documents · {data.fleet.suspended} suspended
+                {data.fleet.docExpired} off duty with expired documents ·{" "}
+                {data.fleet.suspended} suspended
               </p>
             ) : null}
           </Card>
