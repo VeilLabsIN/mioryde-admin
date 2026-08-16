@@ -415,6 +415,10 @@ export const api = {
       body: JSON.stringify({ approve, ...(note ? { note } : {}) }),
     }),
 
+  // ── Monitoring ─────────────────────────────────────────────────────────────
+
+  monitoring: () => request<Monitoring>("/admin/monitoring"),
+
   // ── Access control ─────────────────────────────────────────────────────────
 
   adminUsers: () => request<{ results: AdminAccount[] }>("/admin/access/admins"),
@@ -679,6 +683,43 @@ export interface AdminOrder {
   dropAddress: string;
   vehicleName: string;
   riderName: string | null;
+}
+
+export interface Monitoring {
+  asOf: string;
+  outbox: {
+    pending: number;
+    retrying: number;
+    /** Gave up after max_attempts. The worker will never look at these again. */
+    deadLettered: number;
+    publishedLastHour: number;
+    /** Age of the oldest unpublished event. Null when nothing is waiting. */
+    oldestPendingSeconds: number | null;
+    failures: { topic: string; count: number; lastError: string | null }[];
+  };
+  push: {
+    customers: number;
+    riders: number;
+    stale: number;
+    staleAfterDays: number;
+    /** False means every push is written to a log and nothing leaves. */
+    configured: boolean;
+  };
+  dispatch: {
+    assignedLastDay: number;
+    medianSecondsToAssign: number | null;
+    p95SecondsToAssign: number | null;
+    waitingTooLong: number;
+    concernAfterMinutes: number;
+    offers: { offered: number; rejected: number; expired: number };
+  };
+  ledger: {
+    unbalancedTransactions: number;
+    driftingAccounts: number;
+    /** Double entry across the whole system, in paise. Must be exactly 0. */
+    netMinor: number;
+    transactions: number;
+  };
 }
 
 export type AdminRole = AdminIdentity["role"];

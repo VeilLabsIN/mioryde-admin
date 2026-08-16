@@ -8,7 +8,7 @@ change". Everything here is verified against the code, not remembered.
 > architecture, invariants, status, or blockers. A stale handoff is worse than
 > none — it is believed.
 
-**Last updated:** 16 August 2026 (dispatch board, access control)
+**Last updated:** 16 August 2026 (dispatch board, access control, monitoring)
 
 ---
 
@@ -117,6 +117,15 @@ would let one user lock out a city.
 **Invoices are immutable and gapless** (GST Rule 46). Corrections are credit
 notes, never edits.
 
+**The ledger's guarantees are triggers, and triggers can be absent.** A restore
+that replayed rows before the functions existed, or a load run with
+`session_replication_role = replica`, leaves a database that looks entirely
+normal and quietly disagrees with itself. `/monitoring` checks all three
+invariants directly against the rows — postings summing to zero, stored
+balances matching their lines, and the global net being exactly zero. It scans
+every ledger line; when that stops being cheap the answer is a nightly job
+writing its result somewhere the page reads, not a shallower check.
+
 **The admin CSP carries `'unsafe-inline'` for scripts, deliberately.** A strict
 `script-src 'self'` blocked Next's inline hydration scripts and the panel
 rendered a blank page while building, typechecking and passing every test. A
@@ -153,9 +162,10 @@ Complete and verified against a live database:
 - Partner onboarding: documents, dual approval, vehicles, agreement, bank
 - Financial integrity: double-entry ledger, cash netting, collection ceiling,
   nightly payout batch, GST invoicing
-- Admin panel: 14 pages including KYC review, bank checks, collections, a live
-  dispatch board, agreement publishing, business analytics, and access control
-  (create admins, change roles, deactivate, reset and change passwords)
+- Admin panel: 15 pages including KYC review, bank checks, collections, a live
+  dispatch board, agreement publishing, business analytics, access control
+  (create admins, change roles, deactivate, reset and change passwords) and
+  monitoring (queue depth, dispatch latency, ledger integrity)
 - CI on all four repos — builds, boots the API, builds real APKs, checks no
   demo path reached a release build
 

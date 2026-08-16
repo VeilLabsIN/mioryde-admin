@@ -74,6 +74,15 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/agreement", label: "Agreement", mark: "AG", needs: ["pricing.edit"] },
       { href: "/audit", label: "Audit log", mark: "AU", needs: ["audit.view"] },
+    ],
+  },
+  // Separate from Governance: those two are about what was agreed and what was
+  // done, these are about whether the machine is working and who can touch it.
+  // Filed together they read as one undifferentiated pile of admin screens.
+  {
+    label: "System",
+    items: [
+      { href: "/monitoring", label: "Monitoring", mark: "MO", needs: ["metrics.view"] },
       { href: "/access", label: "Access control", mark: "AC", needs: ["access.manage"] },
     ],
   },
