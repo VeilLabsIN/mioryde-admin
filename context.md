@@ -8,7 +8,7 @@ change". Everything here is verified against the code, not remembered.
 > architecture, invariants, status, or blockers. A stale handoff is worse than
 > none — it is believed.
 
-**Last updated:** 15 August 2026
+**Last updated:** 16 August 2026
 
 ---
 
@@ -37,8 +37,8 @@ All on `main`, remote `github.com/VeilLabsIN/<repo>`. A fifth repo,
 `mioryde-web` (marketing site), is on `master` and has **no working remote** —
 its commits are local only. Deliberate; do not "fix" it without asking.
 
-Heads at last update: api `1857a9f` · admin `5a97924` · customer `b9ede51` ·
-rider `ce48a47`.
+Heads at last update: api `86c2c0e` · admin `7747078` · customer `b9ede51` ·
+rider `ce48a47`. All four clean and pushed.
 
 ## 3. Run it locally
 
@@ -105,6 +105,14 @@ would let one user lock out a city.
 **Invoices are immutable and gapless** (GST Rule 46). Corrections are credit
 notes, never edits.
 
+**The admin CSP carries `'unsafe-inline'` for scripts, deliberately.** A strict
+`script-src 'self'` blocked Next's inline hydration scripts and the panel
+rendered a blank page while building, typechecking and passing every test. A
+per-request nonce was implemented and abandoned — Next 16.2.10 does not
+propagate it (verified: zero nonce attributes in a production build). See
+`mioryde-admin/src/middleware.ts`. **Do not "harden" this without checking the
+panel still hydrates in a browser.**
+
 **Outbox pattern for notifications** (at-least-once). Money never goes through
 it — ledger postings share the transaction of the thing they record.
 
@@ -120,7 +128,7 @@ Complete and verified against a live database:
 - Partner onboarding: documents, dual approval, vehicles, agreement, bank
 - Financial integrity: double-entry ledger, cash netting, collection ceiling,
   nightly payout batch, GST invoicing
-- Admin panel: 14 pages including KYC review, bank checks, collections, a live
+- Admin panel: 12 pages including KYC review, bank checks, collections, a live
   SSE operations board, agreement publishing and business analytics
 - CI on all four repos — builds, boots the API, builds real APKs, checks no
   demo path reached a release build
