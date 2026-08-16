@@ -357,6 +357,11 @@ export const api = {
       body: JSON.stringify({ decision, ...options }),
     }),
 
+  // ── Analytics ──────────────────────────────────────────────────────────────
+
+  analytics: (days = 30) =>
+    request<Analytics>(`/admin/analytics?days=${days}`),
+
   // ── Partner agreement ──────────────────────────────────────────────────────
 
   currentAgreement: () => request<Agreement>("/admin/agreement"),
@@ -437,6 +442,49 @@ export interface CountersignItem {
   riderName: string;
   firstReviewerName: string | null;
   firstReviewedAt: string;
+}
+
+export interface Money {
+  minor: number;
+  currency: string;
+}
+
+export interface Analytics {
+  days: number;
+  summary: {
+    revenue: { now: Money; previous: Money };
+    orders: { now: number; previous: number };
+    delivered: number;
+    /** A rate, not a count — 40 cancellations means nothing without a denominator. */
+    cancellationRate: { now: number; previous: number };
+    averageFare: Money;
+    averageDistanceMeters: number;
+  };
+  daily: {
+    date: string;
+    revenue: Money;
+    delivered: number;
+    cancelled: number;
+    placed: number;
+  }[];
+  breakdowns: {
+    zones: { label: string; orders: number; revenue: Money }[];
+    vehicles: { label: string; orders: number; revenue: Money }[];
+    payments: { label: string; orders: number; revenue: Money }[];
+  };
+  fleet: {
+    active: number;
+    online: number;
+    pendingKyc: number;
+    suspended: number;
+    docExpired: number;
+    earning: number;
+    utilisation: number;
+    /** Uncollected float — money partners hold right now. Not in revenue. */
+    cashOutstanding: Money;
+    holdingCash: number;
+    bankChecksPending: number;
+  };
 }
 
 export interface Agreement {

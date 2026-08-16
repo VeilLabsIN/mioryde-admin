@@ -37,7 +37,7 @@ All on `main`, remote `github.com/VeilLabsIN/<repo>`. A fifth repo,
 `mioryde-web` (marketing site), is on `master` and has **no working remote** —
 its commits are local only. Deliberate; do not "fix" it without asking.
 
-Heads at last update: api `3a3a15c` · admin `db9ec02` · customer `b9ede51` ·
+Heads at last update: api `1857a9f` · admin `5a97924` · customer `b9ede51` ·
 rider `ce48a47`.
 
 ## 3. Run it locally
@@ -120,8 +120,8 @@ Complete and verified against a live database:
 - Partner onboarding: documents, dual approval, vehicles, agreement, bank
 - Financial integrity: double-entry ledger, cash netting, collection ceiling,
   nightly payout batch, GST invoicing
-- Admin panel: 13 pages including KYC review, bank checks, collections, a live
-  SSE operations board, and agreement publishing
+- Admin panel: 14 pages including KYC review, bank checks, collections, a live
+  SSE operations board, agreement publishing and business analytics
 - CI on all four repos — builds, boots the API, builds real APKs, checks no
   demo path reached a release build
 

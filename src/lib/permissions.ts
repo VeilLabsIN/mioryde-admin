@@ -107,6 +107,7 @@ const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   // Owner-only on the server. Publishing changes the contract every partner
   // works under and stands the fleet down; that is a company decision.
   ["/agreement", "pricing.edit"],
+  ["/analytics", "metrics.view"],
   ["/payouts", "payouts.view"],
   ["/pricing", "pricing.view"],
   ["/audit", "audit.view"],
