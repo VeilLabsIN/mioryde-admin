@@ -37,7 +37,7 @@ All on `main`, remote `github.com/VeilLabsIN/<repo>`. A fifth repo,
 `mioryde-web` (marketing site), is on `master` and has **no working remote** —
 its commits are local only. Deliberate; do not "fix" it without asking.
 
-Heads at last update: api `7d94ee8` · admin `6c5e53c` · customer `b9ede51` ·
+Heads at last update: api `3a3a15c` · admin `db9ec02` · customer `b9ede51` ·
 rider `ce48a47`.
 
 ## 3. Run it locally
@@ -120,8 +120,8 @@ Complete and verified against a live database:
 - Partner onboarding: documents, dual approval, vehicles, agreement, bank
 - Financial integrity: double-entry ledger, cash netting, collection ceiling,
   nightly payout batch, GST invoicing
-- Admin panel: 12 pages including KYC review, bank checks, collections, and a
-  live SSE operations board
+- Admin panel: 13 pages including KYC review, bank checks, collections, a live
+  SSE operations board, and agreement publishing
 - CI on all four repos — builds, boots the API, builds real APKs, checks no
   demo path reached a release build
 
@@ -132,8 +132,8 @@ Not built (no schema exists): scheduled deliveries, returns, tips, incentives,
 support tickets, proof of delivery, enterprise accounts, gateway↔ledger
 reconciliation.
 
-Built but not wired to a UI: partner agreement publishing (admin), Truecaller
-one-tap button (customer app), partner history tab (admin).
+Built but not wired to a UI: Truecaller one-tap button (customer app), partner
+history tab (admin).
 
 ## 6. Blocked on the client, not on code
 
@@ -145,12 +145,18 @@ and inert.
 | **Real GSTIN** — the one on file is a dummy that passes every format check | Every invoice is legally invalid |
 | SMS gateway + TRAI DLT registration | All OTP login |
 | Razorpay credentials | All online payment |
-| S3-compatible storage | KYC uploads, so all onboarding |
+| AWS S3 bucket, **ap-south-1 (Mumbai)** | KYC uploads, so all onboarding |
 | Firebase service account + `google-services.json` in both apps | Push notifications |
 | Counsel-drafted partner agreement | The seeded text is a marked placeholder |
 
 Degraded but working without: Maps key, Exotel masked calling, Truecaller client
 id, Sentry DSN.
+
+**Vendor choices are decided and documented** at the end of
+`mioryde-api/.env.example`, with the reasoning for each. The short version:
+S3 Mumbai (residency), MSG91 (DLT), Razorpay, FCM, Exotel, self-hosted OSRM,
+Google Maps for display only. Each is a config change to replace, not a
+rewrite.
 
 ## 7. Conventions worth matching
 

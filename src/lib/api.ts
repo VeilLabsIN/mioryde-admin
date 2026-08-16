@@ -357,6 +357,23 @@ export const api = {
       body: JSON.stringify({ decision, ...options }),
     }),
 
+  // ── Partner agreement ──────────────────────────────────────────────────────
+
+  currentAgreement: () => request<Agreement>("/admin/agreement"),
+
+  publishAgreement: (body: {
+    version: string;
+    title: string;
+    body: string;
+    effectiveFrom?: string;
+  }) =>
+    request<{
+      version: string;
+      contentHash: string;
+      /** Partners stood down because they signed the previous version. */
+      ridersTakenOffline: number;
+    }>("/admin/agreement", { method: "POST", body: JSON.stringify(body) }),
+
   // ── Cash collections ───────────────────────────────────────────────────────
 
   outstandingCash: (page = 0) =>
@@ -420,6 +437,15 @@ export interface CountersignItem {
   riderName: string;
   firstReviewerName: string | null;
   firstReviewedAt: string;
+}
+
+export interface Agreement {
+  version: string;
+  title: string;
+  body: string;
+  /** SHA-256, computed by the database from the body. Evidence of what was published. */
+  contentHash: string;
+  effectiveFrom: string;
 }
 
 export interface OutstandingCash {

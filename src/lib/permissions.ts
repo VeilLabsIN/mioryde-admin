@@ -104,6 +104,9 @@ const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   ["/banking", "payouts.settle"],
   // Clearing what a partner owes the business is a settlement decision.
   ["/collections", "payouts.settle"],
+  // Owner-only on the server. Publishing changes the contract every partner
+  // works under and stands the fleet down; that is a company decision.
+  ["/agreement", "pricing.edit"],
   ["/payouts", "payouts.view"],
   ["/pricing", "pricing.view"],
   ["/audit", "audit.view"],

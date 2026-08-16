@@ -36,6 +36,7 @@ const NAV: NavItem[] = [
   { href: "/banking", label: "Bank checks", mark: "BK", needs: ["payouts.settle"] },
   { href: "/collections", label: "Collections", mark: "CO", needs: ["payouts.settle"] },
   { href: "/pricing", label: "Rate cards", mark: "RC", needs: ["pricing.view"] },
+  { href: "/agreement", label: "Agreement", mark: "AG", needs: ["pricing.edit"] },
   { href: "/audit", label: "Audit log", mark: "AU", needs: ["audit.view"] },
 ];
 
