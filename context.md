@@ -198,7 +198,20 @@ rewrite.
 
 Test counts at last update: api 168, admin 38, rider app 84, customer app 85.
 
-## 9. If you are picking this up cold
+## 9. Environment quirks that waste an hour if you do not know them
+
+- **Docker Desktop is started by the user, by hand.** Launching it from a tool
+  call kills it. If the containers are down, ask rather than trying.
+- **Flutter is not on PATH.** It lives at `C:\Users\datan\dev\flutter\bin`.
+- **The admin panel must run on 3100**, which `npm run dev` now pins. The API
+  holds 3000, and the API's CORS allowlist contains only 3100.
+- **Browser automation cannot drive the admin login form.** Typing and clicking
+  through it produces no request, while the same form works for a human. A
+  tooling limit, not a bug — it has been chased once already, do not repeat it.
+- `/tmp` in Git Bash and `/tmp` in Windows Python are different directories.
+  Use the session scratchpad for files both need to see.
+
+## 10. If you are picking this up cold
 
 1. Read this file, then `mioryde-api/Bugs.md`.
 2. Run the stack (§3) and sign in to the admin panel.
