@@ -232,6 +232,14 @@ export const api = {
     );
   },
 
+  /**
+   * Everything in flight, for the dispatch board.
+   *
+   * No paging parameter, because the endpoint has none — a board showing half
+   * the city would be worse than no board. See `truncated` on the response.
+   */
+  liveOrders: () => request<LiveOrdersResponse>("/admin/orders/live"),
+
   customers: (params: { page?: number; search?: string } = {}) => {
     const query = new URLSearchParams();
     if (params.page) query.set("page", String(params.page));
@@ -630,6 +638,36 @@ export interface AdminOrder {
   dropAddress: string;
   vehicleName: string;
   riderName: string | null;
+}
+
+export interface LiveOrder {
+  id: string;
+  code: string;
+  status: string;
+  total: Money;
+  paymentMethod: string;
+  paymentStatus: string;
+  placedAt: string;
+  /** When the order last *entered* this status. What the board counts from. */
+  statusSince: string;
+  customer: { name: string; phone: string };
+  pickupAddress: string;
+  dropAddress: string;
+  distanceMeters: number;
+  /** The routing estimate taken at quote time, for judging a long transit. */
+  expectedSeconds: number;
+  vehicleName: string;
+  rider: { id: string; name: string; phone: string } | null;
+  /** Partners who were offered this job and turned it down. */
+  declines: number;
+}
+
+export interface LiveOrdersResponse {
+  /** The server's clock when it answered. Elapsed times are measured from it. */
+  asOf: string;
+  /** True when more deliveries are live than the endpoint will return. */
+  truncated: boolean;
+  results: LiveOrder[];
 }
 
 export interface AdminCustomer {

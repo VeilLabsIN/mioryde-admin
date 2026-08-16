@@ -8,7 +8,7 @@ change". Everything here is verified against the code, not remembered.
 > architecture, invariants, status, or blockers. A stale handoff is worse than
 > none — it is believed.
 
-**Last updated:** 16 August 2026
+**Last updated:** 16 August 2026 (dispatch board)
 
 ---
 
@@ -116,6 +116,19 @@ panel still hydrates in a browser.**
 **Outbox pattern for notifications** (at-least-once). Money never goes through
 it — ledger postings share the transaction of the thing they record.
 
+**`order_events` records more than transitions.** A partner declining a job
+writes a `pending → pending` row. Anything asking "when did this order enter
+its current status" must exclude those (`from_status IS DISTINCT FROM
+to_status`), or a delivery nobody has accepted in twenty minutes reads as
+thirty seconds old — reporting the dispatch problem as its own absence. The
+dispatch board depends on this; so would any SLA measure.
+
+**Elapsed times in the panel are measured against the server's clock.** Every
+response that drives a duration carries `asOf`, and the client subtracts the
+measured skew. A workstation four minutes fast would otherwise age every row
+on the dispatch board by four minutes — uniformly and plausibly, which is
+worse than an obvious error.
+
 **`inList()` for `IN (...)` clauses.** `= ANY(${jsArray})` through Drizzle fails
 with "requires array on right side". This has been fixed four times.
 
@@ -129,7 +142,7 @@ Complete and verified against a live database:
 - Financial integrity: double-entry ledger, cash netting, collection ceiling,
   nightly payout batch, GST invoicing
 - Admin panel: 12 pages including KYC review, bank checks, collections, a live
-  SSE operations board, agreement publishing and business analytics
+  dispatch board, agreement publishing and business analytics
 - CI on all four repos — builds, boots the API, builds real APKs, checks no
   demo path reached a release build
 
@@ -139,6 +152,17 @@ features, integration/hardening, and launch ops.
 Not built (no schema exists): scheduled deliveries, returns, tips, incentives,
 support tickets, proof of delivery, enterprise accounts, gateway↔ledger
 reconciliation.
+
+**Refunds are not a small job, despite the ledger.** The reversing posting is
+the easy third of it. `invoices` is immutable by trigger and tells you to issue
+a credit note (`0018`-era rule, enforced in `0014_gst_invoices.sql`) — and no
+credit-note table, numbering series or counter exists, so refunding a delivered
+order is not currently possible without issuing an invalid tax document.
+`RazorpayGateway` has no `refund()` and no credentials, so that leg can be
+written but not verified. And the reversal is not a mirror of the payment: COD
+has no gateway leg, and clawing back `earnings` after the nightly batch has
+paid them is a negative-balance policy that does not exist. Three decisions
+before any code.
 
 Built but not wired to a UI: Truecaller one-tap button (customer app), partner
 history tab (admin).
@@ -196,7 +220,7 @@ rewrite.
 | Money handling | `mioryde-api/src/common/money.ts` |
 | Ledger rules | `mioryde-api/migrations/0018_ledger.sql` |
 
-Test counts at last update: api 168, admin 38, rider app 84, customer app 85.
+Test counts at last update: api 174, admin 53, rider app 84, customer app 85.
 
 ## 9. Environment quirks that waste an hour if you do not know them
 
