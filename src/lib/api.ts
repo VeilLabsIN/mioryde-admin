@@ -415,6 +415,47 @@ export const api = {
       body: JSON.stringify({ approve, ...(note ? { note } : {}) }),
     }),
 
+  // ── Access control ─────────────────────────────────────────────────────────
+
+  adminUsers: () => request<{ results: AdminAccount[] }>("/admin/access/admins"),
+
+  /**
+   * Creates an admin and returns their password **once**.
+   *
+   * The server generates it; nothing here ever chooses or transmits one. The
+   * caller must show it immediately, because it is stored only as a hash and
+   * cannot be retrieved again — only reset.
+   */
+  createAdminUser: (body: { email: string; name: string; role: AdminRole }) =>
+    request<{ id: string; email: string; role: AdminRole; password: string }>(
+      "/admin/access/admins",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  updateAdminUser: (
+    id: string,
+    body: { role?: AdminRole; isActive?: boolean },
+  ) =>
+    request<{ id: string; role: AdminRole; isActive: boolean }>(
+      `/admin/access/admins/${id}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    ),
+
+  resetAdminPassword: (id: string) =>
+    request<{ email: string; password: string }>(
+      `/admin/access/admins/${id}/reset-password`,
+      { method: "POST" },
+    ),
+
+  changeOwnPassword: (body: {
+    currentPassword: string;
+    newPassword: string;
+  }) =>
+    request<{ changed: boolean }>("/admin/access/password", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   pendingVehicles: (page = 0) =>
     request<{ results: PendingVehicle[] }>(`/admin/vehicles/pending?page=${page}`),
 
@@ -638,6 +679,24 @@ export interface AdminOrder {
   dropAddress: string;
   vehicleName: string;
   riderName: string | null;
+}
+
+export type AdminRole = AdminIdentity["role"];
+
+/** The minimum length the server accepts for a password an admin chooses. */
+export const MIN_PASSWORD_LENGTH = 12;
+
+export interface AdminAccount {
+  id: string;
+  email: string;
+  name: string;
+  role: AdminRole;
+  isActive: boolean;
+  lastLoginAt: string | null;
+  createdAt: string | null;
+  /** Only set while a lockout is still in force; a lapsed one reads as null. */
+  lockedUntil: string | null;
+  activeSessions: number;
 }
 
 export interface LiveOrder {

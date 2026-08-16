@@ -44,6 +44,28 @@ describe("admin permissions", () => {
     it("does not show revenue to support", () => {
       expect(can("support", "metrics.view")).toBe(false);
     });
+
+    it("keeps account administration to owner alone", () => {
+      // There is no partial version of this. A role that can create admins can
+      // create an owner, and a role that can change roles can grant itself one
+      // — so anything short of owner-only is privilege escalation by design.
+      for (const role of ROLES) {
+        expect(can(role, "access.manage")).toBe(role === "owner");
+      }
+      expect(canOpen("ops", "/access")).toBe(false);
+      expect(canOpen("finance", "/access")).toBe(false);
+      expect(canOpen("support", "/access")).toBe(false);
+      expect(canOpen("owner", "/access")).toBe(true);
+    });
+
+    it("lets every role reach its own security page", () => {
+      // Changing your own password is the one action an account must never
+      // lose, including one whose role was narrowed after it was created.
+      for (const role of ROLES) {
+        expect(canOpen(role, "/security")).toBe(true);
+      }
+      expect(canOpen(undefined, "/security")).toBe(true);
+    });
   });
 
   describe("owner is a genuine superset", () => {

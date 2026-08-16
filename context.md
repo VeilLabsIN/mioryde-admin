@@ -8,7 +8,7 @@ change". Everything here is verified against the code, not remembered.
 > architecture, invariants, status, or blockers. A stale handoff is worse than
 > none — it is believed.
 
-**Last updated:** 16 August 2026 (dispatch board)
+**Last updated:** 16 August 2026 (dispatch board, access control)
 
 ---
 
@@ -58,7 +58,11 @@ cd ../mioryde-rider-app && flutter run --dart-define-from-file=env/emulator.json
 ```
 
 Useful: `npm run payout:batch [YYYY-MM-DD]` runs a payout batch by hand.
-`npm run admin:create -- --email x@y.com --name "X" --role owner` makes an admin.
+`npm run admin:create -- --email x@y.com --name "X" --role owner` makes the
+*first* admin. After that use Access control in the panel — the script still
+carries `ON CONFLICT DO UPDATE`, so pointing it at an existing address silently
+resets that person's password, and it can demote the last owner. The panel
+refuses both.
 
 OTP codes print to the server log in development (`SMS_PROVIDER=log`) — grep
 `OTP for`.
@@ -97,6 +101,14 @@ then does the real check. This trips everyone once.
 
 **Admin auth is an HttpOnly refresh cookie + in-memory access token.** Nothing
 durable in localStorage.
+
+**Every admin request re-reads the session and the account.** `AdminGuard`
+verifies the token's signature and then looks up the session row: revoked or
+expired session, or a deactivated account, is a 401, and **the role comes from
+the row, not from the token**. Without this, deactivating an admin left them
+fully privileged until their access token expired — up to fifteen minutes, in
+precisely the situation where that is least acceptable (BUG-040). It costs one
+indexed lookup per request; do not "optimise" it away.
 
 **Rate limiting keys on the verified account, not the IP.** Indian carriers put
 tens of thousands of subscribers behind few addresses (CGNAT); per-IP limits
@@ -141,8 +153,9 @@ Complete and verified against a live database:
 - Partner onboarding: documents, dual approval, vehicles, agreement, bank
 - Financial integrity: double-entry ledger, cash netting, collection ceiling,
   nightly payout batch, GST invoicing
-- Admin panel: 12 pages including KYC review, bank checks, collections, a live
-  dispatch board, agreement publishing and business analytics
+- Admin panel: 14 pages including KYC review, bank checks, collections, a live
+  dispatch board, agreement publishing, business analytics, and access control
+  (create admins, change roles, deactivate, reset and change passwords)
 - CI on all four repos — builds, boots the API, builds real APKs, checks no
   demo path reached a release build
 
@@ -220,7 +233,7 @@ rewrite.
 | Money handling | `mioryde-api/src/common/money.ts` |
 | Ledger rules | `mioryde-api/migrations/0018_ledger.sql` |
 
-Test counts at last update: api 174, admin 53, rider app 84, customer app 85.
+Test counts at last update: api 175, admin 55, rider app 84, customer app 85.
 
 ## 9. Environment quirks that waste an hour if you do not know them
 

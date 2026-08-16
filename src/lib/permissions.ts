@@ -1,6 +1,9 @@
-import type { AdminIdentity } from "./api";
+import type { AdminRole } from "./api";
 
-export type AdminRole = AdminIdentity["role"];
+// Re-exported rather than redeclared: it is defined beside the identity it
+// comes from, and two independent definitions of the role union is how the
+// panel ends up believing in a role the server has never heard of.
+export type { AdminRole };
 
 /**
  * What each role may reach.
@@ -32,7 +35,8 @@ export type Capability =
   | "pricing.view"
   | "pricing.edit"
   | "audit.view"
-  | "metrics.view";
+  | "metrics.view"
+  | "access.manage";
 
 const MATRIX: Record<AdminRole, readonly Capability[]> = {
   // Superset, applied in the guard rather than by listing every capability —
@@ -50,6 +54,10 @@ const MATRIX: Record<AdminRole, readonly Capability[]> = {
     "pricing.edit",
     "audit.view",
     "metrics.view",
+    // Owner and nothing else, on the server too. A role that can create
+    // admins can create an owner, and a role that can change roles can grant
+    // itself one — there is no such thing as partial access to this.
+    "access.manage",
   ],
   ops: [
     "orders.view",
@@ -111,6 +119,10 @@ const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   ["/payouts", "payouts.view"],
   ["/pricing", "pricing.view"],
   ["/audit", "audit.view"],
+  ["/access", "access.manage"],
+  // `/security` is deliberately absent. Unlisted paths are open to every role,
+  // and changing your own password is the one action an account must never
+  // lose — including an account whose role was narrowed to nothing.
   // Last, because every path starts with "/".
   ["/", "metrics.view"],
 ];

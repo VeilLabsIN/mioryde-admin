@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
@@ -93,12 +94,22 @@ export default function PanelLayout({
           <div aria-hidden className="hazard h-1 w-16 opacity-50" />
 
           <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-[13px] font-medium leading-tight">{admin.name}</p>
+            {/* Your own name is where people look for their own account
+                settings, which is the only thing on the other end of this —
+                changing your password. It is deliberately not in the nav: it
+                belongs to every role, and the nav is organised by capability. */}
+            <Link
+              href="/security"
+              aria-label="Your account and password"
+              className="group text-right transition-colors duration-150"
+            >
+              <p className="text-[13px] font-medium leading-tight group-hover:text-accent">
+                {admin.name}
+              </p>
               <p className="font-mono text-[10px] uppercase tracking-[1.5px] text-fg-muted">
                 {admin.role}
               </p>
-            </div>
+            </Link>
             <button
               type="button"
               onClick={async () => {

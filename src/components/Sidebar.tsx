@@ -74,6 +74,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/agreement", label: "Agreement", mark: "AG", needs: ["pricing.edit"] },
       { href: "/audit", label: "Audit log", mark: "AU", needs: ["audit.view"] },
+      { href: "/access", label: "Access control", mark: "AC", needs: ["access.manage"] },
     ],
   },
 ];
