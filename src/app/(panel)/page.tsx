@@ -104,7 +104,12 @@ export default function OverviewPage() {
             {recent.map((order) => (
               <li key={order.id}>
                 <Link
-                  href={`/orders?search=${order.code}`}
+                  // Encoded, and now actually honoured: the deliveries page
+                  // reads `search` from the URL. Until Stage 8 no page in the
+                  // panel read the query string at all, so this link dropped
+                  // its filter and dumped the operator on the unfiltered list
+                  // while looking like it worked (PATTERNS.md A3).
+                  href={`/orders?search=${encodeURIComponent(order.code)}`}
                   className="flex items-center gap-4 px-4 py-3 transition-colors duration-150
                              hover:bg-panel"
                 >

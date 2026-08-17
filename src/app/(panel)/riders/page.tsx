@@ -13,6 +13,7 @@ import {
   PageHeader,
 } from "@/components/ui";
 import { type AdminRider, type PageMeta, ApiError, api } from "@/lib/api";
+import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
 
 const FILTERS = [
   { value: "pending_kyc", label: "Awaiting review" },
@@ -38,13 +39,20 @@ const STATUS_LABEL: Record<string, string> = {
 export default function RidersPage() {
   // Opens on pending applications — this screen exists to get people approved,
   // not to browse everyone.
-  const [status, setStatus] = useState<string>("pending_kyc");
-  const [search, setSearch] = useState("");
+  // "pending_kyc" is the default *and* the fallback, so the opening view has a
+  // clean URL and only a deliberate change puts ?status= in it.
+  const [status, setStatus, statusReady] = useUrlParam("status", "pending_kyc");
+  const [search, setSearch, searchReady] = useUrlParam("search");
   const [riders, setRiders] = useState<AdminRider[] | null>(null);
   const [meta, setMeta] = useState<PageMeta | null>(null);
-  const [page, setPage] = useState(0);
+  const [page, setPage, pageReady] = useUrlPage();
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  // The URL is read after mount, so the first render holds defaults. Fetching
+  // then would race a request for the default view against the one the URL
+  // actually asked for, and the wrong response can land last.
+  const urlReady = pageReady && statusReady && searchReady;
 
   const [debounced, setDebounced] = useState("");
   useEffect(() => {
@@ -55,6 +63,8 @@ export default function RidersPage() {
   const requestId = useRef(0);
 
   const load = useCallback(() => {
+    if (!urlReady) return;
+
     const id = ++requestId.current;
     setRiders(null);
     setError(null);
@@ -77,14 +87,7 @@ export default function RidersPage() {
         if (id !== requestId.current) return;
         setError(e instanceof Error ? e.message : "Could not load partners.");
       });
-  }, [status, debounced, page]);
-
-  // Filter or search change goes back to page one. `load` is not in the deps
-  // because it changes on every page change too, which would reset the page
-  // immediately after setting it.
-  useEffect(() => {
-    setPage(0);
-  }, [status, debounced]);
+  }, [status, debounced, page, urlReady, setPage]);
 
   useEffect(load, [load]);
 
@@ -118,7 +121,10 @@ export default function RidersPage() {
         <div className="w-full max-w-[280px]">
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setPage(0);
+              setSearch(e.target.value);
+            }}
             placeholder="Name or phone"
             aria-label="Search partners"
           />
@@ -129,7 +135,12 @@ export default function RidersPage() {
         {FILTERS.map((f) => (
           <GhostButton
             key={f.value || "all"}
-            onClick={() => setStatus(f.value)}
+            onClick={() => {
+              // Two sequential URL writes; each re-reads the live query string,
+              // so the page reset is not overwritten by the status write.
+              setPage(0);
+              setStatus(f.value);
+            }}
             aria-pressed={f.value === status}
             className={f.value === status ? "border-accent text-accent" : undefined}
           >

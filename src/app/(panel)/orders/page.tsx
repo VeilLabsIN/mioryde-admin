@@ -17,6 +17,7 @@ import {
   api,
   formatMoney,
 } from "@/lib/api";
+import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
 
 const FILTERS = [
   { value: "", label: "All" },
@@ -30,10 +31,41 @@ const FILTERS = [
 export default function OrdersPage() {
   const [orders, setOrders] = useState<AdminOrder[] | null>(null);
   const [meta, setMeta] = useState<PageMeta | null>(null);
-  const [page, setPage] = useState(0);
-  const [status, setStatus] = useState("");
-  const [search, setSearch] = useState("");
+
+  // Filters, search and page live in the URL, so this view is linkable. The
+  // overview's recent-delivery links point here with ?search=<code> and were
+  // silently dropping the filter before this — see PATTERNS.md A3.
+  const [page, setPage, pageReady] = useUrlPage();
+  const [status, setStatus, statusReady] = useUrlParam("status");
+  const [search, setSearch, searchReady] = useUrlParam("search");
   const [error, setError] = useState<string | null>(null);
+
+  // The URL is read in an effect after mount, so the first render holds
+  // defaults. Fetching then would fire a request for the unfiltered list and
+  // race it against the real one — and on a slow API the wrong response can
+  // land last. Waiting one tick costs nothing and removes the race.
+  const urlReady = pageReady && statusReady && searchReady;
+
+  /**
+   * Narrowing the view returns to the first page.
+   *
+   * Both values are in the URL, so this is two sequential writes. They compose
+   * because each setter re-reads `window.location.search` rather than closing
+   * over a snapshot — otherwise the second would overwrite the first and the
+   * page number would survive the filter change.
+   *
+   * Without this, refining a search from page three lands the operator on an
+   * empty table for a query that has results.
+   */
+  const changeStatus = (next: string) => {
+    setPage(0);
+    setStatus(next);
+  };
+
+  const changeSearch = (next: string) => {
+    setPage(0);
+    setSearch(next);
+  };
 
   // Debounced so typing a phone number is one request, not eleven.
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -46,14 +78,9 @@ export default function OrdersPage() {
   // overwrite results for the later, more specific "9876".
   const requestId = useRef(0);
 
-  // Changing a filter or the search term resets to the first page. Staying on
-  // page 3 while narrowing a search is how an operator lands on an empty table
-  // for a query that has results.
   useEffect(() => {
-    setPage(0);
-  }, [status, debouncedSearch]);
+    if (!urlReady) return;
 
-  useEffect(() => {
     const id = ++requestId.current;
     setOrders(null);
     setError(null);
@@ -79,7 +106,7 @@ export default function OrdersPage() {
         if (id !== requestId.current) return;
         setError(e instanceof Error ? e.message : "Could not load deliveries.");
       });
-  }, [status, debouncedSearch, page]);
+  }, [status, debouncedSearch, page, urlReady, setPage]);
 
   const activeCount = useMemo(
     () =>
@@ -109,7 +136,7 @@ export default function OrdersPage() {
         <div className="w-full max-w-[280px]">
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => changeSearch(e.target.value)}
             placeholder="Order code, phone or name"
             aria-label="Search deliveries"
           />
@@ -122,7 +149,7 @@ export default function OrdersPage() {
           return (
             <GhostButton
               key={filter.value || "all"}
-              onClick={() => setStatus(filter.value)}
+              onClick={() => changeStatus(filter.value)}
               aria-pressed={selected}
               className={
                 selected

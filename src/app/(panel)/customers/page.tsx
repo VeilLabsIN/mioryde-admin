@@ -10,12 +10,21 @@ import {
   SkeletonRows,
 } from "@/components/ui";
 import { type AdminCustomer, type PageMeta, api } from "@/lib/api";
+import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<AdminCustomer[] | null>(null);
   const [meta, setMeta] = useState<PageMeta | null>(null);
-  const [page, setPage] = useState(0);
-  const [search, setSearch] = useState("");
+  const [page, setPage, pageReady] = useUrlPage();
+  const [search, setSearch, searchReady] = useUrlParam("search");
+  const urlReady = pageReady && searchReady;
+
+  // Narrowing returns to the first page. Two sequential URL writes, which
+  // compose because each setter re-reads the live query string.
+  const changeSearch = (next: string) => {
+    setPage(0);
+    setSearch(next);
+  };
   const [error, setError] = useState<string | null>(null);
 
   const [debounced, setDebounced] = useState("");
@@ -26,13 +35,9 @@ export default function CustomersPage() {
 
   const requestId = useRef(0);
 
-  // Narrowing the search returns to the first page, or an operator refining a
-  // query from page two lands on an empty table that has results.
   useEffect(() => {
-    setPage(0);
-  }, [debounced]);
+    if (!urlReady) return;
 
-  useEffect(() => {
     const id = ++requestId.current;
     setCustomers(null);
     setError(null);
@@ -56,7 +61,7 @@ export default function CustomersPage() {
           e instanceof Error ? e.message : "Could not load customers.",
         );
       });
-  }, [debounced, page]);
+  }, [debounced, page, urlReady, setPage]);
 
   return (
     <div className="mx-auto max-w-[1200px]">
@@ -74,7 +79,7 @@ export default function CustomersPage() {
         <div className="w-full max-w-[280px]">
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => changeSearch(e.target.value)}
             placeholder="Name or phone"
             aria-label="Search customers"
           />

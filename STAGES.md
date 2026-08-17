@@ -228,14 +228,34 @@ in the footer. Remaining:
 
 ---
 
-## Stage 8 · URL as view state ⬜
+## Stage 8 · URL as view state 🔨
 
-Filters, search, page, tab and date range live only in React state. Nothing is
-shareable, bookmarkable or restored by back — and the dashboard's
-recent-delivery links are silently broken because of it (`PATTERNS.md` A3).
+**Done for deliveries, customers and partners.** `useUrlParam` and `useUrlPage`
+in `lib/useUrlState.ts`; filters, search and page number are in the query
+string, so those views are linkable and bookmarkable.
 
-`useUrlState` wrapping `useSearchParams` + `router.replace`. `replace` not
-`push`, so typing a search does not fill the history stack.
+**Not `useSearchParams`,** and the reason is written into the hook: a client
+component reading it in a statically prerendered route must sit under a Suspense
+boundary or `next build` refuses. Every page here is `"use client"` and
+prerendered, so adopting it means a boundary per page and a static-render deopt
+each — for a value that only changes on the client, in a panel where nothing
+server-side reads the query string. So the hook uses `window.location.search`
+plus `history.replaceState`, and listens for `popstate` itself.
+
+**The honest tradeoff.** `replaceState` everywhere means typing in a search box
+does not fill the history stack — which was the goal — but it also means the
+back button does not step through *page numbers*. Back from page two leaves the
+page rather than returning to page one. The better answer is `push` for discrete
+actions (page, filter) and `replace` for continuous ones (typing); that is a
+follow-up, not shipped.
+
+The first page is omitted from the URL, and empty values are removed rather than
+written as `?search=`, so two identical views always produce the same link.
+Page numbers are one-based in the URL and zero-based to the API, converted in
+one place and covered by five tests.
+
+**Remaining:** payouts, collections, banking, the KYC tab selection, the audit
+log filters, and the analytics date range.
 
 ---
 

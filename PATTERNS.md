@@ -56,7 +56,7 @@ state, its assigned partner, or its cancellation reason.
 
 Everything needed already exists in the schema. Nothing exposes it.
 
-### A3 · The dashboard's "recent deliveries" links go nowhere useful
+### A3 · The dashboard's "recent deliveries" links go nowhere useful — *fixed*
 
 **High.** `page.tsx:87` links each recent delivery to
 `/orders?search=${order.code}`. **No page in the panel reads the URL** —
@@ -67,7 +67,11 @@ consults the query string.
 So the primary drill-through on the landing page silently drops its filter and
 dumps the operator on the unfiltered list. It looks like it works.
 
-### A4 · No URL state anywhere
+**Fixed.** The deliveries page reads `search` from the URL, and the link is now
+encoded. Verified: `/orders?search=LEDGER01` arrives with the search box filled
+and one row shown, where before it listed all sixteen.
+
+### A4 · No URL state anywhere — *fixed for 3 of 9 pages*
 
 **High.** Following from A3: filters, search terms, selected tab, date range
 and pagination all live only in React state. Consequences:
