@@ -8,7 +8,8 @@ change". Everything here is verified against the code, not remembered.
 > architecture, invariants, status, or blockers. A stale handoff is worse than
 > none — it is believed.
 
-**Last updated:** 16 August 2026 (dispatch board, access control, monitoring)
+**Last updated:** 17 August 2026 (dispatch board, access control, monitoring,
+deeper analytics)
 
 ---
 
@@ -163,9 +164,10 @@ Complete and verified against a live database:
 - Financial integrity: double-entry ledger, cash netting, collection ceiling,
   nightly payout batch, GST invoicing
 - Admin panel: 15 pages including KYC review, bank checks, collections, a live
-  dispatch board, agreement publishing, business analytics, access control
-  (create admins, change roles, deactivate, reset and change passwords) and
-  monitoring (queue depth, dispatch latency, ledger integrity)
+  dispatch board, agreement publishing, access control (create admins, change
+  roles, deactivate, reset and change passwords), monitoring (queue depth,
+  dispatch latency, ledger integrity) and analytics (trends, hour-of-day
+  demand, partner leaderboard, repeat-customer rate, custom range, CSV export)
 - CI on all four repos — builds, boots the API, builds real APKs, checks no
   demo path reached a release build
 
@@ -225,6 +227,12 @@ rewrite.
   earliest. Keep this direction.
 - **Server decides, client displays.** Where a rule exists (payout blocked, over
   the cash limit), read the server's answer rather than recomputing it.
+- **A partner's earnings are `orders.rider_payout`, never a recomputation.**
+  `commission_pct` is the *platform's* cut — `payout = total * (1 - pct/100)`
+  — so multiplying by it yields the complement of what you wanted. It is also
+  frozen at delivery, so recomputing from a rate that has since changed
+  restates history. This was wrong on the partner detail page for a long time
+  and reported a quarter of what partners had earned (BUG-043).
 - **Verify live.** Three bugs here were caught only by running the thing while a
   full test suite passed. Tests assert what you thought to assert.
 - Migrations are plain SQL, numbered, never edited after being applied — the
@@ -243,7 +251,7 @@ rewrite.
 | Money handling | `mioryde-api/src/common/money.ts` |
 | Ledger rules | `mioryde-api/migrations/0018_ledger.sql` |
 
-Test counts at last update: api 175, admin 55, rider app 84, customer app 85.
+Test counts at last update: api 176, admin 55, rider app 84, customer app 85.
 
 ## 9. Environment quirks that waste an hour if you do not know them
 

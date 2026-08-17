@@ -367,8 +367,52 @@ export const api = {
 
   // ── Analytics ──────────────────────────────────────────────────────────────
 
-  analytics: (days = 30) =>
-    request<Analytics>(`/admin/analytics?days=${days}`),
+  analytics: (range: { days?: number; from?: string; to?: string } = {}) => {
+    const query = new URLSearchParams();
+    // from/to win on the server too when both are present; sending only what
+    // was chosen keeps the request readable in a network log.
+    if (range.from && range.to) {
+      query.set("from", range.from);
+      query.set("to", range.to);
+    } else {
+      query.set("days", String(range.days ?? 30));
+    }
+    return request<Analytics>(`/admin/analytics?${query}`);
+  },
+
+  /**
+   * Downloads the daily series as a CSV.
+   *
+   * Fetched with the bearer token and handed to the browser as a blob rather
+   * than linked directly: a plain `<a href>` sends no Authorization header, so
+   * the endpoint would answer 401 and the browser would save the error body as
+   * a file called `daily.csv`. Failing loudly here is the whole point.
+   */
+  async downloadDailyCsv(range: { days?: number; from?: string; to?: string } = {}) {
+    const query = new URLSearchParams();
+    if (range.from && range.to) {
+      query.set("from", range.from);
+      query.set("to", range.to);
+    } else {
+      query.set("days", String(range.days ?? 30));
+    }
+
+    const token = auth.accessToken();
+    const res = await fetch(`${BASE_URL}/admin/analytics/daily.csv?${query}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    if (!res.ok) {
+      throw new ApiError(res.status, `Could not export (${res.status}).`);
+    }
+
+    // The server names the file, including the period it covers. Parsed rather
+    // than reconstructed here so the two cannot drift apart.
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    const named = /filename="([^"]+)"/.exec(disposition)?.[1];
+
+    return { blob: await res.blob(), filename: named ?? "mioryde-daily.csv" };
+  },
 
   // ── Partner agreement ──────────────────────────────────────────────────────
 
@@ -504,6 +548,8 @@ export interface Money {
 
 export interface Analytics {
   days: number;
+  /** The window the server actually used, resolved in the business timezone. */
+  range: { from: string; to: string };
   summary: {
     revenue: { now: Money; previous: Money };
     orders: { now: number; previous: number };
@@ -537,6 +583,33 @@ export interface Analytics {
     cashOutstanding: Money;
     holdingCash: number;
     bankChecksPending: number;
+  };
+  /** All 24 buckets, always — a quiet 03:00 is a zero, not a missing bar. */
+  hourly: {
+    hour: number;
+    placed: number;
+    delivered: number;
+    revenue: Money;
+  }[];
+  partners: {
+    riderId: string;
+    name: string;
+    rating: number | null;
+    delivered: number;
+    cancelled: number;
+    cancellationRate: number;
+    /** What customers paid on this partner's deliveries. */
+    revenue: Money;
+    /** The partner's own share, from the payout frozen at delivery. */
+    earned: Money;
+  }[];
+  retention: {
+    activeCustomers: number;
+    repeatCustomers: number;
+    newCustomers: number;
+    /** Share of active customers who have ordered more than once, ever. */
+    repeatRate: number;
+    averageLifetimeOrders: number;
   };
 }
 

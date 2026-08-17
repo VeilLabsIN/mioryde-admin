@@ -51,9 +51,12 @@ type SeriesKey = (typeof SERIES)[number]["key"];
  */
 export default function AnalyticsPage() {
   const [days, setDays] = useState<number>(30);
+  /** Set only when a custom range is in force; presets clear it. */
+  const [custom, setCustom] = useState<{ from: string; to: string } | null>(null);
   const [series, setSeries] = useState<SeriesKey>("revenue");
   const [data, setData] = useState<Analytics | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   // Guards against a slow response for an old range landing after a newer one.
   const requestId = useRef(0);
@@ -64,7 +67,7 @@ export default function AnalyticsPage() {
     setData(null);
 
     api
-      .analytics(days)
+      .analytics(custom ?? { days })
       .then((result) => {
         if (id === requestId.current) setData(result);
       })
@@ -76,9 +79,34 @@ export default function AnalyticsPage() {
             : "Could not load analytics.",
         );
       });
-  }, [days]);
+  }, [days, custom]);
 
   useEffect(load, [load]);
+
+  async function exportCsv() {
+    setExporting(true);
+    setError(null);
+    try {
+      const { blob, filename } = await api.downloadDailyCsv(custom ?? { days });
+      // Object URL and a synthetic click. Revoked immediately after — the blob
+      // is held in memory until it is, and an operator exporting repeatedly
+      // over a shift would otherwise accumulate every copy.
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (caught: unknown) {
+      setError(
+        caught instanceof ApiError ? caught.message : "Could not export.",
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const rupees = (minor: number) => formatMoney({ minor, currency: "INR" });
   const active = SERIES.find((option) => option.key === series)!;
@@ -107,18 +135,44 @@ export default function AnalyticsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Analytics"
-        subtitle="Every figure is against the previous period of the same length."
-        actions={RANGES.map((range) => (
+        subtitle={
+          data
+            ? `${data.range.from} to ${data.range.to} · against the previous ${data.days} days`
+            : "Every figure is against the previous period of the same length."
+        }
+        actions={[
+          ...RANGES.map((range) => (
           <GhostButton
             key={range}
-            onClick={() => setDays(range)}
+            onClick={() => {
+              // Choosing a preset clears any custom range, so the two controls
+              // cannot both look selected while only one is in effect.
+              setCustom(null);
+              setDays(range);
+            }}
             className={
-              days === range ? "border-accent text-fg" : "text-fg-faint"
+              custom === null && days === range
+                ? "border-accent text-fg"
+                : "text-fg-faint"
             }
           >
             {range} days
           </GhostButton>
-        ))}
+          )),
+          <GhostButton
+            key="export"
+            onClick={() => void exportCsv()}
+            disabled={exporting || data === null}
+          >
+            {exporting ? "Exporting…" : "Export CSV"}
+          </GhostButton>,
+        ]}
+      />
+
+      <RangePicker
+        value={custom}
+        onApply={(range) => setCustom(range)}
+        onClear={() => setCustom(null)}
       />
 
       {error ? (
@@ -270,7 +324,230 @@ export default function AnalyticsPage() {
               </p>
             ) : null}
           </Card>
+
+          <Card>
+            <SectionLabel>Demand by hour</SectionLabel>
+            <p className="text-fg-faint mb-3 text-xs">
+              Orders placed, by hour of the business day, across the whole
+              period. This is the staffing question — when to get partners
+              online.
+            </p>
+            <TrendChart
+              points={data.hourly.map((bucket) => ({
+                // Two digits, so the axis reads as clock time rather than as
+                // an index. "9" beside "10" invites reading it as a count.
+                label: String(bucket.hour).padStart(2, "0"),
+                value: bucket.placed,
+              }))}
+              format={(value) => String(Math.round(value))}
+              mode="bar"
+              height={180}
+            />
+            <PeakHour hourly={data.hourly} />
+          </Card>
+
+          <Card>
+            <SectionLabel>Returning customers</SectionLabel>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat
+                label="Repeat rate"
+                value={`${(data.retention.repeatRate * 100).toFixed(0)}%`}
+                hint="Of customers active in this period, the share who have ordered more than once"
+              />
+              <Stat
+                label="Active customers"
+                value={String(data.retention.activeCustomers)}
+                hint={`${data.retention.repeatCustomers} have ordered before`}
+              />
+              <Stat
+                label="First-time"
+                value={String(data.retention.newCustomers)}
+                hint="First ever order fell inside this period"
+              />
+              <Stat
+                label="Orders per customer"
+                value={data.retention.averageLifetimeOrders.toFixed(1)}
+                hint="Lifetime average, not just this period"
+              />
+            </div>
+            <p className="text-fg-faint mt-4 text-xs">
+              Measured over each customer&apos;s whole history, not just this
+              window — somebody who ordered in January and again this week is
+              returning, not new.
+            </p>
+          </Card>
+
+          <Card>
+            <SectionLabel>Partners</SectionLabel>
+            <p className="text-fg-faint mb-3 text-xs">
+              Ranked by deliveries rather than revenue — revenue rewards
+              whoever drew the long jobs, and the question here is who is
+              turning up.
+            </p>
+            <PartnerTable partners={data.partners} rupees={rupees} />
+          </Card>
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Names the busiest hour in words.
+ *
+ * A reader can find the tallest bar themselves, but not without doing it every
+ * time they look. Stating it once turns the chart from something to study into
+ * something to glance at.
+ */
+function PeakHour({ hourly }: { hourly: Analytics["hourly"] }) {
+  const busiest = hourly.reduce(
+    (best, bucket) => (bucket.placed > best.placed ? bucket : best),
+    hourly[0] ?? { hour: 0, placed: 0 },
+  );
+
+  const total = hourly.reduce((sum, bucket) => sum + bucket.placed, 0);
+  if (total === 0) return null;
+
+  const label = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
+
+  return (
+    <p className="text-fg-faint mt-3 text-xs">
+      Busiest hour {label(busiest.hour)}–{label((busiest.hour + 1) % 24)} with{" "}
+      <span className="text-fg-mid tabular-nums">{busiest.placed}</span> orders,{" "}
+      {((busiest.placed / total) * 100).toFixed(0)}% of the period.
+    </p>
+  );
+}
+
+function PartnerTable({
+  partners,
+  rupees,
+}: {
+  partners: Analytics["partners"];
+  rupees: (minor: number) => string;
+}) {
+  if (partners.length === 0) {
+    return <p className="text-fg-faint py-4 text-sm">Nobody delivered in this period.</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[560px] text-sm">
+        <thead>
+          <tr className="border-line text-fg-muted border-b text-left font-mono text-[9px] uppercase tracking-[2px]">
+            <th className="py-2 pr-3 font-normal">Partner</th>
+            <th className="py-2 pr-3 text-right font-normal">Delivered</th>
+            <th className="py-2 pr-3 text-right font-normal">Cancelled</th>
+            <th className="py-2 pr-3 text-right font-normal">Earned</th>
+            <th className="py-2 text-right font-normal">Fares</th>
+          </tr>
+        </thead>
+        <tbody className="divide-line divide-y">
+          {partners.map((partner) => (
+            <tr key={partner.riderId}>
+              <td className="max-w-[220px] truncate py-2 pr-3">
+                {partner.name}
+                {partner.rating !== null && (
+                  <span className="text-fg-faint ml-2 text-xs tabular-nums">
+                    {partner.rating.toFixed(1)}★
+                  </span>
+                )}
+              </td>
+              <td className="py-2 pr-3 text-right font-mono tabular-nums">
+                {partner.delivered}
+              </td>
+              {/* The rate, not just the count. Two cancellations out of three
+                  jobs and two out of ninety are different partners. */}
+              <td
+                className={`py-2 pr-3 text-right font-mono tabular-nums ${
+                  partner.cancellationRate > 0.1 ? "text-warn" : "text-fg-faint"
+                }`}
+              >
+                {partner.cancelled}
+                {partner.cancelled > 0 && (
+                  <span className="ml-1 text-xs">
+                    ({(partner.cancellationRate * 100).toFixed(0)}%)
+                  </span>
+                )}
+              </td>
+              {/* Earned before fares, because it is the partner's number and
+                  this is a table about partners. Both are shown because they
+                  are easy to confuse — see BUG-043. */}
+              <td className="py-2 pr-3 text-right font-mono tabular-nums">
+                {rupees(partner.earned.minor)}
+              </td>
+              <td className="text-fg-faint py-2 text-right font-mono tabular-nums">
+                {rupees(partner.revenue.minor)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * An explicit date range.
+ *
+ * Kept in local state until Apply, so a half-typed date does not fire a
+ * request on every keystroke — and the presets above stay authoritative until
+ * somebody deliberately chooses otherwise.
+ */
+function RangePicker({
+  value,
+  onApply,
+  onClear,
+}: {
+  value: { from: string; to: string } | null;
+  onApply: (range: { from: string; to: string }) => void;
+  onClear: () => void;
+}) {
+  const [from, setFrom] = useState(value?.from ?? "");
+  const [to, setTo] = useState(value?.to ?? "");
+
+  const complete = from !== "" && to !== "";
+
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <label className="flex flex-col gap-1">
+        <span className="text-fg-muted font-mono text-[9px] uppercase tracking-[2px]">
+          From
+        </span>
+        <input
+          type="date"
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+          className="border-edge bg-panel text-fg focus:border-accent h-9 border px-2 font-sans text-[13px] focus:outline-none"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-fg-muted font-mono text-[9px] uppercase tracking-[2px]">
+          To
+        </span>
+        <input
+          type="date"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          className="border-edge bg-panel text-fg focus:border-accent h-9 border px-2 font-sans text-[13px] focus:outline-none"
+        />
+      </label>
+
+      <GhostButton disabled={!complete} onClick={() => onApply({ from, to })}>
+        Apply range
+      </GhostButton>
+
+      {value && (
+        <GhostButton
+          onClick={() => {
+            setFrom("");
+            setTo("");
+            onClear();
+          }}
+        >
+          Clear
+        </GhostButton>
       )}
     </div>
   );
