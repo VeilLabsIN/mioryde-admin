@@ -34,6 +34,48 @@
   --dur-fast: 120ms;
   --dur-base: 200ms;
   --dur-slow: 320ms;
+
+  /* ── Type scale ───────────────────────────────────────────────────────────
+     Six steps, each with a job. Before this the panel used nine sizes —
+     text-[9px] through text-[28px] — several of them one pixel apart and
+     chosen per file, which is the same drift that gave twelve pages three
+     different heading treatments before PageHeader existed.
+
+     Sizes are px rather than rem on purpose. This is a fixed-density
+     operations tool on a desktop, not a document: a browser zoom scales the
+     whole layout, and rem would let a changed root size reflow a table into
+     something unreadable while the column widths stayed put.
+     ─────────────────────────────────────────────────────────────────────── */
+
+  /* Column headers and SectionLabel. Uppercase, widely tracked — legible at
+     this size only because it is short, capitalised and never a sentence. */
+  --text-micro: 9px;
+  --text-micro--line-height: 1.2;
+  --text-micro--letter-spacing: 2px;
+  --text-micro--font-weight: 700;
+
+  /* Hints, timestamps, the second line of a row. */
+  --text-meta: 11px;
+  --text-meta--line-height: 1.45;
+
+  /* The panel's body size. Most content is this. */
+  --text-body: 13px;
+  --text-body--line-height: 1.5;
+
+  /* Card headings and emphasised rows — one step up from body, not two. */
+  --text-label: 15px;
+  --text-label--line-height: 1.4;
+
+  /* PageHeader, and nothing else. */
+  --text-title: 24px;
+  --text-title--line-height: 1.25;
+  --text-title--font-weight: 600;
+
+  /* Dashboard and monitoring figures. Tabular digits are applied at the call
+     site rather than here, because the same size is occasionally used for a
+     word ("Passing") where proportional is correct. */
+  --text-figure: 28px;
+  --text-figure--line-height: 1.15;
 }
 
 /* ── midnight (default) ─────────────────────────────────────────────────── */
@@ -299,7 +341,61 @@
    Everything animated below is `transform` or `opacity` only. Both are handled
    by the compositor, so they never trigger layout or paint and stay at 60fps
    on the low-end laptops an ops team actually uses.
+
+   Four jobs, and a thing should pick one rather than inventing a duration:
+
+     enter   200ms  content arriving — fade plus a 4px rise
+     change  120ms  hover, focus, a value updating in place
+     leave   120ms  always faster than entering
+     attend  slow, looped — the live pulse, and nothing else
+
+   Leaving is deliberately quicker than entering. Waiting for something to
+   finish disappearing is the most irritating kind of latency there is, because
+   the decision has already been made and the interface is still catching up.
+
+   The `prefers-reduced-motion` block near the end of this file neutralises all
+   of it, so none of these need to check.
    ─────────────────────────────────────────────────────────────────────────── */
+
+/* Enter. The rise is small on purpose — a row that travels a long way implies
+   it came from somewhere, and it did not, it just arrived. */
+@utility motion-enter {
+  animation: rise var(--dur-base) var(--ease-out-quint) both;
+}
+
+/* Change. For anything that transitions in place; pair with the properties
+   being changed rather than `transition-all`, which animates layout too. */
+@utility motion-change {
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out-quint);
+}
+
+@utility motion-leave {
+  animation: fade-out var(--dur-fast) var(--ease-out-quint) both;
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+/* A value that changed, flashed once. Used by the dispatch board and the
+   monitoring page so a number moving is visible peripherally — an operator
+   watching a city is not staring at one cell. */
+@keyframes value-changed {
+  0% {
+    background-color: color-mix(in oklab, var(--accent) 22%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+@utility motion-value-changed {
+  animation: value-changed var(--dur-slow) var(--ease-out-quint);
+  border-radius: 2px;
+}
 
 @keyframes rise {
   from { opacity: 0; transform: translate3d(0, 8px, 0); }

@@ -73,16 +73,37 @@ and pagination all live only in React state. Consequences:
 - Browser back does not restore state; it leaves the page entirely.
 - A reload loses the operator's place.
 
-### A5 · Buttons have no visible focus state
+### A5 · Inputs suppress the focus ring that everything else gets
 
-**High, and an accessibility defect.** In `components/ui.tsx`, `Button` and
-`GhostButton` define hover and active styles and **no focus style at all**.
-`Input` (line 81) sets `focus:border-accent focus:outline-none` — it removes
-the browser's default ring and replaces it only with a border colour change.
+**Medium.** *Corrected after first publication — the original version of this
+entry claimed buttons had no focus state at all. That was wrong, and it was
+wrong because I checked the component file instead of the cascade.*
 
-The result: a keyboard user cannot see where they are. On a panel that
-deactivates admin accounts and settles payouts, "which button am I about to
-press" is not a cosmetic question.
+`globals.css:292` carries a global `@layer base` rule:
+
+```css
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+```
+
+Verified present in the compiled production stylesheet. So `Button`,
+`GhostButton` and every other interactive element **do** get a visible accent
+ring on keyboard focus, without declaring anything themselves. That is the
+right way round — one rule, no per-component repetition.
+
+What is actually wrong is narrower: `Input` (`ui.tsx:81`) sets
+`focus:border-accent focus:outline-none`. Tailwind utilities sit in a later
+cascade layer than `base`, so `outline-none` wins and inputs are the one
+control that loses the ring, keeping only a border-colour change. A border that
+shifts from grey to amber is a weaker signal than a 2px offset outline, and it
+is inconsistent with every other focusable thing in the panel.
+
+**Fix:** drop `focus:outline-none` from `Input` and let the base rule apply,
+keeping `focus:border-accent` as reinforcement. One deletion.
+
+**Method note, since it cost something:** a component-level grep cannot answer
+"does this element have a focus style" when the project sets one globally. Check
+the compiled CSS or the browser's computed style. The appendix command for A5
+was the wrong command.
 
 ### A6 · Five pages fake tables with CSS grid
 
@@ -384,13 +405,12 @@ supports optional sort and row click. This removes the duplication, fixes the
 semantics for all five pages at once, and is the prerequisite for A1's
 pagination controls being consistent.
 
-### C4 · Focus-visible styling as a token
+### C4 · Stop `Input` opting out of the global focus ring
 
-Fix A5 once, in `ui.tsx`, rather than per-component: a shared
-`focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2
-focus-visible:outline-accent` applied to every interactive primitive. Use
-`focus-visible` rather than `focus` so a mouse click does not leave a ring
-behind, which is why it was probably dropped in the first place.
+This is already solved for everything except inputs — see the corrected A5. The
+whole of C4 is: delete `focus:outline-none` from `Input` in `ui.tsx`. Do **not**
+add per-component `focus-visible:` utilities; the base rule already covers every
+primitive and duplicating it is how the two drift apart.
 
 ### C5 · URL as the source of truth for view state
 
@@ -616,7 +636,7 @@ Claims in Part A were checked as follows, so they can be re-checked:
 | A1 no totals | Every list handler returns `{results}`; no `count(*) OVER` in any admin query |
 | A2 no order detail | Full route list from the API boot log — no `GET /admin/orders/:id` |
 | A3, A4 URL state | `grep -rn "useSearchParams\|searchParams" src/` → zero matches |
-| A5 focus | `grep -n "focus:" src/components/ui.tsx` → one match, on `Input` only |
+| A5 focus | ~~`grep -n "focus:" ui.tsx`~~ — **wrong method, gave a wrong answer.** Use `grep -oE ":focus-visible\{outline[^}]*\}" .next/static/chunks/*.css` → the base rule is present |
 | A6 fake tables | `grep -rln "grid-cols-\[" src/app` → 5 pages; `<table>` → 2 pages |
 | A7 boundaries | `ls src/app` — no `error.tsx`, `not-found.tsx`, `loading.tsx` |
 | A8 PageHeader | Per-file grep across all 15 pages → 2 missing |

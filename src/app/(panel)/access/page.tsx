@@ -11,6 +11,7 @@ import {
   SectionLabel,
   SkeletonRows,
 } from "@/components/ui";
+import { useToast } from "@/components/ToastProvider";
 import {
   type AdminAccount,
   type AdminRole,
@@ -178,17 +179,24 @@ function AdminRow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const toast = useToast();
 
-  async function run(action: () => Promise<unknown>) {
+  async function run(action: () => Promise<unknown>, done?: string) {
     setBusy(true);
     setError(null);
     try {
       await action();
       await onChanged();
+      // Success goes to a toast: the row it happened on may have moved or
+      // re-sorted by the time the reload lands, so putting confirmation *in*
+      // the row means it sometimes appears somewhere the operator is not
+      // looking.
+      if (done) toast.success(done);
     } catch (e: unknown) {
-      // The server owns these rules — self-edit, last owner. Showing its
-      // sentence rather than a generic failure is what makes a refusal
-      // readable as a rule instead of a bug.
+      // The refusal stays on the row. The server owns these rules — self-edit,
+      // last owner — and its sentence is about *this account*, so it belongs
+      // beside that account rather than in a corner of the screen. Toasts are
+      // for outcomes; this is closer to a validation message.
       setError(e instanceof ApiError ? e.message : "That did not work.");
     } finally {
       setBusy(false);
@@ -239,16 +247,16 @@ function AdminRow({
           value={admin.role}
           disabled={busy || isLastOwner}
           aria-label={`Role for ${admin.name}`}
-          onChange={(e) =>
-            void run(() =>
-              api.updateAdminUser(admin.id, {
-                role: e.target.value as AdminRole,
-              }),
-            )
-          }
-          className="h-9 w-full border border-edge bg-panel px-2 font-sans text-[13px]
-                     text-fg transition-colors duration-150 focus:border-accent
-                     focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          onChange={(e) => {
+            const next = e.target.value as AdminRole;
+            void run(
+              () => api.updateAdminUser(admin.id, { role: next }),
+              `${admin.name} is now ${ROLE_LABEL[next]}. Their sessions were signed out.`,
+            );
+          }}
+          className="motion-change h-9 w-full border border-edge bg-panel px-2 font-sans
+                     text-body text-fg transition-colors focus:border-accent
+                     disabled:cursor-not-allowed disabled:opacity-50"
         >
           {ROLES.map((role) => (
             <option key={role} value={role}>
@@ -271,8 +279,11 @@ function AdminRow({
         <GhostButton
           disabled={busy || isLastOwner}
           onClick={() =>
-            void run(() =>
-              api.updateAdminUser(admin.id, { isActive: !admin.isActive }),
+            void run(
+              () => api.updateAdminUser(admin.id, { isActive: !admin.isActive }),
+              admin.isActive
+                ? `${admin.name} deactivated. Access ended immediately.`
+                : `${admin.name} reactivated.`,
             )
           }
           className={admin.isActive ? "hover:border-danger hover:text-danger" : ""}

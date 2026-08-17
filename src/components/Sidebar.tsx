@@ -181,7 +181,13 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
       </div>
 
       {/* Navigation */}
-      <nav ref={navRef} className="relative flex-1 overflow-y-auto overflow-x-hidden p-2">
+      {/* Labelled, so a screen reader announces it as the panel's navigation
+          rather than as an unnamed region indistinguishable from any other. */}
+      <nav
+        ref={navRef}
+        aria-label="Panel sections"
+        className="relative flex-1 overflow-y-auto overflow-x-hidden p-2"
+      >
         {/* The single sliding indicator. `translate3d` keeps it on the
             compositor; animating `top` instead would trigger layout each frame. */}
         {indicator && (

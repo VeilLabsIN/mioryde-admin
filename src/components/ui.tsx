@@ -76,23 +76,57 @@ export function Input({
 }: ComponentPropsWithoutRef<"input">) {
   return (
     <input
-      className={`h-10 w-full border border-edge bg-panel px-3 font-sans text-sm text-fg
-                  placeholder:text-fg-faint transition-colors duration-150
-                  focus:border-accent focus:outline-none ${className}`}
+      // No `focus:outline-none`. It used to be here, and because Tailwind's
+      // utilities sit in a later cascade layer than `@layer base` it beat the
+      // global `:focus-visible { outline: 2px solid var(--accent) }` rule —
+      // making the text field the one control in the panel that lost its
+      // keyboard focus ring, keeping only a border colour change. The border
+      // shift stays as reinforcement; the outline does the actual work.
+      className={`motion-change h-10 w-full border border-edge bg-panel px-3 font-sans
+                  text-body text-fg transition-colors placeholder:text-fg-faint
+                  focus:border-accent ${className}`}
       {...props}
     />
   );
 }
 
+/**
+ * How loud a container is.
+ *
+ * One `Card` for everything meant a warning, a table and a form all looked
+ * identical, so a page had no read order — the operator had to read all of it
+ * to find the part that mattered. Tone puts importance in the container rather
+ * than in making its text bigger.
+ *
+ * The three status tones colour the *left edge* rather than the whole border.
+ * A fully coloured box competes with its own contents for attention; an edge
+ * marks the card in a scan of the page and then gets out of the way. The
+ * monitoring page improvised this with `border-warn` before it was a pattern.
+ */
+type CardTone = "default" | "raised" | "inset" | "critical" | "warning" | "ok";
+
+const CARD_TONES: Record<CardTone, string> = {
+  default: "border-line bg-surface",
+  raised: "border-edge bg-raised",
+  // A level down, for detail nested inside another card. No shadow — an inset
+  // surface with a shadow reads as floating above the thing containing it.
+  inset: "border-line bg-panel",
+  critical: "border-line border-l-2 border-l-danger bg-surface",
+  warning: "border-line border-l-2 border-l-warn bg-surface",
+  ok: "border-line border-l-2 border-l-ok bg-surface",
+};
+
 /** Panel with the brand's bottom-right corner cut. */
 export function Card({
   className = "",
+  tone = "default",
   ...props
-}: ComponentPropsWithoutRef<"div">) {
+}: ComponentPropsWithoutRef<"div"> & { tone?: CardTone }) {
   return (
     <div
-      className={`corner-cut border border-line bg-surface [box-shadow:var(--shadow-panel)]
-                  ${className}`}
+      className={`corner-cut border ${CARD_TONES[tone]} ${
+        tone === "inset" ? "" : "[box-shadow:var(--shadow-panel)]"
+      } ${className}`}
       {...props}
     />
   );
@@ -164,7 +198,12 @@ export function EmptyState({
   );
 }
 
-/** Placeholder rows that match the real row height, so nothing jumps on load. */
+/**
+ * Placeholder rows that match the real row height, so nothing jumps on load.
+ *
+ * The height is not decorative — 52px is what a populated row measures, and
+ * matching it is why the table does not reflow when data lands.
+ */
 export function SkeletonRows({ rows = 6 }: { rows?: number }) {
   return (
     <div className="divide-y divide-line">
@@ -172,6 +211,46 @@ export function SkeletonRows({ rows = 6 }: { rows?: number }) {
         <div key={i} className="shimmer h-[52px]" />
       ))}
     </div>
+  );
+}
+
+/**
+ * Placeholder for a grid of metric tiles.
+ *
+ * Exists because three pages that are not tables used `SkeletonRows` anyway —
+ * the monitoring cards and the analytics charts both showed a stack of 52px
+ * bars and then rendered something completely unlike it. A skeleton in the
+ * wrong shape is worse than a spinner: it makes a promise about the layout and
+ * then breaks it.
+ */
+export function SkeletonCards({
+  count = 4,
+  className = "",
+}: {
+  count?: number;
+  className?: string;
+}) {
+  return (
+    <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-4 ${className}`}>
+      {Array.from({ length: count }, (_, i) => (
+        <Card key={i} className="px-4 py-3.5">
+          <div className="shimmer mb-2 h-2 w-16 bg-panel" />
+          {/* Same height as the figure it stands in for. */}
+          <div className="shimmer h-8 w-20 bg-panel" />
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+/** Placeholder sized to a chart's plotting area rather than to a list. */
+export function SkeletonChart({ height = 200 }: { height?: number }) {
+  return (
+    <div
+      className="shimmer w-full bg-panel"
+      style={{ height }}
+      aria-hidden
+    />
   );
 }
 

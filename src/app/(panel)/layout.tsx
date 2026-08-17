@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
+import { ToastProvider } from "@/components/ToastProvider";
 import { Spinner } from "@/components/ui";
 import { type AdminIdentity, api, auth } from "@/lib/api";
 import { canOpen, landingPathFor } from "@/lib/permissions";
@@ -86,7 +87,24 @@ export default function PanelLayout({
   }
 
   return (
+    // ToastProvider wraps the whole shell rather than sitting inside <main>, so
+    // a result that lands after the operator has navigated elsewhere still
+    // reaches them. Previously each page owned its own success and error
+    // rendering, and anything that resolved after unmount was lost.
+    <ToastProvider>
     <div className="flex min-h-dvh">
+      {/* Straight past fifteen nav items to the content. The first thing a
+          keyboard or screen-reader user meets on every single page was the
+          whole sidebar. */}
+      <a
+        href="#panel-main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3
+                   focus:z-50 focus:border focus:border-accent focus:bg-raised
+                   focus:px-3 focus:py-2 focus:text-body"
+      >
+        Skip to content
+      </a>
+
       <Sidebar role={admin.role} />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -125,8 +143,11 @@ export default function PanelLayout({
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 overflow-y-auto p-6">{children}</main>
+        <main id="panel-main" className="min-w-0 flex-1 overflow-y-auto p-6">
+          {children}
+        </main>
       </div>
     </div>
+    </ToastProvider>
   );
 }
