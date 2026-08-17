@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Card, EmptyState, SectionLabel, StatusPill } from "@/components/ui";
+import {
+  Card,
+  EmptyState,
+  PageHeader,
+  SectionLabel,
+  StatusPill,
+} from "@/components/ui";
 import { type AdminOrder, api, formatMoney } from "@/lib/api";
 
 type Overview = Awaited<ReturnType<typeof api.overview>>;
@@ -40,10 +46,15 @@ export default function OverviewPage() {
 
   return (
     <div className="mx-auto max-w-[1200px]">
-      <h1 className="mb-1 font-sans text-2xl font-semibold">Overview</h1>
-      <p className="mb-8 text-[13px] text-fg-muted">
-        Live operations across every zone.
-      </p>
+      {/* PageHeader, not a hand-rolled heading. This page was one of the two
+          that still had its own treatment, which is the drift the component
+          was extracted to end — see context.md §7. */}
+      <div className="mb-8">
+        <PageHeader
+          title="Overview"
+          subtitle="Live operations across every zone."
+        />
+      </div>
 
       <div className="stagger mb-10 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Active now" value={data?.orders.active} accent />
@@ -59,9 +70,18 @@ export default function OverviewPage() {
         <Stat
           label="Dispatch queue"
           value={data?.outboxPending}
-          // Nothing drains the outbox yet, so a rising number here is expected
-          // rather than alarming — but it should be visible, not hidden.
-          warn={(data?.outboxPending ?? 0) > 0}
+          // Unpublished events. The worker drains this every three seconds, so
+          // a small non-zero number is an ordinary busy moment rather than a
+          // problem — which is why the threshold is not 1.
+          //
+          // The previous comment here said nothing drained the outbox at all.
+          // That stopped being true when the worker shipped, and it told the
+          // reader to ignore a number that is now a real signal. Monitoring is
+          // where the useful version of this lives: it separates a queue that
+          // is busy from one that is stuck by reporting the *age* of the
+          // oldest unsent event, which a count cannot.
+          warn={(data?.outboxPending ?? 0) > 25}
+          hint="Age, not depth, is the signal — see Monitoring"
         />
       </div>
 
@@ -115,11 +135,13 @@ function Stat({
   value,
   accent = false,
   warn = false,
+  hint,
 }: {
   label: string;
   value?: number | string;
   accent?: boolean;
   warn?: boolean;
+  hint?: string;
 }) {
   const loading = value === undefined;
   return (
@@ -140,6 +162,9 @@ function Stat({
           {value}
         </p>
       )}
+      {hint && !loading ? (
+        <p className="mt-1 text-[11px] leading-snug text-fg-faint">{hint}</p>
+      ) : null}
     </Card>
   );
 }
