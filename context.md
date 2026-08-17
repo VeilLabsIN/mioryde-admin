@@ -9,7 +9,7 @@ change". Everything here is verified against the code, not remembered.
 > none — it is believed.
 
 **Last updated:** 17 August 2026 (dispatch board, access control, monitoring,
-deeper analytics)
+deeper analytics, GST credit notes)
 
 ---
 
@@ -162,7 +162,7 @@ Complete and verified against a live database:
 - Payments (Razorpay integration written), wallet, COD with a ₹5,000 cap
 - Partner onboarding: documents, dual approval, vehicles, agreement, bank
 - Financial integrity: double-entry ledger, cash netting, collection ceiling,
-  nightly payout batch, GST invoicing
+  nightly payout batch, GST invoicing and credit notes
 - Admin panel: 15 pages including KYC review, bank checks, collections, a live
   dispatch board, agreement publishing, access control (create admins, change
   roles, deactivate, reset and change passwords), monitoring (queue depth,
@@ -178,16 +178,32 @@ Not built (no schema exists): scheduled deliveries, returns, tips, incentives,
 support tickets, proof of delivery, enterprise accounts, gateway↔ledger
 reconciliation.
 
-**Refunds are not a small job, despite the ledger.** The reversing posting is
-the easy third of it. `invoices` is immutable by trigger and tells you to issue
-a credit note (`0018`-era rule, enforced in `0014_gst_invoices.sql`) — and no
-credit-note table, numbering series or counter exists, so refunding a delivered
-order is not currently possible without issuing an invalid tax document.
-`RazorpayGateway` has no `refund()` and no credentials, so that leg can be
-written but not verified. And the reversal is not a mirror of the payment: COD
-has no gateway leg, and clawing back `earnings` after the nightly batch has
-paid them is a negative-balance policy that does not exist. Three decisions
-before any code.
+**Refunds: the tax half is built, the money half needs decisions.**
+
+Done — `0023_credit_notes.sql` and `CreditNoteService`. Its own gapless series
+(`MIO/CN/<fy>/<n>`), separate from the invoice series as Rule 53 requires;
+immutable like invoices; many notes per invoice, so partial refunds work; and a
+constraint trigger that takes `FOR UPDATE` on the invoice row so two concurrent
+credits cannot together exceed what was charged. `apportionCredit` splits a
+tax-inclusive amount across the invoice's own components rather than
+recomputing from a rate, so the parts always sum exactly and a full credit
+mirrors the invoice.
+
+**It issues the document; it does not move money.** That separation is
+deliberate — a refund failing at the gateway must not leave an unissued credit
+note, and a credit note for a supply that never happened must not imply a
+payment.
+
+Still undecided, and these are business calls rather than code:
+
+1. **Destination** — wallet only, or gateway too? Wallet is buildable and
+   verifiable today; `RazorpayGateway` has no `refund()` and no credentials, so
+   that leg would ship inert.
+2. **Partner earnings** — claw back, platform absorbs, or refuse refunds after
+   the nightly batch has paid? There is no negative-balance policy in the
+   schema, so clawback is the expensive answer.
+3. **COD** — the customer paid cash to the driver and the platform never held
+   it, so a refund is the platform paying out money it never received.
 
 Built but not wired to a UI: Truecaller one-tap button (customer app), partner
 history tab (admin).
@@ -247,11 +263,11 @@ rewrite.
 | Every config value and what it blocks | `mioryde-api/.env.example` |
 | Role → capability matrix | `mioryde-admin/src/lib/permissions.ts` |
 | Admin API client and types | `mioryde-admin/src/lib/api.ts` |
-| Schema history | `mioryde-api/migrations/` (22 files) |
+| Schema history | `mioryde-api/migrations/` (23 files) |
 | Money handling | `mioryde-api/src/common/money.ts` |
 | Ledger rules | `mioryde-api/migrations/0018_ledger.sql` |
 
-Test counts at last update: api 176, admin 55, rider app 84, customer app 85.
+Test counts at last update: api 185, admin 55, rider app 84, customer app 85.
 
 ## 9. Environment quirks that waste an hour if you do not know them
 
