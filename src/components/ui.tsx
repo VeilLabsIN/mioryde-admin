@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { ComponentPropsWithoutRef } from "react";
 
 /** Chamfered primary action, matching the website's CTA shape. */
@@ -354,6 +355,7 @@ export function PageHeader({
   title,
   subtitle,
   actions,
+  breadcrumb,
 }: {
   title: string;
   /**
@@ -363,14 +365,41 @@ export function PageHeader({
    */
   subtitle?: React.ReactNode;
   actions?: React.ReactNode;
+  /**
+   * The trail above the title, for a page somebody arrived *at* rather than
+   * navigated *to*.
+   *
+   * A detail page reached from a link has no other way back up — the sidebar
+   * highlights the section but there is nothing pointing at the list you came
+   * from, so the only exit is the browser button. Top-level pages omit this.
+   */
+  breadcrumb?: { label: string; href: string }[];
 }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="mb-1 font-sans text-2xl font-semibold">{title}</h1>
-        {subtitle ? (
-          <p className="text-[13px] text-fg-muted">{subtitle}</p>
+        {breadcrumb && breadcrumb.length > 0 ? (
+          <nav aria-label="Breadcrumb" className="mb-1.5">
+            <ol className="flex flex-wrap items-center gap-1.5 text-meta text-fg-faint">
+              {breadcrumb.map((crumb) => (
+                <li key={crumb.href} className="flex items-center gap-1.5">
+                  <Link
+                    href={crumb.href}
+                    className="motion-change transition-colors hover:text-accent"
+                  >
+                    {crumb.label}
+                  </Link>
+                  {/* Decorative, so it is hidden rather than read out between
+                      every level. */}
+                  <span aria-hidden>/</span>
+                </li>
+              ))}
+            </ol>
+          </nav>
         ) : null}
+
+        <h1 className="mb-1 font-sans text-title">{title}</h1>
+        {subtitle ? <p className="text-body text-fg-muted">{subtitle}</p> : null}
       </div>
       {actions ? <div className="flex shrink-0 gap-2">{actions}</div> : null}
     </div>

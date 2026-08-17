@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Card,
@@ -198,7 +199,16 @@ export default function OrdersPage() {
                   className="grid grid-cols-[104px_1fr_150px_120px_88px] items-center gap-4
                              px-4 py-3 transition-colors duration-150 hover:bg-panel"
                 >
-                  <span className="font-mono text-xs text-fg-mid">{order.code}</span>
+                  {/* The row's way in to the detail page. On the code rather
+                      than the whole row: the row is wide and a full-row link
+                      makes selecting an address to copy impossible. */}
+                  <Link
+                    href={`/orders/${order.id}`}
+                    className="motion-change font-mono text-xs text-fg-mid underline-offset-2
+                               transition-colors hover:text-accent hover:underline"
+                  >
+                    {order.code}
+                  </Link>
 
                   <span className="min-w-0">
                     <span className="block truncate text-[13px] text-fg-soft">

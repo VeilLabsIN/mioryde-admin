@@ -459,6 +459,8 @@ export const api = {
       body: JSON.stringify({ approve, ...(note ? { note } : {}) }),
     }),
 
+  orderById: (id: string) => request<OrderDetail>(`/admin/orders/${id}`),
+
   // ── Monitoring ─────────────────────────────────────────────────────────────
 
   monitoring: () => request<Monitoring>("/admin/monitoring"),
@@ -837,6 +839,81 @@ export interface AdminAccount {
   /** Only set while a lockout is still in force; a lapsed one reads as null. */
   lockedUntil: string | null;
   activeSessions: number;
+}
+
+/**
+ * One delivery, in full — everything the schema knows about it.
+ *
+ * The panel had no way to open a single order before this. Support's whole job
+ * is "what happened to MIO-XXXXX" and the answer was a row in a list.
+ */
+export interface OrderDetail {
+  id: string;
+  code: string;
+  status: string;
+  placedAt: string;
+  deliveredAt: string | null;
+  cancellationReason: string | null;
+
+  route: {
+    pickupAddress: string;
+    dropAddress: string;
+    distanceMeters: number;
+    /** From the quote at placement, not measured. */
+    quotedSeconds: number;
+    zoneName: string | null;
+    vehicleName: string;
+    goodsCategory: string | null;
+  };
+
+  customer: { id: string; name: string; phone: string };
+  /** The recipient. A third party, so masked on the same terms. */
+  receiver: { name: string; phone: string };
+  rider: { id: string; name: string; phone: string } | null;
+
+  money: {
+    total: Money;
+    tax: Money;
+    /** The payout frozen at delivery. Null until delivered. See BUG-043. */
+    riderPayout: Money | null;
+    commissionPct: number | null;
+    method: string;
+    status: string;
+  };
+
+  timeline: {
+    fromStatus: string | null;
+    toStatus: string;
+    actorType: string;
+    /** Resolved server-side — a uuid in a timeline answers nothing. */
+    actorName: string | null;
+    at: string;
+    metadata: Record<string, unknown>;
+  }[];
+
+  payment: {
+    status: string;
+    gateway: string;
+    amount: Money;
+    gatewayPaymentId: string | null;
+    failureReason: string | null;
+  } | null;
+
+  invoice: {
+    invoiceNumber: string;
+    issuedAt: string;
+    totalValue: Money;
+  } | null;
+
+  creditNotes: {
+    creditNoteNumber: string;
+    issuedAt: string;
+    totalValue: Money;
+    reasonCode: string;
+    reason: string | null;
+  }[];
+
+  rating: { stars: number; tags: string[]; comment: string | null } | null;
 }
 
 export interface LiveOrder {

@@ -311,12 +311,25 @@ column at very wide viewports.
 
 ---
 
-## Stage 12 · Order detail ⬜
+## Stage 12 · Order detail ✅
 
-Not styling — the largest functional hole in the panel (`PATTERNS.md` A2).
-There is no `GET /admin/orders/:id`, so support cannot open a delivery. The
-timeline, tracks, invoice, credit notes and payment state all exist in the
-schema already. Needs Stage 6's backend shape and Stage 8's URL work first.
+The largest functional hole in the panel, now closed. `GET /admin/orders/:id`
+plus `/orders/[id]`, reached from the order code in the list.
+
+Five queries rather than one join: an order has many events and many credit
+notes, so a single statement would multiply the order's own columns across every
+event row and force the caller to de-duplicate.
+
+`PageHeader` gained `breadcrumb` for this (pattern B3), so a page arrived at by
+link has a way back up. It is also the first real adoption of the Stage 3 `Card`
+tones — the history panel is `raised`, a cancellation is `warning`.
+
+**Found while building it:** `orders.goods_category` does not exist. A later
+migration normalised it into `goods_categories` and left `goods_category_id` on
+the order, so the first version of the query was a 500. Reading a column list
+from migration 0001 is not the same as reading the table.
+
+Still deliberately missing: the GPS track. It needs its own endpoint and a map.
 
 ---
 

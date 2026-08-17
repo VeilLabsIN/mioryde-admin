@@ -49,7 +49,7 @@ Finishing it turned up something worse. The audit log — the one list that alre
 fails when Postgres plans the statement, so every call was a 500 and the page
 showed its error state on every load since audit logging shipped. See BUG-044.
 
-### A2 · There is no way to open a single delivery
+### A2 · There is no way to open a single delivery — *fixed*
 
 **Critical for support.** The full admin API surface has no
 `GET /admin/orders/:id`. Support's entire job is "what happened to order
@@ -59,6 +59,16 @@ and location), its GPS breadcrumb (`order_tracks`), its invoice, its payment
 state, its assigned partner, or its cancellation reason.
 
 Everything needed already exists in the schema. Nothing exposes it.
+
+**Fixed.** `GET /admin/orders/:id` and `/orders/[id]`. The timeline is the page:
+every transition with its actor resolved to a name, human labels rather than
+wire statuses, declines shown as declines rather than as progress, and the gap
+between steps stated in words — two timestamps a reader has to subtract is the
+difference between data and an answer. Plus route, both masked parties, the
+money with the frozen payout, the invoice, any credit notes, and the rating.
+
+The track polyline is deliberately excluded — it is the largest part by far and
+only wanted when somebody opens a map, so it needs its own endpoint.
 
 ### A3 · The dashboard's "recent deliveries" links go nowhere useful — *fixed*
 
@@ -250,7 +260,7 @@ types, and no way to search at all without first choosing the right page.
 Show results grouped by type with the entity's key facts inline, and open the
 record on Enter.
 
-### B3 · Breadcrumbs on every page below the top level
+### B3 · Breadcrumbs on every page below the top level — *component done*
 
 **Reference:** `Subscriptions > Google Workspace Business Base` and
 `Account settings > Account management` sitting above the page title.
