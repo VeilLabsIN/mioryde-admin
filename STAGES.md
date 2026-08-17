@@ -154,23 +154,26 @@ failure stays on the row.
 
 ---
 
-## Stage 6 · Inline paging 🔨
+## Stage 6 · Inline paging ✅
 
-**Nine of eleven lists converted.** Deliveries, customers, partners, payouts,
-KYC queue, countersign queue, pending vehicles, collections and bank checks all
-return `{results, page}` and the first six of those have a `<Pager>` wired up.
+**All eleven lists converted.** Deliveries, customers, partners, payouts, the
+three KYC queues, collections, bank checks, the audit log and rider history all
+return `{results, page}`, and every list with a UI has a `<Pager>`.
 
-**Remaining two:**
+**The audit log deliberately uses the probe form**, not `count(*) OVER ()`. The
+page already carried a note saying that counting an append-only log on every
+view is a full scan and the number is not worth it — that reasoning was correct,
+so `pagedByProbe` fetches one extra row instead and the readout says "50+".
+`Pager` treating a null total as *unknown* rather than zero is what makes that
+work.
 
-- **Audit log** — the only list that already had prev/next, so it is the least
-  broken. It needs the envelope for its totals, and its existing controls
-  replaced by `<Pager>`.
-- **Rider history** — has no UI at all (built and unwired, `context.md` §5), so
-  there is nothing to page yet. Do it with the partner detail tab.
+**Rider history** shares `auditLog()`, so it has paging already; it still has no
+UI (`context.md` §5). Do that with the partner detail tab.
 
-**Also still to wire on the client:** the KYC page fetches three paginated
-queues (review, countersign, vehicles) and shows all three without pagers. It
-now receives the metadata; it ignores it.
+**Found while finishing this:** the audit log endpoint had never worked at all —
+a `text = uuid` cast that fails at plan time, so every call was a 500. See
+BUG-044. The page has existed since audit logging shipped and had never
+displayed a row.
 
 `common/paging.ts` carries the shared shape: `totalCount` (a `count(*) OVER ()`
 fragment selected alongside the page's own columns) and `pagedResponse` /

@@ -277,7 +277,7 @@ export const api = {
     if (params.action) query.set("action", params.action);
     if (params.subjectId) query.set("subjectId", params.subjectId);
     const qs = query.toString();
-    return request<{ results: AuditEntry[] }>(
+    return request<Paged<AuditEntry>>(
       `/admin/audit-log${qs ? `?${qs}` : ""}`,
     );
   },

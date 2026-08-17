@@ -6,6 +6,7 @@ import {
   Card,
   EmptyState,
   GhostButton,
+  Pager,
   SectionLabel,
   SkeletonRows,
   PageHeader,
@@ -14,6 +15,7 @@ import {
   ApiError,
   type CountersignItem,
   type KycQueueItem,
+  type PageMeta,
   type PendingVehicle,
   api,
 } from "@/lib/api";
@@ -56,6 +58,8 @@ export default function KycPage() {
   const [queue, setQueue] = useState<KycQueueItem[] | null>(null);
   const [countersign, setCountersign] = useState<CountersignItem[] | null>(null);
   const [vehicles, setVehicles] = useState<PendingVehicle[] | null>(null);
+  const [meta, setMeta] = useState<PageMeta | null>(null);
+  const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   // Guards against a slow response for an old tab landing after a newer one
@@ -66,10 +70,6 @@ export default function KycPage() {
     const id = ++requestId.current;
     setError(null);
 
-    const settle = <T,>(setter: (value: T | null) => void) =>
-      (result: T) => {
-        if (id === requestId.current) setter(result);
-      };
     const fail = (caught: unknown) => {
       if (id !== requestId.current) return;
       setError(
@@ -79,22 +79,36 @@ export default function KycPage() {
       );
     };
 
+    // One `page` and one `meta` across all three tabs, because only one queue
+    // is on screen at a time. Per-tab paging state would let an operator return
+    // to a tab and find themselves on page four of a queue they thought they
+    // had left at the top.
+    const took = <T,>(setter: (value: T[] | null) => void) =>
+      (result: { results: T[]; page: PageMeta }) => {
+        if (id !== requestId.current) return;
+        if (result.page.beyondEnd) {
+          setPage(0);
+          return;
+        }
+        setter(result.results);
+        setMeta(result.page);
+      };
+
     if (tab === "review") {
       setQueue(null);
-      api.kycQueue().then(settle((r) => setQueue(r?.results ?? []))).catch(fail);
+      api.kycQueue(page).then(took(setQueue)).catch(fail);
     } else if (tab === "countersign") {
       setCountersign(null);
-      api
-        .kycCountersignQueue()
-        .then(settle((r) => setCountersign(r?.results ?? [])))
-        .catch(fail);
+      api.kycCountersignQueue(page).then(took(setCountersign)).catch(fail);
     } else {
       setVehicles(null);
-      api
-        .pendingVehicles()
-        .then(settle((r) => setVehicles(r?.results ?? [])))
-        .catch(fail);
+      api.pendingVehicles(page).then(took(setVehicles)).catch(fail);
     }
+  }, [tab, page]);
+
+  // Switching tab starts at the top of the new queue.
+  useEffect(() => {
+    setPage(0);
   }, [tab]);
 
   useEffect(load, [load]);
@@ -135,6 +149,20 @@ export default function KycPage() {
         <CountersignQueue items={countersign} onDone={load} />
       ) : (
         <VehicleQueue items={vehicles} onDone={load} />
+      )}
+
+      {meta && (
+        <Pager
+          page={meta}
+          noun={
+            tab === "vehicles"
+              ? "vehicles to approve"
+              : tab === "countersign"
+                ? "awaiting a second signature"
+                : "documents to review"
+          }
+          onChange={setPage}
+        />
       )}
     </div>
   );

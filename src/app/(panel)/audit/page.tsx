@@ -6,10 +6,11 @@ import {
   EmptyState,
   GhostButton,
   Input,
+  Pager,
   SkeletonRows,
   PageHeader,
 } from "@/components/ui";
-import { ApiError, type AuditEntry, api } from "@/lib/api";
+import { ApiError, type AuditEntry, type PageMeta, api } from "@/lib/api";
 
 /** Turns `payout.settled` into `Payout settled`. */
 function humanise(action: string): string {
@@ -58,6 +59,7 @@ function formatWhen(iso: string): string {
  */
 export default function AuditPage() {
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
+  const [meta, setMeta] = useState<PageMeta | null>(null);
   const [actions, setActions] = useState<string[]>([]);
   const [action, setAction] = useState("");
   const [subjectId, setSubjectId] = useState("");
@@ -76,7 +78,14 @@ export default function AuditPage() {
     setError(null);
     api
       .auditLog({ page, action: action || undefined, subjectId: subjectFilter })
-      .then((res) => setEntries(res.results))
+      .then((res) => {
+        if (res.page.beyondEnd) {
+          setPage(0);
+          return;
+        }
+        setEntries(res.results);
+        setMeta(res.page);
+      })
       .catch((e: unknown) =>
         setError(e instanceof ApiError ? e.message : "Could not load the log."),
       );
@@ -202,24 +211,24 @@ export default function AuditPage() {
         )}
       </Card>
 
-      <div className="flex items-center gap-3">
-        <GhostButton
-          disabled={page === 0}
-          onClick={() => setPage((p) => Math.max(0, p - 1))}
-        >
-          Previous
-        </GhostButton>
-        <span className="text-sm text-fg-faint">Page {page + 1}</span>
-        {/* No total count: counting an append-only log on every page view is a
-            full scan, and the number is not worth it. A short last page is the
-            signal that there is no more. */}
-        <GhostButton
-          disabled={entries !== null && entries.length < 50}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          Next
-        </GhostButton>
-      </div>
+      {/* The shared Pager, replacing this page's own prev/next — it was the only
+          list in the panel that had any, and now that every list does they
+          should look and behave identically.
+
+          It still shows no total, and for the original reason: counting an
+          append-only log on every page view is a full scan of the filtered set,
+          and the number is not worth it. The server uses the probe form for this
+          one endpoint, so `total` is null and the readout says "50+". That is
+          the honest rendering of not having counted, and it is why Pager treats
+          a null total as unknown rather than falling back to zero. */}
+      {meta && (
+        <Pager
+          page={meta}
+          busy={entries === null}
+          noun="entries"
+          onChange={setPage}
+        />
+      )}
     </div>
   );
 }
