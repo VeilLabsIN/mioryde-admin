@@ -306,7 +306,7 @@ export const api = {
     if (params.page) query.set("page", String(params.page));
     if (params.status) query.set("status", params.status);
     const qs = query.toString();
-    return request<{ results: Payout[]; pending: PayoutTotals }>(
+    return request<Paged<Payout> & { pending: PayoutTotals }>(
       `/admin/payouts${qs ? `?${qs}` : ""}`,
     );
   },
@@ -324,11 +324,11 @@ export const api = {
   // ── KYC ────────────────────────────────────────────────────────────────────
 
   kycQueue: (page = 0) =>
-    request<{ results: KycQueueItem[] }>(`/admin/kyc/queue?page=${page}`),
+    request<Paged<KycQueueItem>>(`/admin/kyc/queue?page=${page}`),
 
   /** Documents a first reviewer approved, waiting on a second (§4.10). */
   kycCountersignQueue: (page = 0) =>
-    request<{ results: CountersignItem[] }>(
+    request<Paged<CountersignItem>>(
       `/admin/kyc/countersign?page=${page}`,
     ),
 
@@ -434,7 +434,7 @@ export const api = {
   // ── Cash collections ───────────────────────────────────────────────────────
 
   outstandingCash: (page = 0) =>
-    request<{ results: OutstandingCash[] }>(`/admin/cash/outstanding?page=${page}`),
+    request<Paged<OutstandingCash>>(`/admin/cash/outstanding?page=${page}`),
 
   recordCashDeposit: (
     riderId: string,
@@ -451,7 +451,7 @@ export const api = {
   // ── Bank verification ──────────────────────────────────────────────────────
 
   pendingBankAccounts: (page = 0) =>
-    request<{ results: PendingBankAccount[] }>(`/admin/bank/pending?page=${page}`),
+    request<Paged<PendingBankAccount>>(`/admin/bank/pending?page=${page}`),
 
   verifyBankAccount: (riderId: string, approve: boolean, note?: string) =>
     request<{ verified: boolean }>(`/admin/bank/riders/${riderId}/verify`, {
@@ -505,7 +505,7 @@ export const api = {
     }),
 
   pendingVehicles: (page = 0) =>
-    request<{ results: PendingVehicle[] }>(`/admin/vehicles/pending?page=${page}`),
+    request<Paged<PendingVehicle>>(`/admin/vehicles/pending?page=${page}`),
 
   reviewVehicle: (
     id: string,

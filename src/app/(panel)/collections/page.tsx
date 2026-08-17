@@ -7,11 +7,18 @@ import {
   EmptyState,
   GhostButton,
   Input,
+  Pager,
   SectionLabel,
   SkeletonRows,
   PageHeader,
 } from "@/components/ui";
-import { ApiError, type OutstandingCash, api, formatMoney } from "@/lib/api";
+import {
+  ApiError,
+  type OutstandingCash,
+  type PageMeta,
+  api,
+  formatMoney,
+} from "@/lib/api";
 
 const METHODS = [
   { value: "bank_transfer", label: "Bank transfer" },
@@ -40,6 +47,8 @@ const METHODS = [
  */
 export default function CollectionsPage() {
   const [rows, setRows] = useState<OutstandingCash[] | null>(null);
+  const [meta, setMeta] = useState<PageMeta | null>(null);
+  const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   // Guards against a slow response landing after a newer one.
@@ -51,9 +60,15 @@ export default function CollectionsPage() {
     setRows(null);
 
     api
-      .outstandingCash()
+      .outstandingCash(page)
       .then((result) => {
-        if (id === requestId.current) setRows(result?.results ?? []);
+        if (id !== requestId.current) return;
+        if (result.page.beyondEnd) {
+          setPage(0);
+          return;
+        }
+        setRows(result?.results ?? []);
+        setMeta(result.page);
       })
       .catch((caught: unknown) => {
         if (id !== requestId.current) return;
@@ -63,7 +78,7 @@ export default function CollectionsPage() {
             : "Could not load outstanding cash.",
         );
       });
-  }, []);
+  }, [page]);
 
   useEffect(load, [load]);
 
@@ -86,8 +101,17 @@ export default function CollectionsPage() {
             <p className="mt-1 font-mono text-2xl tabular-nums">
               {formatMoney({ minor: totalHeld, currency: "INR" })}
             </p>
+            {/* Scoped to this page, and said so. The total across every page
+                would need the server to sum it — this figure adds up only what
+                is on screen, and calling it the whole outstanding balance once
+                there is a second page would overstate nothing but understate
+                the exposure, which is the wrong direction to be wrong in. */}
             <p className="text-fg-faint mt-1 text-xs">
-              across {rows.length} partner{rows.length === 1 ? "" : "s"}
+              across {rows.length} partner{rows.length === 1 ? "" : "s"} on this
+              page
+              {meta?.total != null && meta.total > rows.length
+                ? ` of ${meta.total}`
+                : ""}
             </p>
           </Card>
           <Card>
@@ -128,6 +152,15 @@ export default function CollectionsPage() {
             <PartnerRow key={row.riderId} row={row} onDone={load} />
           ))}
         </div>
+      )}
+
+      {meta && (
+        <Pager
+          page={meta}
+          busy={rows === null}
+          noun="partners holding cash"
+          onChange={setPage}
+        />
       )}
     </div>
   );

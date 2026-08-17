@@ -7,11 +7,13 @@ import {
   EmptyState,
   GhostButton,
   Input,
+  Pager,
   SkeletonRows,
   PageHeader,
 } from "@/components/ui";
 import {
   ApiError,
+  type PageMeta,
   type Payout,
   type PayoutTotals,
   api,
@@ -52,6 +54,8 @@ export default function PayoutsPage() {
   const [status, setStatus] = useState<string>("requested");
   const [payouts, setPayouts] = useState<Payout[] | null>(null);
   const [pending, setPending] = useState<PayoutTotals | null>(null);
+  const [meta, setMeta] = useState<PageMeta | null>(null);
+  const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   // Guards against a slow response for an old filter landing after a newer one
@@ -63,11 +67,16 @@ export default function PayoutsPage() {
     setPayouts(null);
     setError(null);
     api
-      .payouts(status ? { status } : {})
+      .payouts({ ...(page ? { page } : {}), ...(status ? { status } : {}) })
       .then((res) => {
         if (id !== requestId.current) return;
+        if (res.page.beyondEnd) {
+          setPage(0);
+          return;
+        }
         setPayouts(res.results);
         setPending(res.pending);
+        setMeta(res.page);
       })
       .catch((e: unknown) => {
         if (id !== requestId.current) return;
@@ -75,6 +84,12 @@ export default function PayoutsPage() {
           e instanceof ApiError ? e.message : "Could not load payouts.",
         );
       });
+  }, [status, page]);
+
+  // A filter change returns to page one. Narrowing to "requested" while on page
+  // three otherwise shows an empty queue that has work in it.
+  useEffect(() => {
+    setPage(0);
   }, [status]);
 
   useEffect(load, [load]);
@@ -133,6 +148,15 @@ export default function PayoutsPage() {
           </ul>
         )}
       </Card>
+
+      {meta && (
+        <Pager
+          page={meta}
+          busy={payouts === null}
+          noun="requests"
+          onChange={setPage}
+        />
+      )}
     </div>
   );
 }

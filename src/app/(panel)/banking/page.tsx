@@ -7,10 +7,16 @@ import {
   EmptyState,
   GhostButton,
   SectionLabel,
+  Pager,
   SkeletonRows,
   PageHeader,
 } from "@/components/ui";
-import { ApiError, type PendingBankAccount, api } from "@/lib/api";
+import {
+  ApiError,
+  type PageMeta,
+  type PendingBankAccount,
+  api,
+} from "@/lib/api";
 
 /**
  * Bank account verification.
@@ -32,6 +38,8 @@ import { ApiError, type PendingBankAccount, api } from "@/lib/api";
  */
 export default function BankingPage() {
   const [accounts, setAccounts] = useState<PendingBankAccount[] | null>(null);
+  const [meta, setMeta] = useState<PageMeta | null>(null);
+  const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   // Guards against a slow response landing after a newer one and repainting
@@ -44,9 +52,15 @@ export default function BankingPage() {
     setAccounts(null);
 
     api
-      .pendingBankAccounts()
+      .pendingBankAccounts(page)
       .then((result) => {
-        if (id === requestId.current) setAccounts(result?.results ?? []);
+        if (id !== requestId.current) return;
+        if (result.page.beyondEnd) {
+          setPage(0);
+          return;
+        }
+        setAccounts(result?.results ?? []);
+        setMeta(result.page);
       })
       .catch((caught: unknown) => {
         if (id !== requestId.current) return;
@@ -56,7 +70,7 @@ export default function BankingPage() {
             : "Could not load accounts waiting to be checked.",
         );
       });
-  }, []);
+  }, [page]);
 
   useEffect(load, [load]);
 
@@ -93,6 +107,15 @@ export default function BankingPage() {
             />
           ))}
         </div>
+      )}
+
+      {meta && (
+        <Pager
+          page={meta}
+          busy={accounts === null}
+          noun="accounts to check"
+          onChange={setPage}
+        />
       )}
     </div>
   );

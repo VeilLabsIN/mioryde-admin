@@ -156,10 +156,21 @@ failure stays on the row.
 
 ## Stage 6 · Inline paging 🔨
 
-**Done for deliveries, customers and partners.** Eight list endpoints remain —
-payouts, KYC queue, countersign queue, bank checks, collections, pending
-vehicles, rider history, audit log. The pattern is established; each is the same
-three edits.
+**Nine of eleven lists converted.** Deliveries, customers, partners, payouts,
+KYC queue, countersign queue, pending vehicles, collections and bank checks all
+return `{results, page}` and the first six of those have a `<Pager>` wired up.
+
+**Remaining two:**
+
+- **Audit log** — the only list that already had prev/next, so it is the least
+  broken. It needs the envelope for its totals, and its existing controls
+  replaced by `<Pager>`.
+- **Rider history** — has no UI at all (built and unwired, `context.md` §5), so
+  there is nothing to page yet. Do it with the partner detail tab.
+
+**Also still to wire on the client:** the KYC page fetches three paginated
+queues (review, countersign, vehicles) and shows all three without pagers. It
+now receives the metadata; it ignores it.
 
 `common/paging.ts` carries the shared shape: `totalCount` (a `count(*) OVER ()`
 fragment selected alongside the page's own columns) and `pagedResponse` /
