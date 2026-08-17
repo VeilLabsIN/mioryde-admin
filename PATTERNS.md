@@ -23,7 +23,7 @@ mapped in Part B.
 
 Ordered by consequence. These are not "could be nicer"; they are wrong.
 
-### A1 · Every list page except the audit log is capped at 25 rows, silently
+### A1 · Every list page except the audit log is capped at 25 rows, silently — *fixed for 3 of 11*
 
 **Critical.** Nine server-side list queries use `pageSize = 25` (one 20, one
 50). Only `/audit` has any pagination UI (`audit/page.tsx:208`). Every other
@@ -38,6 +38,12 @@ gets an empty result and concludes the record is missing.
 **Compounding it:** no list endpoint returns a total count. Even a "next" button
 cannot say what it is paging through. Fixing this needs the backend first
 (see D1).
+
+**Fixed for deliveries, customers and partners** — `common/paging.ts`, a shared
+`<Pager>`, and `{results, page}` on those three endpoints. This was not
+hypothetical: the dev database has 27 customers, so two of them were genuinely
+unreachable through the panel until now. Eight endpoints remain; see `STAGES.md`
+Stage 6.
 
 ### A2 · There is no way to open a single delivery
 

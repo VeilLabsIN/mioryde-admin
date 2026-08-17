@@ -227,7 +227,7 @@ export const api = {
     if (params.status) query.set("status", params.status);
     if (params.search) query.set("search", params.search);
     const qs = query.toString();
-    return request<{ results: AdminOrder[] }>(
+    return request<Paged<AdminOrder>>(
       `/admin/orders${qs ? `?${qs}` : ""}`,
     );
   },
@@ -245,7 +245,7 @@ export const api = {
     if (params.page) query.set("page", String(params.page));
     if (params.search) query.set("search", params.search);
     const qs = query.toString();
-    return request<{ results: AdminCustomer[] }>(
+    return request<Paged<AdminCustomer>>(
       `/admin/customers${qs ? `?${qs}` : ""}`,
     );
   },
@@ -256,7 +256,7 @@ export const api = {
     if (params.status) query.set("status", params.status);
     if (params.search) query.set("search", params.search);
     const qs = query.toString();
-    return request<{ results: AdminRider[] }>(
+    return request<Paged<AdminRider>>(
       `/admin/riders${qs ? `?${qs}` : ""}`,
     );
   },
@@ -544,6 +544,32 @@ export interface CountersignItem {
 export interface Money {
   minor: number;
   currency: string;
+}
+
+/**
+ * Pagination metadata returned alongside a list.
+ *
+ * Added because every list endpoint used to return a bare `{results}`, so the
+ * panel showed the first 25 rows as if they were the whole set. With 27
+ * customers the last two were unreachable and nothing said so.
+ */
+export interface PageMeta {
+  page: number;
+  pageSize: number;
+  /**
+   * Null means **not determinable**, never zero. Either the endpoint skipped
+   * counting, or the requested page is past the end. Render it as unknown; do
+   * not fall back to 0, which would claim the set is empty.
+   */
+  total: number | null;
+  hasMore: boolean;
+  /** The requested page is past the end — recover by returning to page 0. */
+  beyondEnd: boolean;
+}
+
+export interface Paged<T> {
+  results: T[];
+  page: PageMeta;
 }
 
 export interface Analytics {

@@ -8,10 +8,11 @@ import {
   EmptyState,
   GhostButton,
   Input,
+  Pager,
   SkeletonRows,
   PageHeader,
 } from "@/components/ui";
-import { type AdminRider, ApiError, api } from "@/lib/api";
+import { type AdminRider, type PageMeta, ApiError, api } from "@/lib/api";
 
 const FILTERS = [
   { value: "pending_kyc", label: "Awaiting review" },
@@ -40,6 +41,8 @@ export default function RidersPage() {
   const [status, setStatus] = useState<string>("pending_kyc");
   const [search, setSearch] = useState("");
   const [riders, setRiders] = useState<AdminRider[] | null>(null);
+  const [meta, setMeta] = useState<PageMeta | null>(null);
+  const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -57,16 +60,30 @@ export default function RidersPage() {
     setError(null);
     api
       .riders({
+        ...(page ? { page } : {}),
         ...(status ? { status } : {}),
         ...(debounced ? { search: debounced } : {}),
       })
       .then((res) => {
-        if (id === requestId.current) setRiders(res.results);
+        if (id !== requestId.current) return;
+        if (res.page.beyondEnd) {
+          setPage(0);
+          return;
+        }
+        setRiders(res.results);
+        setMeta(res.page);
       })
       .catch((e: unknown) => {
         if (id !== requestId.current) return;
         setError(e instanceof Error ? e.message : "Could not load partners.");
       });
+  }, [status, debounced, page]);
+
+  // Filter or search change goes back to page one. `load` is not in the deps
+  // because it changes on every page change too, which would reset the page
+  // immediately after setting it.
+  useEffect(() => {
+    setPage(0);
   }, [status, debounced]);
 
   useEffect(load, [load]);
@@ -91,7 +108,11 @@ export default function RidersPage() {
         <div>
           <PageHeader
             title="Partners"
-            subtitle={riders === null ? "Loading…" : `${riders.length} shown`}
+            subtitle={
+              riders === null
+                ? "Loading…"
+                : `${meta?.total ?? riders.length} partners`
+            }
           />
         </div>
         <div className="w-full max-w-[280px]">
@@ -245,6 +266,15 @@ export default function RidersPage() {
           </ul>
         )}
       </Card>
+
+      {meta && (
+        <Pager
+          page={meta}
+          busy={riders === null}
+          noun="partners"
+          onChange={setPage}
+        />
+      )}
     </div>
   );
 }

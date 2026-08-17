@@ -255,6 +255,86 @@ export function SkeletonChart({ height = 200 }: { height?: number }) {
 }
 
 /**
+ * Paging controls for a list.
+ *
+ * One component for every list in the panel, because before this only the audit
+ * log had any — every other page fetched the first 25 rows and presented them
+ * as the whole set.
+ *
+ * The range readout is the important part, more than the buttons. "26–50 of
+ * 340" tells the operator both where they are and that there is a 340 at all;
+ * a bare "next" leaves them guessing whether they have seen everything.
+ *
+ * Renders nothing at all when there is a single page of results. A pager on a
+ * five-row table is furniture.
+ */
+export function Pager({
+  page,
+  onChange,
+  busy = false,
+  noun = "results",
+}: {
+  page: {
+    page: number;
+    pageSize: number;
+    total: number | null;
+    hasMore: boolean;
+  };
+  onChange: (page: number) => void;
+  busy?: boolean;
+  /** Plural noun for the readout — "deliveries", "partners". */
+  noun?: string;
+}) {
+  const onFirstPage = page.page === 0;
+  if (onFirstPage && !page.hasMore) return null;
+
+  const from = page.page * page.pageSize + 1;
+  // `total` may be null, meaning it was not counted. Fall back to the page's
+  // own extent rather than to zero — claiming an empty set on missing metadata
+  // is the failure this whole envelope exists to prevent.
+  const to =
+    page.total === null
+      ? from + page.pageSize - 1
+      : Math.min(from + page.pageSize - 1, page.total);
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+      <p className="text-meta text-fg-faint">
+        <span className="tabular-nums">
+          {from}–{to}
+        </span>{" "}
+        of{" "}
+        {page.total === null ? (
+          // Honest about not knowing. "25+" beats a fabricated figure, and
+          // beats "0" by a distance.
+          <span className="tabular-nums">{page.pageSize}+</span>
+        ) : (
+          <span className="tabular-nums text-fg-mid">{page.total}</span>
+        )}{" "}
+        {noun}
+      </p>
+
+      <div className="flex items-center gap-1.5">
+        <GhostButton
+          onClick={() => onChange(page.page - 1)}
+          disabled={onFirstPage || busy}
+          aria-label="Previous page"
+        >
+          ← Previous
+        </GhostButton>
+        <GhostButton
+          onClick={() => onChange(page.page + 1)}
+          disabled={!page.hasMore || busy}
+          aria-label="Next page"
+        >
+          Next →
+        </GhostButton>
+      </div>
+    </div>
+  );
+}
+
+/**
  * The heading every page opens with.
  *
  * Extracted because twelve pages had grown three different treatments —

@@ -6,12 +6,15 @@ import {
   EmptyState,
   Input,
   PageHeader,
+  Pager,
   SkeletonRows,
 } from "@/components/ui";
-import { type AdminCustomer, api } from "@/lib/api";
+import { type AdminCustomer, type PageMeta, api } from "@/lib/api";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<AdminCustomer[] | null>(null);
+  const [meta, setMeta] = useState<PageMeta | null>(null);
+  const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -23,14 +26,29 @@ export default function CustomersPage() {
 
   const requestId = useRef(0);
 
+  // Narrowing the search returns to the first page, or an operator refining a
+  // query from page two lands on an empty table that has results.
+  useEffect(() => {
+    setPage(0);
+  }, [debounced]);
+
   useEffect(() => {
     const id = ++requestId.current;
     setCustomers(null);
     setError(null);
     api
-      .customers(debounced ? { search: debounced } : {})
+      .customers({
+        ...(page ? { page } : {}),
+        ...(debounced ? { search: debounced } : {}),
+      })
       .then((res) => {
-        if (id === requestId.current) setCustomers(res.results);
+        if (id !== requestId.current) return;
+        if (res.page.beyondEnd) {
+          setPage(0);
+          return;
+        }
+        setCustomers(res.results);
+        setMeta(res.page);
       })
       .catch((e: unknown) => {
         if (id !== requestId.current) return;
@@ -38,7 +56,7 @@ export default function CustomersPage() {
           e instanceof Error ? e.message : "Could not load customers.",
         );
       });
-  }, [debounced]);
+  }, [debounced, page]);
 
   return (
     <div className="mx-auto max-w-[1200px]">
@@ -46,7 +64,11 @@ export default function CustomersPage() {
         <div>
           <PageHeader
             title="Customers"
-            subtitle={customers === null ? "Loading…" : `${customers.length} shown`}
+            subtitle={
+              customers === null
+                ? "Loading…"
+                : `${meta?.total ?? customers.length} customers`
+            }
           />
         </div>
         <div className="w-full max-w-[280px]">
@@ -126,6 +148,15 @@ export default function CustomersPage() {
           </>
         )}
       </Card>
+
+      {meta && (
+        <Pager
+          page={meta}
+          busy={customers === null}
+          noun="customers"
+          onChange={setPage}
+        />
+      )}
     </div>
   );
 }

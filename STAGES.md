@@ -154,7 +154,35 @@ failure stays on the row.
 
 ---
 
-## Stage 6 · Inline paging ⬜
+## Stage 6 · Inline paging 🔨
+
+**Done for deliveries, customers and partners.** Eight list endpoints remain —
+payouts, KYC queue, countersign queue, bank checks, collections, pending
+vehicles, rider history, audit log. The pattern is established; each is the same
+three edits.
+
+`common/paging.ts` carries the shared shape: `totalCount` (a `count(*) OVER ()`
+fragment selected alongside the page's own columns) and `pagedResponse` /
+`pagedByProbe` to build the envelope. The window function rather than a second
+`SELECT count(*)` because two round trips can disagree — a row inserted between
+them makes the count describe a set the page was not drawn from.
+
+**A real bug found while verifying.** With 27 customers, `?page=2` returned
+`total: 0`, because `count(*) OVER ()` attaches its result to each returned row
+and an empty page therefore carries no count. Read naively that says "no
+customers" for a set that has twenty-seven — the same class of lie this stage
+exists to remove. `PageMeta.total` is now nullable and means *not determinable*,
+never zero, with a separate `beyondEnd` flag the client uses to recover to page
+one. Nine tests pin the arithmetic, including the off-by-one where 25 of 25 must
+not offer a next page while 25 of 50 must.
+
+**Verified in a browser** against the 27 real customers: page one read
+"1–25 of 27" with Previous disabled, page two "26–27 of 27" with Next disabled
+and the two rows that were previously unreachable in the panel; a no-match
+search showed "0 customers" with no pager; and deliveries, at 16 rows, showed
+no pager at all.
+
+### Original scope, for the remaining eight
 
 **The functional one, and the highest priority in this file.** Every list page
 except the audit log is capped at 25 rows with no indication (see `PATTERNS.md`

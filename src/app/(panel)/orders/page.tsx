@@ -6,11 +6,17 @@ import {
   EmptyState,
   GhostButton,
   Input,
+  Pager,
   SkeletonRows,
   StatusPill,
   PageHeader,
 } from "@/components/ui";
-import { type AdminOrder, api, formatMoney } from "@/lib/api";
+import {
+  type AdminOrder,
+  type PageMeta,
+  api,
+  formatMoney,
+} from "@/lib/api";
 
 const FILTERS = [
   { value: "", label: "All" },
@@ -23,6 +29,8 @@ const FILTERS = [
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<AdminOrder[] | null>(null);
+  const [meta, setMeta] = useState<PageMeta | null>(null);
+  const [page, setPage] = useState(0);
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +46,13 @@ export default function OrdersPage() {
   // overwrite results for the later, more specific "9876".
   const requestId = useRef(0);
 
+  // Changing a filter or the search term resets to the first page. Staying on
+  // page 3 while narrowing a search is how an operator lands on an empty table
+  // for a query that has results.
+  useEffect(() => {
+    setPage(0);
+  }, [status, debouncedSearch]);
+
   useEffect(() => {
     const id = ++requestId.current;
     setOrders(null);
@@ -45,18 +60,26 @@ export default function OrdersPage() {
 
     api
       .orders({
+        ...(page ? { page } : {}),
         ...(status ? { status } : {}),
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
       })
       .then((res) => {
         if (id !== requestId.current) return;
+        // A stale or typed page number past the end. Recover rather than show
+        // an empty table for a set that has rows in it.
+        if (res.page.beyondEnd) {
+          setPage(0);
+          return;
+        }
         setOrders(res.results);
+        setMeta(res.page);
       })
       .catch((e: unknown) => {
         if (id !== requestId.current) return;
         setError(e instanceof Error ? e.message : "Could not load deliveries.");
       });
-  }, [status, debouncedSearch]);
+  }, [status, debouncedSearch, page]);
 
   const activeCount = useMemo(
     () =>
@@ -75,7 +98,10 @@ export default function OrdersPage() {
             subtitle={
               orders === null
                 ? "Loading…"
-                : `${orders.length} shown · ${activeCount} active`
+                : // The total, not the page length. "25 shown" on a set of 340
+                  // was the panel telling the operator it had shown them
+                  // everything.
+                  `${meta?.total ?? orders.length} total · ${activeCount} active on this page`
             }
           />
         </div>
@@ -183,6 +209,15 @@ export default function OrdersPage() {
           </>
         )}
       </Card>
+
+      {meta && (
+        <Pager
+          page={meta}
+          busy={orders === null}
+          noun="deliveries"
+          onChange={setPage}
+        />
+      )}
     </div>
   );
 }
