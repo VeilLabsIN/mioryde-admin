@@ -23,7 +23,7 @@ mapped in Part B.
 
 Ordered by consequence. These are not "could be nicer"; they are wrong.
 
-### A1 · Every list page except the audit log is capped at 25 rows, silently — *fixed for 3 of 11*
+### A1 · Every list page except the audit log is capped at 25 rows, silently — *fixed*
 
 **Critical.** Nine server-side list queries use `pageSize = 25` (one 20, one
 50). Only `/audit` has any pagination UI (`audit/page.tsx:208`). Every other
@@ -39,11 +39,15 @@ gets an empty result and concludes the record is missing.
 cannot say what it is paging through. Fixing this needs the backend first
 (see D1).
 
-**Fixed for deliveries, customers and partners** — `common/paging.ts`, a shared
-`<Pager>`, and `{results, page}` on those three endpoints. This was not
-hypothetical: the dev database has 27 customers, so two of them were genuinely
-unreachable through the panel until now. Eight endpoints remain; see `STAGES.md`
-Stage 6.
+**Fixed, all eleven lists** — `common/paging.ts`, a shared `<Pager>`, and
+`{results, page}` on every list endpoint. This was not hypothetical: the dev
+database has 27 customers, so two of them were genuinely unreachable through the
+panel until this landed.
+
+Finishing it turned up something worse. The audit log — the one list that already
+*had* prev/next — had never returned a row at all: a `text = uuid` cast that
+fails when Postgres plans the statement, so every call was a 500 and the page
+showed its error state on every load since audit logging shipped. See BUG-044.
 
 ### A2 · There is no way to open a single delivery
 
@@ -82,6 +86,10 @@ and pagination all live only in React state. Consequences:
 - Nothing is bookmarkable. "Pending KYC" is not a URL.
 - Browser back does not restore state; it leaves the page entirely.
 - A reload loses the operator's place.
+
+**Fixed on deliveries, customers and partners** via `lib/useUrlState.ts`. Six
+pages still hold view state in React only: payouts, collections, banking, the
+KYC tab, the audit log's filters, and the analytics date range.
 
 ### A5 · Inputs suppress the focus ring that everything else gets
 
