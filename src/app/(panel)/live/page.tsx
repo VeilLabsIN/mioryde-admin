@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNow } from "@/lib/useNow";
 import { RevealPhone } from "@/components/RevealPhone";
@@ -20,6 +21,7 @@ import {
   needsAttention,
 } from "@/lib/elapsed";
 import { type AdminEvent, useAdminEvents } from "@/lib/useAdminEvents";
+import { useUrlParam } from "@/lib/useUrlState";
 
 /**
  * How each topic reads in the activity feed.
@@ -98,7 +100,9 @@ export default function LivePage() {
   const [paused, setPaused] = useState(false);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  // In the URL so a dispatcher can send "everything stuck at pickup" to a
+  // colleague as a link. Pause stays local — it is a momentary act, not a view.
+  const [statusFilter, setStatusFilter] = useUrlParam("status", "");
   const { events, state } = useAdminEvents(!paused);
 
   // Zero until the clock subscription is live, which is what makes the
@@ -210,13 +214,13 @@ export default function LivePage() {
       />
 
       {error && orders !== null && (
-        <p role="alert" className="text-[12px] text-warn">
+        <p role="alert" className="text-meta text-warn">
           Showing the last successful load — {error}
         </p>
       )}
 
       {snapshot?.truncated && (
-        <p role="alert" className="text-[12px] text-warn">
+        <p role="alert" className="text-meta text-warn">
           More deliveries are live than this board will show. Use Deliveries to
           see the rest.
         </p>
@@ -299,10 +303,17 @@ function OrderRow({
     <>
       <td className="px-4 py-3 align-middle">
         <span className="block min-w-0">
-        <span className="block truncate font-mono text-xs text-fg-mid">
+        {/* The board is where a stuck delivery is noticed, so it has to be
+            where acting on one starts. Without this the operator reads a code
+            off the screen and searches for it on another page. */}
+        <Link
+          href={`/orders/${order.id}`}
+          className="motion-change block truncate font-mono text-meta text-fg-mid
+                     underline-offset-2 transition-colors hover:text-accent hover:underline"
+        >
           {order.code}
-        </span>
-        <span className="block font-mono text-[10px] uppercase tracking-wide text-fg-faint">
+        </Link>
+        <span className="block font-mono text-micro uppercase text-fg-faint">
           {order.paymentMethod}
         </span>
         </span>
@@ -310,10 +321,10 @@ function OrderRow({
 
       <td className="px-4 py-3 align-middle">
         <span className="block min-w-0">
-        <span className="block truncate text-[13px] text-fg-soft">
+        <span className="block truncate text-body text-fg-soft">
           {order.pickupAddress}
         </span>
-        <span className="block truncate text-[12px] text-fg-faint">
+        <span className="block truncate text-meta text-fg-faint">
           → {order.dropAddress}
         </span>
         </span>
@@ -321,10 +332,10 @@ function OrderRow({
 
       <td className="px-4 py-3 align-middle">
         <span className="block min-w-0">
-        <span className="block truncate text-[13px]">
+        <span className="block truncate text-body">
           {order.customer.name || "—"}
         </span>
-        <span className="block truncate font-mono text-[11px] text-fg-faint">
+        <span className="block truncate font-mono text-meta text-fg-faint">
           {order.customer.phone}
         </span>
         </span>
@@ -334,7 +345,7 @@ function OrderRow({
         <span className="block min-w-0">
         {order.rider ? (
           <>
-            <span className="block truncate text-[13px]">
+            <span className="block truncate text-body">
               {order.rider.name || "—"}
             </span>
             {/* Reveal is audited server-side. A dispatcher chasing a stuck
@@ -342,7 +353,7 @@ function OrderRow({
             <RevealPhone riderId={order.rider.id} masked={order.rider.phone} />
           </>
         ) : (
-          <span className="text-[12px] text-fg-faint">
+          <span className="text-meta text-fg-faint">
             Unassigned
             {order.declines > 0 && (
               <span className="ml-1.5 text-warn">
@@ -358,7 +369,7 @@ function OrderRow({
         <span className="block">
         <StatusPill status={order.status} />
         <span
-          className={`mt-1 block font-mono text-[11px] tabular-nums ${
+          className={`mt-1 block font-mono text-meta tabular-nums ${
             attention ? "text-warn" : "text-fg-faint"
           }`}
           // The column reads as a duration, but the value it is derived from is
@@ -373,7 +384,7 @@ function OrderRow({
       </td>
 
       <td className="px-4 py-3 text-right align-middle">
-        <span className="font-mono text-xs tabular-nums">
+        <span className="font-mono text-meta tabular-nums">
         {formatMoney(order.total)}
         </span>
       </td>
@@ -397,15 +408,15 @@ function StatusFilters({
 }: {
   counts: Record<string, number>;
   total: number;
-  selected: string | null;
-  onSelect: (status: string | null) => void;
+  selected: string;
+  onSelect: (status: string) => void;
 }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       <GhostButton
-        onClick={() => onSelect(null)}
-        aria-pressed={selected === null}
-        className={selected === null ? "border-accent text-accent" : undefined}
+        onClick={() => onSelect("")}
+        aria-pressed={selected === ""}
+        className={selected === "" ? "border-accent text-accent" : undefined}
       >
         All <span className="tabular-nums">{total}</span>
       </GhostButton>
@@ -420,7 +431,7 @@ function StatusFilters({
         return (
           <GhostButton
             key={status}
-            onClick={() => onSelect(active ? null : status)}
+            onClick={() => onSelect(active ? "" : status)}
             aria-pressed={active}
             className={active ? "border-accent text-accent" : undefined}
           >
@@ -451,12 +462,12 @@ function ActivityFeed({
 }) {
   return (
     <div className="min-w-0">
-      <p className="mb-3 font-mono text-[9px] uppercase tracking-[2px] text-fg-muted">
+      <p className="mb-3 font-mono text-micro uppercase text-fg-muted">
         Activity · this session
       </p>
 
       {events.length === 0 ? (
-        <p className="text-[12px] text-fg-faint">
+        <p className="text-meta text-fg-faint">
           {paused
             ? "Paused. Nothing is being received."
             : "Nothing yet. Events appear as deliveries are placed, offered, assigned and completed."}
@@ -500,18 +511,18 @@ function EventRow({ event }: { event: AdminEvent }) {
           }`}
         />
         <span className="min-w-0">
-          <span className="block truncate text-[12px]">
+          <span className="block truncate text-meta">
             {meta?.label ?? event.topic}
           </span>
           {code && (
-            <span className="block truncate font-mono text-[10px] text-fg-faint">
+            <span className="block truncate font-mono text-micro text-fg-faint">
               {code}
             </span>
           )}
         </span>
       </span>
 
-      <span className="shrink-0 font-mono text-[10px] tabular-nums text-fg-faint">
+      <span className="shrink-0 font-mono text-micro tabular-nums text-fg-faint">
         {new Date(event.at).toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
@@ -548,7 +559,7 @@ function FreshnessBadge({
 
   return (
     <span
-      className={`rounded border px-2 py-1 font-mono text-[10px] tabular-nums ${
+      className={`rounded border px-2 py-1 font-mono text-micro tabular-nums ${
         alarming ? "border-warn/40 text-warn" : "border-edge text-fg-faint"
       }`}
       title={
@@ -573,7 +584,7 @@ function ConnectionBadge({ state }: { state: string }) {
   )[state] ?? ["Unknown", "text-fg-faint border-edge"];
 
   return (
-    <span className={`rounded border px-2 py-1 text-xs ${className}`}>
+    <span className={`rounded border px-2 py-1 text-meta ${className}`}>
       {/* A dot that only pulses while genuinely connected. A badge that says
           "Live" on a dead stream is worse than no badge. */}
       {state === "live" ? (

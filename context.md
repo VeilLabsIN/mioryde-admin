@@ -287,9 +287,21 @@ Test counts at last update: api 202, admin 60, rider app 84, customer app 85.
 - **Flutter is not on PATH.** It lives at `C:\Users\datan\dev\flutter\bin`.
 - **The admin panel must run on 3100**, which `npm run dev` now pins. The API
   holds 3000, and the API's CORS allowlist contains only 3100.
-- **Browser automation cannot drive the admin login form.** Typing and clicking
-  through it produces no request, while the same form works for a human. A
-  tooling limit, not a bug — it has been chased once already, do not repeat it.
+- **`REDIS_URL` now points at a hosted Upstash instance**, not the local
+  `mioryde-redis` container that is still running beside Postgres. Both work —
+  ioredis speaks RESP over TLS to either. Redis is optional at one API
+  instance (throttler counters fall back to in-memory, admin SSE events reach
+  the one process that raised them) and becomes required at two, because
+  cross-instance pub/sub is what makes the live board agree with itself.
+- **Browser automation *can* drive the admin login form.** An earlier note here
+  said it could not. It can, using `form_input` against the field refs rather
+  than synthetic keystrokes into a focused element — the latter is what
+  produced no request. Corrected 18 Aug 2026 after signing in that way.
+- **Check whether 3100 is `next dev` or `next start` before wondering why an
+  edit did nothing.** It has been left running as `next start` — a production
+  build, which never picks up source changes. Symptom: the file on disk has
+  your edit, `tsc` is clean, and the browser shows the old markup. Rebuild and
+  restart rather than debugging the change.
 - `/tmp` in Git Bash and `/tmp` in Windows Python are different directories.
   Use the session scratchpad for files both need to see.
 
