@@ -464,6 +464,31 @@ export const api = {
   customerById: (id: string) =>
     request<CustomerDetail>(`/admin/customers/${id}`),
 
+  /**
+   * Whether the panel may offer each action on an order, and why not.
+   *
+   * The reasons come from the server rather than being re-derived here — an
+   * explanation that disagrees with the rule it describes is worse than none.
+   */
+  orderActions: (id: string) =>
+    request<OrderActions>(`/admin/orders/${id}/actions`),
+
+  cancelOrder: (id: string, reason: string) =>
+    request<{ status: string; code: string }>(`/admin/orders/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  setCustomerStatus: (
+    id: string,
+    status: "active" | "blocked",
+    reason?: string,
+  ) =>
+    request<{ status: string }>(`/admin/customers/${id}/status`, {
+      method: "POST",
+      body: JSON.stringify({ status, ...(reason ? { reason } : {}) }),
+    }),
+
   // ── Monitoring ─────────────────────────────────────────────────────────────
 
   monitoring: () => request<Monitoring>("/admin/monitoring"),
@@ -878,6 +903,14 @@ export interface AdminAccount {
  * The panel had no way to open a single order before this. Support's whole job
  * is "what happened to MIO-XXXXX" and the answer was a row in a list.
  */
+export interface OrderActions {
+  cancel: {
+    allowed: boolean;
+    /** Why not, in words fit to show an operator. Null when allowed. */
+    reason: string | null;
+  };
+}
+
 export interface OrderDetail {
   id: string;
   code: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Card,
   EmptyState,
@@ -10,7 +10,14 @@ import {
   SkeletonRows,
   StatusPill,
 } from "@/components/ui";
-import { type OrderDetail, ApiError, api, formatMoney } from "@/lib/api";
+import {
+  type OrderActions,
+  type OrderDetail,
+  ApiError,
+  api,
+  formatMoney,
+} from "@/lib/api";
+import { ActionPanel } from "@/components/ActionPanel";
 import { formatElapsed } from "@/lib/elapsed";
 
 /**
@@ -37,11 +44,12 @@ export default function OrderDetailPage() {
   const id = params.id;
 
   const [order, setOrder] = useState<OrderDetail | null>(null);
+  const [actions, setActions] = useState<OrderActions | null>(null);
   const [error, setError] = useState<{ message: string; missing: boolean } | null>(
     null,
   );
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!id) return;
     api
       .orderById(id)
@@ -58,7 +66,17 @@ export default function OrderDetailPage() {
           missing,
         });
       });
+
+    // Separate call, and a failure is swallowed: support can read this page but
+    // not act on it, so a 403 here means "no buttons for you" rather than an
+    // error over the whole delivery.
+    api
+      .orderActions(id)
+      .then(setActions)
+      .catch(() => setActions(null));
   }, [id]);
+
+  useEffect(load, [load]);
 
   if (error) {
     return (
@@ -186,6 +204,28 @@ export default function OrderDetailPage() {
           <MoneyCard order={order} />
         </div>
       </div>
+
+      {actions && (
+        <ActionPanel
+          title="Cancel this delivery"
+          description="Ends the delivery on the customer's behalf and tells dispatch to stop offering it."
+          consequence={
+            order.rider
+              ? `${order.rider.name} is assigned and will be notified that the job is off.`
+              : "No partner has accepted this yet, so nobody is mid-journey."
+          }
+          actionLabel="Cancel delivery"
+          disabledReason={actions.cancel.reason}
+          requireReason
+          reasonPlaceholder="Customer called — wrong address entered"
+          destructive
+          successMessage={`${order.code} cancelled.`}
+          onConfirm={async (reason) => {
+            await api.cancelOrder(order.id, reason);
+            load();
+          }}
+        />
+      )}
 
       {order.rating && (
         <Card className="p-4">

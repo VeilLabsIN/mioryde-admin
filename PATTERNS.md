@@ -598,17 +598,36 @@ found before it ever ran.
   before refunds are decided, `GET /admin/orders/:id/credit-notes` and a
   read-only display belong on the order detail page.
 
-### D6 · Actions the panel cannot take
+### D6 · Actions the panel cannot take — *two of five built*
 
-There are no admin write endpoints for orders at all. Worth deciding which of
-these operations should exist, because each is currently a database query
-somebody runs by hand:
+There were no admin write endpoints for orders at all. Two now exist, and the
+other three are deliberately not built:
 
-- cancel an order on a customer's behalf, with a reason
-- reassign a stuck delivery to another partner
-- refund (blocked on the three decisions in `context.md`)
-- adjust a fare, with an audit trail and a credit note
-- suspend or restore a customer account
+**Built.** *Cancel a delivery* and *block or restore a customer*, both
+operations-only, both audited, both requiring a reason in the destructive
+direction.
+
+The cancel carries one judgement worth knowing about: **it refuses an order
+that has already been paid.** Cancelling a prepaid, paid delivery means the
+customer has handed over money for something that will not happen — an
+obligation the platform then owes them, and refunds do not exist to discharge
+it. Cancelling anyway would leave money in limbo with nothing recording that it
+is owed, which is exactly how a customer ends up chasing support for a refund
+nobody knows about. COD is unaffected: no money has moved.
+
+It also refuses once the parcel is `picked_up`. Flipping a row to `cancelled`
+does not get goods back to the sender and strands the partner mid-job with no
+instruction — that is a recovery involving two people and a physical object,
+and a button would make it look like a status change.
+
+**Not built, and why:**
+
+- **Reassign a stuck delivery.** Touches the dispatch invariants — the unique
+  accepted-offer index exists precisely to stop two partners holding one job —
+  and getting it wrong double-assigns a delivery. Needs designing, not typing.
+- **Adjust a fare.** Downward is a credit note, which now exists. Upward is a
+  debit note, which does not. Half an operation is worse than none.
+- **Refund.** Still the three business decisions in `context.md`.
 
 ### D7 · Notification settings
 

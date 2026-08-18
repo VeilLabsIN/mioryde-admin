@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Card,
   EmptyState,
@@ -12,6 +12,7 @@ import {
   StatusPill,
 } from "@/components/ui";
 import { type CustomerDetail, ApiError, api, formatMoney } from "@/lib/api";
+import { ActionPanel } from "@/components/ActionPanel";
 
 /**
  * One customer.
@@ -20,9 +21,9 @@ import { type CustomerDetail, ApiError, api, formatMoney } from "@/lib/api";
  * "has this person been refunded before", "why is their wallet empty" and "are
  * they a regular or a first-timer" had no answer in the panel.
  *
- * Deliberately read-only. There are no customer actions on the server yet
- * (`PATTERNS.md` D6), and a page with buttons that 404 teaches operators to
- * ignore errors.
+ * Blocking and restoring are the only actions offered. Everything else about a
+ * customer — a refund, a fare adjustment — needs machinery that does not exist,
+ * and a page with buttons that fail teaches operators to ignore errors.
  */
 export default function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
@@ -33,7 +34,7 @@ export default function CustomerDetailPage() {
     null,
   );
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!id) return;
     api
       .customerById(id)
@@ -49,6 +50,8 @@ export default function CustomerDetailPage() {
         });
       });
   }, [id]);
+
+  useEffect(load, [load]);
 
   if (error) {
     return (
@@ -102,8 +105,8 @@ export default function CustomerDetailPage() {
         <Card tone="warning" className="p-4">
           <SectionLabel>Account {customer.status}</SectionLabel>
           <p className="text-body text-fg-soft">
-            This customer cannot place orders. Changing that is not possible from
-            the panel yet.
+            This customer cannot place orders. Deliveries already in flight are
+            unaffected — a parcel with a partner still has to arrive somewhere.
           </p>
         </Card>
       )}
@@ -143,6 +146,37 @@ export default function CustomerDetailPage() {
           }
         />
       </div>
+
+      <ActionPanel
+        title={blocked ? "Restore this account" : "Block this account"}
+        description={
+          blocked
+            ? "Lets this customer place orders again."
+            : "Stops this customer placing new orders. Deliveries already in flight are not touched."
+        }
+        consequence={
+          blocked
+            ? undefined
+            : "Blocking does not cancel anything already booked, and does not refund anything."
+        }
+        actionLabel={blocked ? "Restore account" : "Block account"}
+        requireReason={!blocked}
+        reasonPlaceholder="Repeated fraudulent cancellations"
+        destructive={!blocked}
+        successMessage={
+          blocked
+            ? `${customer.name || "Account"} restored.`
+            : `${customer.name || "Account"} blocked.`
+        }
+        onConfirm={async (reason) => {
+          await api.setCustomerStatus(
+            customer.id,
+            blocked ? "active" : "blocked",
+            reason || undefined,
+          );
+          load();
+        }}
+      />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
         <Card tone="raised" className="p-5">
