@@ -8,8 +8,9 @@ change". Everything here is verified against the code, not remembered.
 > architecture, invariants, status, or blockers. A stale handoff is worse than
 > none — it is believed.
 
-**Last updated:** 17 August 2026 (dispatch board, access control, monitoring,
-deeper analytics, GST credit notes)
+**Last updated:** 18 August 2026 (dispatch board, access control, monitoring,
+deeper analytics, GST credit notes, pagination, order and customer detail,
+launch readiness)
 
 ---
 
@@ -118,6 +119,12 @@ would let one user lock out a city.
 **Invoices are immutable and gapless** (GST Rule 46). Corrections are credit
 notes, never edits.
 
+**The panel reports its own launch readiness.** `/readiness` computes every
+blocker from live configuration rather than from a list somebody maintains —
+GSTIN, SMS, Razorpay, S3, Firebase, agreement — and a banner carries the worst
+of them onto whatever page the operator is on. When you clear a blocker, that
+page is where you confirm it, and nothing needs editing to stay true.
+
 **The ledger's guarantees are triggers, and triggers can be absent.** A restore
 that replayed rows before the functions existed, or a load run with
 `session_replication_role = replica`, leaves a database that looks entirely
@@ -163,11 +170,14 @@ Complete and verified against a live database:
 - Partner onboarding: documents, dual approval, vehicles, agreement, bank
 - Financial integrity: double-entry ledger, cash netting, collection ceiling,
   nightly payout batch, GST invoicing and credit notes
-- Admin panel: 15 pages including KYC review, bank checks, collections, a live
+- Admin panel: 18 pages including KYC review, bank checks, collections, a live
   dispatch board, agreement publishing, access control (create admins, change
   roles, deactivate, reset and change passwords), monitoring (queue depth,
-  dispatch latency, ledger integrity) and analytics (trends, hour-of-day
-  demand, partner leaderboard, repeat-customer rate, custom range, CSV export)
+  dispatch latency, ledger integrity), analytics (trends, hour-of-day demand,
+  partner leaderboard, repeat-customer rate, custom range, CSV export),
+  delivery and customer detail pages, and launch readiness
+- Every list endpoint is paginated with real totals; filters, search and page
+  live in the URL on deliveries, customers and partners, so views are shareable
 - CI on all four repos — builds, boots the API, builds real APKs, checks no
   demo path reached a release build
 
@@ -264,10 +274,11 @@ rewrite.
 | Role → capability matrix | `mioryde-admin/src/lib/permissions.ts` |
 | Admin API client and types | `mioryde-admin/src/lib/api.ts` |
 | Schema history | `mioryde-api/migrations/` (23 files) |
+| Admin panel audit and roadmap | `mioryde-admin/PATTERNS.md`, `STAGES.md` |
 | Money handling | `mioryde-api/src/common/money.ts` |
 | Ledger rules | `mioryde-api/migrations/0018_ledger.sql` |
 
-Test counts at last update: api 185, admin 55, rider app 84, customer app 85.
+Test counts at last update: api 202, admin 60, rider app 84, customer app 85.
 
 ## 9. Environment quirks that waste an hour if you do not know them
 

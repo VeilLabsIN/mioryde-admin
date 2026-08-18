@@ -468,6 +468,8 @@ export const api = {
 
   monitoring: () => request<Monitoring>("/admin/monitoring"),
 
+  readiness: () => request<Readiness>("/admin/readiness"),
+
   // ── Access control ─────────────────────────────────────────────────────────
 
   adminUsers: () => request<{ results: AdminAccount[] }>("/admin/access/admins"),
@@ -787,6 +789,32 @@ export interface AdminOrder {
   dropAddress: string;
   vehicleName: string;
   riderName: string | null;
+}
+
+/**
+ * Launch readiness, computed from configuration rather than remembered.
+ *
+ * `blocking` means the platform cannot legally or functionally operate without
+ * it. Everything else degrades. Conflating the two turns a checklist into noise.
+ */
+export interface ReadinessCheck {
+  key: string;
+  label: string;
+  ready: boolean;
+  blocking: boolean;
+  detail: string;
+  category: "legal" | "payments" | "messaging" | "storage" | "operations";
+}
+
+export interface Readiness {
+  checkedAt: string;
+  summary: {
+    ready: number;
+    total: number;
+    blockingOutstanding: number;
+    blockingTotal: number;
+  };
+  checks: ReadinessCheck[];
 }
 
 export interface Monitoring {

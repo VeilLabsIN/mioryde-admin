@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { BannerStrip } from "@/components/Banner";
 import { Sidebar } from "@/components/Sidebar";
 import { ToastProvider } from "@/components/ToastProvider";
 import { Spinner } from "@/components/ui";
@@ -142,6 +143,10 @@ export default function PanelLayout({
             </button>
           </div>
         </header>
+
+        {/* Above the scroll container, so a critical banner does not scroll
+            away from an operator who is halfway down a long queue. */}
+        <BannerStrip />
 
         <main id="panel-main" className="min-w-0 flex-1 overflow-y-auto p-6">
           {children}

@@ -205,7 +205,7 @@ Each of these is a pattern the reference console uses, why it works there, and
 what it maps to here. This is the part that decides whether the panel reads as
 professional.
 
-### B1 · A banner system for things that need action, with the action in it
+### B1 · A banner system for things that need action, with the action in it — *done*
 
 **Reference:** a red bar across the content area — *"Payment pending — Your
 service requires a one-time payment of at least ₹500.00 to become active"* —
@@ -222,24 +222,24 @@ operator has to go and find.
 Firebase is unconfigured; `kyc` knows documents are waiting; `banking` knows
 accounts need checking. Today each is a number on a page nobody has open.
 
-**Pattern to build:**
+**Built** as `components/Banner.tsx`, mounted by the panel layout above
+`<main>` — above the scroll container specifically, so a critical banner cannot
+scroll away from an operator halfway down a queue.
 
-```tsx
-// components/Banner.tsx
-type BannerTone = "critical" | "warning" | "info";
-// Rendered by the panel layout above <main>, fed by one hook so any page can
-// contribute and the operator sees them wherever they are.
-<Banner
-  tone="critical"
-  title="The ledger does not balance"
-  detail="Three postings do not sum to zero. Stop and investigate."
-  action={{ label: "Open monitoring", href: "/monitoring" }}
-  learnMore="/monitoring#ledger"
-/>
-```
+`useAttention()` derives them from monitoring and readiness together: an
+unbalanced ledger, abandoned notifications, outstanding launch blockers. Both
+sources are role-gated and fetched with `allSettled`, so a support account that
+can read neither simply gets no banner rather than an error — a 403 here is a
+policy outcome, not a failure.
 
-Rules: at most two banners at once, most severe first; a banner must always
-carry an action; dismissal is per-session and never available for `critical`.
+Rules as designed, and all implemented: at most two at once, critical sorted
+first, every banner carries an action, and **critical cannot be dismissed** —
+the only thing that should make an unbalanced ledger disappear is it no longer
+being true.
+
+One judgement worth recording: all outstanding blockers collapse into a *single*
+banner. Six notices about a system that is not launched yet is not six pieces of
+information.
 
 ### B2 · A global search that is the fastest path to a record
 
@@ -309,7 +309,7 @@ right, which is the same idea arrived at independently. Worth generalising: a
 standard right rail slot the layout provides, so any page can put context there
 and it lands in the same place every time.
 
-### B6 · An onboarding / readiness checklist with visible progress
+### B6 · An onboarding / readiness checklist with visible progress — *done*
 
 **Reference:** *"Next in onboarding — 0/9"*, collapsible, with the current step
 expanded and an action button on it.
@@ -323,11 +323,26 @@ provider is unconfigured, Razorpay is unconfigured, the agreement is still the
 seeded placeholder, S3 is unset. Today that knowledge is spread across
 `.env.example`, `context.md` and the monitoring page.
 
-**Pattern:** a `GET /admin/readiness` endpoint returning one row per launch
-requirement — `{key, label, ready, blocking, detail, docsUrl}` — computed from
-actual configuration rather than a hand-maintained list, and a dashboard card
-showing `n/m ready` with the blocking ones expanded. This is the single highest
-value-per-line item in this file: it makes the launch state self-reporting.
+**Built.** `GET /admin/readiness` returns one row per requirement computed from
+live configuration and data, plus `/readiness` grouping them into blocking,
+degraded and ready.
+
+The **blocking versus degraded** split is the load-bearing part. A checklist
+that treats "no masked calling" the same as "no GST registration" is one nobody
+finishes reading, so the headline is the blocker count rather than a passing
+count — 3/9 invites relief, "5 blockers outstanding" does not.
+
+Reads `03AAAAA0000A1Z5` on the current config and calls it a placeholder. That
+is a **heuristic**, not validation: a GSTIN's format cannot distinguish a dummy
+from a registration, which is precisely why BUG-A01 survived. It looks for the
+giveaways in the PAN portion — five identical letters, `ABCDE`, or the digit
+runs `0000`/`1234` — and reports "looks like a placeholder", never "invalid",
+because the remedy either way is a human looking at it. Six tests pin it.
+
+**What it cannot see**, stated on the page itself: whether a real GSTIN belongs
+to the right entity, or whether agreement text has actually been through
+counsel. It detects the *seeded* placeholder marker, so arbitrary unreviewed
+text passes.
 
 ### B7 · Destructive flows get a page with prerequisites, not a modal
 

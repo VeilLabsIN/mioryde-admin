@@ -83,6 +83,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "System",
     items: [
       { href: "/monitoring", label: "Monitoring", mark: "MO", needs: ["metrics.view"] },
+      { href: "/readiness", label: "Readiness", mark: "RD", needs: ["metrics.view"] },
       { href: "/access", label: "Access control", mark: "AC", needs: ["access.manage"] },
     ],
   },

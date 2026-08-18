@@ -121,6 +121,7 @@ const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   // this one. A second capability mapping to the same roles is drift waiting
   // to happen and buys nothing.
   ["/monitoring", "metrics.view"],
+  ["/readiness", "metrics.view"],
   ["/payouts", "payouts.view"],
   ["/pricing", "pricing.view"],
   ["/audit", "audit.view"],
