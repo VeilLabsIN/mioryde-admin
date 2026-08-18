@@ -8,10 +8,65 @@ import {
   Input,
   PageHeader,
   Pager,
-  SkeletonRows,
 } from "@/components/ui";
 import { type AdminCustomer, type PageMeta, api } from "@/lib/api";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
+import { type Column, DataTable } from "@/components/DataTable";
+
+
+/** Declared once — the grid version wrote every width twice. */
+const CUSTOMER_COLUMNS: readonly Column<AdminCustomer>[] = [
+  {
+    key: "name",
+    header: "Name",
+    cell: (c) => (
+      <span className="block min-w-0">
+        <Link
+          href={`/customers/${c.id}`}
+          className="motion-change block truncate text-body underline-offset-2
+                     transition-colors hover:text-accent hover:underline"
+        >
+          {c.name || "Unnamed"}
+        </Link>
+        {c.email && (
+          <span className="block truncate text-meta text-fg-faint">{c.email}</span>
+        )}
+      </span>
+    ),
+  },
+  {
+    key: "phone",
+    header: "Phone",
+    width: "160px",
+    cell: (c) => (
+      <span className="font-mono text-meta text-fg-mid">{c.phone}</span>
+    ),
+  },
+  {
+    key: "orders",
+    header: "Orders",
+    width: "96px",
+    align: "right",
+    cell: (c) => (
+      <span className="font-mono text-meta tabular-nums">{c.orderCount}</span>
+    ),
+  },
+  {
+    key: "joined",
+    header: "Joined",
+    width: "116px",
+    align: "right",
+    cell: (c) => (
+      <span className="font-mono text-meta text-fg-faint">
+        {new Date(c.createdAt).toLocaleDateString("en-IN", {
+          day: "numeric",
+          month: "short",
+          year: "2-digit",
+        })}
+      </span>
+    ),
+  },
+];
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<AdminCustomer[] | null>(null);
@@ -99,63 +154,15 @@ export default function CustomersPage() {
             }
             hint={error}
           />
-        ) : customers === null ? (
-          <SkeletonRows rows={8} />
-        ) : customers.length === 0 ? (
-          <EmptyState
-            title="No customers match"
-            hint={search ? "Try a different search." : "Signups appear here."}
-          />
         ) : (
-          <>
-            <div
-              className="grid grid-cols-[1fr_150px_90px_110px] gap-4 border-b border-line
-                         bg-panel px-4 py-2 font-mono text-[9px] uppercase tracking-[2px]
-                         text-fg-muted"
-            >
-              <span>Name</span>
-              <span>Phone</span>
-              <span className="text-right">Orders</span>
-              <span className="text-right">Joined</span>
-            </div>
-            <ul className="stagger divide-y divide-line">
-              {customers.map((c) => (
-                <li
-                  key={c.id}
-                  className="grid grid-cols-[1fr_150px_90px_110px] items-center gap-4 px-4
-                             py-3 transition-colors duration-150 hover:bg-panel"
-                >
-                  <span className="min-w-0">
-                    <Link
-                      href={`/customers/${c.id}`}
-                      className="motion-change block truncate text-body underline-offset-2
-                                 transition-colors hover:text-accent hover:underline"
-                    >
-                      {c.name || "Unnamed"}
-                    </Link>
-                    {c.email && (
-                      <span className="block truncate text-[11px] text-fg-faint">
-                        {c.email}
-                      </span>
-                    )}
-                  </span>
-                  <span className="font-mono text-[12px] text-fg-mid">
-                    {c.phone}
-                  </span>
-                  <span className="text-right font-mono text-xs tabular-nums">
-                    {c.orderCount}
-                  </span>
-                  <span className="text-right font-mono text-[11px] text-fg-faint">
-                    {new Date(c.createdAt).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      year: "2-digit",
-                    })}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </>
+          <DataTable
+            caption="Customers, newest first"
+            columns={CUSTOMER_COLUMNS}
+            rows={customers}
+            rowKey={(c) => c.id}
+            emptyTitle="No customers match"
+            emptyHint={search ? "Try a different search." : "Signups appear here."}
+          />
         )}
       </Card>
 

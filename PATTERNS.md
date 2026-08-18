@@ -133,7 +133,7 @@ keeping `focus:border-accent` as reinforcement. One deletion.
 the compiled CSS or the browser's computed style. The appendix command for A5
 was the wrong command.
 
-### A6 · Five pages fake tables with CSS grid
+### A6 · Five pages fake tables with CSS grid — *fixed on 2 of 5*
 
 **Medium, accessibility and consistency.** `access`, `customers`, `live`,
 `orders` and `pricing` build tabular data as `<ul>` / `<li>` with
@@ -145,13 +145,30 @@ the grid versions — a cell is read as loose text with no idea which column it
 belongs to. It is also two different implementations of the same thing, which
 is the drift `PageHeader` was extracted to stop.
 
-### A7 · No error boundary, no 404, no loading boundary
+**Fixed on deliveries and customers** via `components/DataTable.tsx`. Verified in
+a browser: a real `<table>`, every `<th>` carrying `scope="col"`, an `sr-only`
+`<caption>`, and widths applied through `<colgroup>` rather than repeated on
+each row. Three pages remain — `access`, `live` and `pricing`.
+
+### A7 · No error boundary, no 404, no loading boundary — *fixed and proven*
 
 **Medium.** `src/app/` has no `error.tsx`, `not-found.tsx` or `loading.tsx` at
 any level. An unhandled render error is a blank page — the exact symptom of
 BUG-038, which took a browser to find. A mistyped URL gets Next's default 404
 with none of the panel's chrome or navigation, so the operator's only way out
 is the back button.
+
+**Fixed, and finally proven rather than assumed.** A temporary conditional throw
+was inserted into the rate cards page, built, and loaded: the boundary caught
+it, the sidebar kept all ten nav links, the header survived, the real message
+was shown with Try again and Back to overview, and clicking a sidebar link
+escaped to `/orders` normally. The probe was reverted and `/pricing` confirmed
+rendering again from the served build.
+
+One detail worth keeping: an *unconditional* `throw` at the top of a component
+makes the rest unreachable, and TypeScript then skips control-flow narrowing on
+it — which failed the build on an unrelated line. The probe has to be
+conditional to keep the component reachable.
 
 ### A8 · Two pages skip `PageHeader` — *overview now fixed*
 
@@ -435,7 +452,7 @@ and the backdrop come from the platform rather than from us. Requirements:
 returns focus to the trigger on close, labelled by its heading, and no
 scroll-lock bug on the body.
 
-### C3 · A real data-table component
+### C3 · A real data-table component — *built*
 
 Five pages hand-roll grid tables (A6) with the column widths duplicated in two
 places each — the header `div` and the row `li` — which is why the column

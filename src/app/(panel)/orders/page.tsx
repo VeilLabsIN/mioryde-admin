@@ -8,7 +8,6 @@ import {
   GhostButton,
   Input,
   Pager,
-  SkeletonRows,
   StatusPill,
   PageHeader,
 } from "@/components/ui";
@@ -19,6 +18,7 @@ import {
   formatMoney,
 } from "@/lib/api";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
+import { type Column, DataTable } from "@/components/DataTable";
 
 const FILTERS = [
   { value: "", label: "All" },
@@ -28,6 +28,87 @@ const FILTERS = [
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
 ] as const;
+
+
+/**
+ * The delivery table's columns.
+ *
+ * Declared once. The grid version this replaces wrote every width twice — on
+ * the header row and again on each data row — and kept them in sync by hand.
+ */
+const ORDER_COLUMNS: readonly Column<AdminOrder>[] = [
+  {
+    key: "code",
+    header: "Code",
+    width: "116px",
+    cell: (order) => (
+      // On the code rather than the whole row: the row is wide, and a full-row
+      // link makes selecting an address to copy impossible.
+      <Link
+        href={`/orders/${order.id}`}
+        className="motion-change font-mono text-meta text-fg-mid underline-offset-2
+                   transition-colors hover:text-accent hover:underline"
+      >
+        {order.code}
+      </Link>
+    ),
+  },
+  {
+    key: "route",
+    header: "Route",
+    cell: (order) => (
+      <span className="block min-w-0">
+        <span className="block truncate text-body text-fg-soft">
+          {order.pickupAddress}
+        </span>
+        <span className="block truncate text-meta text-fg-faint">
+          → {order.dropAddress}
+        </span>
+      </span>
+    ),
+  },
+  {
+    key: "customer",
+    header: "Customer",
+    width: "160px",
+    cell: (order) => (
+      <span className="block min-w-0">
+        <span className="block truncate text-body">
+          {order.customer.name || "—"}
+        </span>
+        <span className="block truncate font-mono text-meta text-fg-faint">
+          {order.customer.phone}
+        </span>
+      </span>
+    ),
+  },
+  {
+    key: "status",
+    header: "Status",
+    width: "132px",
+    cell: (order) => (
+      <>
+        <StatusPill status={order.status} />
+        {order.riderName && (
+          <span className="mt-1 block truncate text-meta text-fg-faint">
+            {order.riderName}
+          </span>
+        )}
+      </>
+    ),
+  },
+  {
+    key: "total",
+    header: "Total",
+    width: "96px",
+    align: "right",
+    cell: (order) => (
+      <span className="font-mono text-meta tabular-nums">
+        {formatMoney(order.total)}
+      </span>
+    ),
+  },
+];
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<AdminOrder[] | null>(null);
@@ -167,83 +248,19 @@ export default function OrdersPage() {
       <Card className="overflow-hidden">
         {error ? (
           <EmptyState title="Could not load deliveries" hint={error} />
-        ) : orders === null ? (
-          <SkeletonRows rows={8} />
-        ) : orders.length === 0 ? (
-          <EmptyState
-            title="Nothing matches"
-            hint={
+        ) : (
+          <DataTable
+            caption="Deliveries, newest first"
+            columns={ORDER_COLUMNS}
+            rows={orders}
+            rowKey={(order) => order.id}
+            emptyTitle="Nothing matches"
+            emptyHint={
               search || status
                 ? "Try a different filter or search."
                 : "Bookings will appear here."
             }
           />
-        ) : (
-          <>
-            <div
-              className="grid grid-cols-[104px_1fr_150px_120px_88px] gap-4 border-b border-line
-                         bg-panel px-4 py-2 font-mono text-[9px] uppercase tracking-[2px]
-                         text-fg-muted"
-            >
-              <span>Code</span>
-              <span>Route</span>
-              <span>Customer</span>
-              <span>Status</span>
-              <span className="text-right">Total</span>
-            </div>
-
-            <ul className="stagger divide-y divide-line">
-              {orders.map((order) => (
-                <li
-                  key={order.id}
-                  className="grid grid-cols-[104px_1fr_150px_120px_88px] items-center gap-4
-                             px-4 py-3 transition-colors duration-150 hover:bg-panel"
-                >
-                  {/* The row's way in to the detail page. On the code rather
-                      than the whole row: the row is wide and a full-row link
-                      makes selecting an address to copy impossible. */}
-                  <Link
-                    href={`/orders/${order.id}`}
-                    className="motion-change font-mono text-xs text-fg-mid underline-offset-2
-                               transition-colors hover:text-accent hover:underline"
-                  >
-                    {order.code}
-                  </Link>
-
-                  <span className="min-w-0">
-                    <span className="block truncate text-[13px] text-fg-soft">
-                      {order.pickupAddress}
-                    </span>
-                    <span className="block truncate text-[12px] text-fg-faint">
-                      → {order.dropAddress}
-                    </span>
-                  </span>
-
-                  <span className="min-w-0">
-                    <span className="block truncate text-[13px]">
-                      {order.customer.name || "—"}
-                    </span>
-                    <span className="block truncate font-mono text-[11px] text-fg-faint">
-                      {order.customer.phone}
-                    </span>
-                  </span>
-
-                  <span>
-                    <StatusPill status={order.status} />
-                    {order.riderName && (
-                      <span className="mt-1 block truncate text-[11px] text-fg-faint">
-                        {order.riderName}
-                      </span>
-                    )}
-                  </span>
-
-                  <span className="text-right font-mono text-xs tabular-nums">
-                    {formatMoney(order.total)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </>
         )}
       </Card>
 
