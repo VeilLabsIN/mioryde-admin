@@ -311,7 +311,7 @@ column at very wide viewports.
 
 ---
 
-## Stage 12 · Order detail ✅
+## Stage 12 · Order and customer detail ✅
 
 The largest functional hole in the panel, now closed. `GET /admin/orders/:id`
 plus `/orders/[id]`, reached from the order code in the list.
@@ -328,6 +328,10 @@ tones — the history panel is `raised`, a cancellation is `warning`.
 migration normalised it into `goods_categories` and left `goods_category_id` on
 the order, so the first version of the query was a 500. Reading a column list
 from migration 0001 is not the same as reading the table.
+
+Customer detail followed the same shape, and the two now link to each other in
+both directions — a delivery names its customer, a customer lists its
+deliveries.
 
 Still deliberately missing: the GPS track. It needs its own endpoint and a map.
 

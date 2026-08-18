@@ -499,7 +499,7 @@ payment and invoice state, any credit notes, and the ratings. Then a
 Include the track polyline only behind a separate call — it is the largest part
 of the payload and is only wanted when somebody opens a map.
 
-### D4 · Customer detail — *built, not yet verified against a database*
+### D4 · Customer detail — *done*
 
 `GET /admin/customers/:id` and `/customers/[id]`: order history, wallet balance
 and recent entries, saved-address count, lifetime value, cancellation rate, and
@@ -513,8 +513,16 @@ nobody recomputes it.
 Read-only on purpose: there are no customer actions on the server (D6), and
 buttons that 404 teach operators to ignore errors.
 
-**Caveat:** written while Docker was down, so this query has never executed. It
-typechecks, lints and builds — which is exactly what BUG-044 also did.
+**Verified** against the dev database and in a browser: a customer with 9
+orders reads ₹229.34 lifetime, a 22% cancellation rate and a ₹74 wallet with
+signed entries; a customer with none reads "—" for the rate rather than 0% or
+NaN, "Never used" for the wallet, and shows no wallet card at all. The
+customer → delivery → customer round trip closes.
+
+Written while Docker was down, so it was committed unverified and checked
+afterwards. What static column-checking caught first: `organizations` has no
+`name` column, only `legal_name` — a 500 identical to the `goods_category` one,
+found before it ever ran.
 
 ### D5 · Wire up what already exists
 
