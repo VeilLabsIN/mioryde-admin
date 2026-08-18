@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    <rect width="512" height="512" fill="#000000"/>
+    <g transform="translate(51.2 51.2) scale(0.8)">
+  <!--
+    Mioryde — consumer mark.
+
+    The master. Every launcher icon, favicon and splash asset is rendered from
+    this file rather than from a raster copy, so there is one place the shape
+    lives and no chance of a resized PNG drifting from the original.
+
+    Geometry notes for anyone editing:
+    · The pin is centred on x=256 and spans y=104..430, leaving a 20% margin so
+      it survives Android's adaptive-icon mask, which crops aggressively on
+      some launchers.
+    · The counter (the black circle) sits at cy=239, slightly above the pin's
+      visual centre — a circle placed at the true centre reads as sagging,
+      because the taper below draws the eye down.
+    · The swoosh breaks the counter's lower-left arc on purpose. That break is
+      what makes the mark read as a road leaving the frame rather than a comma
+      floating in a hole.
+  -->
+  <defs>
+    <!--
+      Depth comes from three stacked passes, not from a bevel filter:
+      a body gradient, a gloss sweep, and a warm rim light. Filters are
+      expensive to rasterise, blur at small sizes and are unevenly supported by
+      SVG renderers — gradients are exact at every scale.
+    -->
+    <linearGradient id="body" x1="0.18" y1="0" x2="0.72" y2="1">
+      <stop offset="0%"   stop-color="#FFE24A"/>
+      <stop offset="34%"  stop-color="#FFD012"/>
+      <stop offset="68%"  stop-color="#FFB300"/>
+      <stop offset="100%" stop-color="#EF9200"/>
+    </linearGradient>
+
+    <!-- Gloss: a soft highlight down the upper-left, where light would land. -->
+    <linearGradient id="gloss" x1="0.1" y1="0.05" x2="0.55" y2="0.62">
+      <stop offset="0%"   stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="45%"  stop-color="#FFFFFF" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Rim light along the lower-right, so the form turns away from the eye. -->
+    <linearGradient id="rim" x1="0.75" y1="0.35" x2="0.35" y2="1">
+      <stop offset="0%"   stop-color="#FFF3B0" stop-opacity="0.42"/>
+      <stop offset="55%"  stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="swooshFill" x1="0.1" y1="1" x2="0.9" y2="0">
+      <stop offset="0%"   stop-color="#FFC61A"/>
+      <stop offset="55%"  stop-color="#FFE04F"/>
+      <stop offset="100%" stop-color="#FFF6C8"/>
+    </linearGradient>
+
+    <!-- Shared geometry. Referenced by both marks; edit once. -->
+    <path id="pinPath"
+      d="M256 104
+         C 178 104 115 167 115 245
+         C 115 318 196 380 256 430
+         C 316 380 397 318 397 245
+         C 397 167 334 104 256 104 Z"/>
+
+    <path id="swooshPath"
+      d="M175 336
+         C 181 274 226 226 320 205
+         C 268 232 236 268 224 336 Z"/>
+  </defs>
+
+  <!-- Body -->
+  <use href="#pinPath" fill="url(#body)"/>
+  <use href="#pinPath" fill="url(#gloss)"/>
+  <use href="#pinPath" fill="url(#rim)"/>
+
+  <!-- Counter: knocked out to the background colour rather than made
+       transparent, so the mark is safe on any surface. -->
+  <circle cx="256" cy="239" r="76" fill="#000000"/>
+
+  <!-- Road -->
+  <use href="#swooshPath" fill="url(#swooshFill)"/>
+</g>
+  </svg>

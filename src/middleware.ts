@@ -81,10 +81,14 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except static assets and the icon, which are served straight
+    // Everything except static assets and the icons, which are served straight
     // from disk and carry no scripts to police.
+    //
+    // `icon` and `apple-icon` are the App Router file-convention routes, not
+    // files in public/ — the previous list named only favicon.ico, so the tab
+    // icon was being handed a full Content-Security-Policy on every request.
     {
-      source: "/((?!_next/static|_next/image|favicon.ico).*)",
+      source: "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },
