@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  boardOrder,
   clockSkewMs,
   elapsedMs,
   formatElapsed,
@@ -105,5 +106,59 @@ describe("needsAttention", () => {
     // A new status shipping as a screen full of warnings would train
     // operators to ignore the flag.
     expect(needsAttention("scheduled", 10 * 60 * 60_000)).toBe(false);
+  });
+});
+
+describe("boardOrder", () => {
+  const NOW = Date.parse("2026-08-18T12:00:00.000Z");
+  const agoMin = (m: number) => new Date(NOW - m * 60_000).toISOString();
+
+  it("puts a flagged delivery above an older unflagged one", () => {
+    // The case the board got wrong. A long haul collected two minutes ago is
+    // not urgent; a delivery nobody has accepted for eight minutes is.
+    const ordered = boardOrder(
+      [
+        { code: "LONGHAUL", status: "in_transit", statusSince: agoMin(90) },
+        { code: "STUCK", status: "pending", statusSince: agoMin(8) },
+      ],
+      NOW,
+      0,
+    );
+    expect(ordered.map((o) => o.code)).toEqual(["STUCK", "LONGHAUL"]);
+  });
+
+  it("ranks flagged deliveries among themselves by time in status", () => {
+    const ordered = boardOrder(
+      [
+        { code: "NEWER", status: "pending", statusSince: agoMin(6) },
+        { code: "OLDER", status: "pending", statusSince: agoMin(40) },
+      ],
+      NOW,
+      0,
+    );
+    expect(ordered.map((o) => o.code)).toEqual(["OLDER", "NEWER"]);
+  });
+
+  it("corrects for a workstation clock that is running fast", () => {
+    // Four minutes fast: without the correction this pending order reads as
+    // six minutes old and crosses the five-minute threshold it has not
+    // actually reached.
+    const skew = 4 * 60_000;
+    const orders = [{ code: "FRESH", status: "pending", statusSince: agoMin(2) }];
+    expect(needsAttention("pending", elapsedMs(orders[0]!.statusSince, NOW, skew))).toBe(
+      false,
+    );
+    expect(boardOrder(orders, NOW, skew)).toHaveLength(1);
+  });
+
+  it("does not mutate the array it was given", () => {
+    // The board holds this array in state; sorting in place would reorder the
+    // snapshot under React without a re-render.
+    const input = [
+      { code: "A", status: "pending", statusSince: agoMin(1) },
+      { code: "B", status: "pending", statusSince: agoMin(30) },
+    ];
+    boardOrder(input, NOW, 0);
+    expect(input.map((o) => o.code)).toEqual(["A", "B"]);
   });
 });

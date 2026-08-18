@@ -288,7 +288,7 @@ rewrite.
 | Money handling | `mioryde-api/src/common/money.ts` |
 | Ledger rules | `mioryde-api/migrations/0018_ledger.sql` |
 
-Test counts at last update: api 202, admin 60, rider app 84, customer app 85.
+Test counts at last update: api 203, admin 64, rider app 84, customer app 85.
 
 ## 9. Environment quirks that waste an hour if you do not know them
 

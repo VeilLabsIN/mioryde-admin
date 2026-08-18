@@ -15,6 +15,7 @@ import {
 import { type LiveOrder, api, formatMoney } from "@/lib/api";
 import { type Column, DataTable } from "@/components/DataTable";
 import {
+  boardOrder,
   clockSkewMs,
   elapsedMs,
   formatElapsed,
@@ -175,13 +176,17 @@ export default function LivePage() {
     [orders, now, skew],
   );
 
-  const visible = useMemo(
-    () =>
-      statusFilter
-        ? (orders ?? []).filter((o) => o.status === statusFilter)
-        : (orders ?? []),
-    [orders, statusFilter],
-  );
+  const visible = useMemo(() => {
+    const filtered = statusFilter
+      ? (orders ?? []).filter((o) => o.status === statusFilter)
+      : (orders ?? []);
+    // Ordered against the snapshot's clock, not the ticking one. Sorting on
+    // `now` would re-rank the board every second and slide a row out from
+    // under the cursor as it crossed a threshold — on a screen whose rows are
+    // links to irreversible actions. The flag still lights up the moment it is
+    // earned; only the position waits for the next refresh.
+    return boardOrder(filtered, snapshot?.receivedAt ?? 0, skew);
+  }, [orders, statusFilter, snapshot?.receivedAt, skew]);
 
   const stale =
     snapshot !== null && now > 0 && now - snapshot.receivedAt > STALE_AFTER_MS;
@@ -257,7 +262,7 @@ export default function LivePage() {
               />
             ) : (
               <DataTable
-                caption="Deliveries in flight, longest waiting first"
+                caption="Deliveries in flight, those needing attention first"
                 columns={BOARD_COLUMNS}
                 rows={visible}
                 rowKey={(order) => order.id}

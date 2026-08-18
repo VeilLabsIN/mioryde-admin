@@ -106,3 +106,39 @@ export function needsAttention(status: string, elapsed: number): boolean {
   const threshold = ATTENTION_AFTER_MS[status];
   return threshold !== undefined && elapsed >= threshold;
 }
+
+/**
+ * The order a dispatch board should be read in.
+ *
+ * The board sorted by when each order was *placed*, while the duration it
+ * displays and the flag it raises both measure time in the *current status*.
+ * Three different notions of "waiting" on one screen, and they disagree the
+ * moment an order progresses: a long haul placed this morning and collected
+ * two minutes ago outranked a delivery nobody had accepted for eight minutes,
+ * which is precisely inverted on the screen whose job is "who needs somebody".
+ * It also made the visible duration column non-monotonic, so the list looked
+ * mis-sorted even when it was doing what it was told.
+ *
+ * Flagged first, then longest in its current status. Attention wins over
+ * duration because a pending order at six minutes is a dispatch failure a
+ * customer is already noticing, while a two-hour transit is usually a long
+ * trip — the flag encodes that judgement and the raw number does not.
+ *
+ * Sorting here rather than in SQL because the thresholds live in this file and
+ * the elapsed time is corrected for this workstation's clock skew, neither of
+ * which the server knows.
+ */
+export function boardOrder<T extends { status: string; statusSince: string }>(
+  orders: readonly T[],
+  now: number,
+  skew: number,
+): T[] {
+  return [...orders].sort((a, b) => {
+    const aElapsed = elapsedMs(a.statusSince, now, skew);
+    const bElapsed = elapsedMs(b.statusSince, now, skew);
+    const aFlagged = needsAttention(a.status, aElapsed);
+    const bFlagged = needsAttention(b.status, bElapsed);
+    if (aFlagged !== bFlagged) return aFlagged ? -1 : 1;
+    return bElapsed - aElapsed;
+  });
+}
