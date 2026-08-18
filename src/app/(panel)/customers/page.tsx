@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   Card,
@@ -125,9 +126,13 @@ export default function CustomersPage() {
                              py-3 transition-colors duration-150 hover:bg-panel"
                 >
                   <span className="min-w-0">
-                    <span className="block truncate text-[13px]">
-                      {c.name || "—"}
-                    </span>
+                    <Link
+                      href={`/customers/${c.id}`}
+                      className="motion-change block truncate text-body underline-offset-2
+                                 transition-colors hover:text-accent hover:underline"
+                    >
+                      {c.name || "Unnamed"}
+                    </Link>
                     {c.email && (
                       <span className="block truncate text-[11px] text-fg-faint">
                         {c.email}

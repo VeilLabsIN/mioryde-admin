@@ -499,12 +499,22 @@ payment and invoice state, any credit notes, and the ratings. Then a
 Include the track polyline only behind a separate call — it is the largest part
 of the payload and is only wanted when somebody opens a map.
 
-### D4 · Customer detail
+### D4 · Customer detail — *built, not yet verified against a database*
 
-`GET /admin/customers/:id` — order history, wallet balance and transactions,
-saved addresses count, lifetime value, and the repeat/new classification the
-analytics work now computes. Support currently has a customer list and nothing
-behind it.
+`GET /admin/customers/:id` and `/customers/[id]`: order history, wallet balance
+and recent entries, saved-address count, lifetime value, cancellation rate, and
+the repeat/new classification — defined identically to the analytics one, so the
+two screens cannot disagree about what "returning" means.
+
+The wallet balance is read from the newest entry's `balance_after`, never
+summed. That column is computed under a row lock at insert time precisely so
+nobody recomputes it.
+
+Read-only on purpose: there are no customer actions on the server (D6), and
+buttons that 404 teach operators to ignore errors.
+
+**Caveat:** written while Docker was down, so this query has never executed. It
+typechecks, lints and builds — which is exactly what BUG-044 also did.
 
 ### D5 · Wire up what already exists
 

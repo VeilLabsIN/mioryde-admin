@@ -461,6 +461,9 @@ export const api = {
 
   orderById: (id: string) => request<OrderDetail>(`/admin/orders/${id}`),
 
+  customerById: (id: string) =>
+    request<CustomerDetail>(`/admin/customers/${id}`),
+
   // ── Monitoring ─────────────────────────────────────────────────────────────
 
   monitoring: () => request<Monitoring>("/admin/monitoring"),
@@ -914,6 +917,55 @@ export interface OrderDetail {
   }[];
 
   rating: { stars: number; tags: string[]; comment: string | null } | null;
+}
+
+/**
+ * One customer, with the history support is asked about.
+ *
+ * Mirrors `OrderDetail`: the list gave a name and a count and nothing behind it.
+ */
+export interface CustomerDetail {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  status: string;
+  joinedAt: string;
+  referralCode: string;
+  organizationName: string | null;
+  savedAddresses: number;
+
+  orders: {
+    total: number;
+    delivered: number;
+    cancelled: number;
+    cancellationRate: number;
+    /** Over the whole history, matching the analytics definition. */
+    isRepeat: boolean;
+    firstOrderAt: string | null;
+    lastOrderAt: string | null;
+    lifetimeValue: Money;
+  };
+
+  recentOrders: {
+    id: string;
+    code: string;
+    status: string;
+    total: Money;
+    placedAt: string;
+  }[];
+
+  wallet: {
+    /** Null when they have never had an entry — different from a zero balance. */
+    balance: Money | null;
+    entries: {
+      kind: string;
+      /** Signed: credits positive, debits negative. */
+      amount: Money;
+      description: string | null;
+      at: string;
+    }[];
+  };
 }
 
 export interface LiveOrder {

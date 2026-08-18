@@ -159,8 +159,9 @@ export default function OrderDetailPage() {
             <SectionLabel>People</SectionLabel>
             <Field
               label="Customer"
-              value={order.customer.name || "—"}
+              value={order.customer.name || "Unnamed"}
               detail={order.customer.phone}
+              href={`/customers/${order.customer.id}`}
             />
             <Field
               label="Recipient"
