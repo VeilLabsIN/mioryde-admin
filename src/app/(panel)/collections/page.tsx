@@ -19,6 +19,7 @@ import {
   api,
   formatMoney,
 } from "@/lib/api";
+import { useUrlPage } from "@/lib/useUrlState";
 
 const METHODS = [
   { value: "bank_transfer", label: "Bank transfer" },
@@ -48,13 +49,15 @@ const METHODS = [
 export default function CollectionsPage() {
   const [rows, setRows] = useState<OutstandingCash[] | null>(null);
   const [meta, setMeta] = useState<PageMeta | null>(null);
-  const [page, setPage] = useState(0);
+  const [page, setPage, urlReady] = useUrlPage();
   const [error, setError] = useState<string | null>(null);
 
   // Guards against a slow response landing after a newer one.
   const requestId = useRef(0);
 
   const load = useCallback(() => {
+    if (!urlReady) return;
+
     const id = ++requestId.current;
     setError(null);
     setRows(null);
@@ -78,7 +81,7 @@ export default function CollectionsPage() {
             : "Could not load outstanding cash.",
         );
       });
-  }, [page]);
+  }, [page, urlReady, setPage]);
 
   useEffect(load, [load]);
 

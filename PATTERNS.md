@@ -85,7 +85,7 @@ dumps the operator on the unfiltered list. It looks like it works.
 encoded. Verified: `/orders?search=LEDGER01` arrives with the search box filled
 and one row shown, where before it listed all sixteen.
 
-### A4 · No URL state anywhere — *fixed for 3 of 9 pages*
+### A4 · No URL state anywhere — *fixed*
 
 **High.** Following from A3: filters, search terms, selected tab, date range
 and pagination all live only in React state. Consequences:
@@ -97,9 +97,28 @@ and pagination all live only in React state. Consequences:
 - Browser back does not restore state; it leaves the page entirely.
 - A reload loses the operator's place.
 
-**Fixed on deliveries, customers and partners** via `lib/useUrlState.ts`. Six
-pages still hold view state in React only: payouts, collections, banking, the
-KYC tab, the audit log's filters, and the analytics date range.
+**Fixed on all nine** via `lib/useUrlState.ts`. Deliveries, customers, partners,
+payouts, collections, banking, the KYC tab, the audit log's two filters and the
+analytics range and series all live in the query string.
+
+Verified as deep links, which is the point of the work: `/kyc?tab=vehicles`
+opens on that queue, `/payouts?status=paid` opens filtered, `/analytics?days=90
+&series=delivered` opens on the right range *and* the right chart, and
+`/audit?subject=<id>` opens showing only that record's history — which is the
+question an audit log is actually asked, now answerable with a link somebody
+can paste into an incident thread.
+
+Two details worth keeping:
+
+- **Unknown values fail safe.** An unrecognised `?tab=` or `?series=` reads as
+  the default rather than rendering nothing, and an out-of-range `?days=` falls
+  back rather than sending the server a value its DTO will refuse. Same
+  direction as the apps' handling of unknown wire values.
+- **A control seeded from the URL must re-seed when the URL arrives.** The
+  analytics range picker initialised its two date inputs at mount, and the URL
+  is read in an effect *after* mount — so a shared custom-range link fetched the
+  right data while both boxes sat empty, which reads as the range having been
+  ignored.
 
 ### A5 · Inputs suppress the focus ring that everything else gets
 

@@ -10,6 +10,7 @@ import {
   SkeletonRows,
 } from "@/components/ui";
 import { ApiError, type Analytics, api, formatMoney } from "@/lib/api";
+import { useUrlParam } from "@/lib/useUrlState";
 
 const RANGES = [7, 30, 90] as const;
 
@@ -50,10 +51,42 @@ type SeriesKey = (typeof SERIES)[number]["key"];
  * delivered. A large gap is acquisition spend with nothing behind it.
  */
 export default function AnalyticsPage() {
-  const [days, setDays] = useState<number>(30);
-  /** Set only when a custom range is in force; presets clear it. */
-  const [custom, setCustom] = useState<{ from: string; to: string } | null>(null);
-  const [series, setSeries] = useState<SeriesKey>("revenue");
+  // The whole view is in the URL. "Revenue for last quarter" is a thing people
+  // paste into a message, and it was not a link before this.
+  //
+  // `days` is a string here because that is what a query parameter is; it is
+  // parsed once below rather than at each use.
+  const [daysRaw, setDaysRaw, daysReady] = useUrlParam("days", "30");
+  const [from, setFrom, fromReady] = useUrlParam("from");
+  const [to, setTo, toReady] = useUrlParam("to");
+  const [seriesRaw, setSeriesRaw, seriesReady] = useUrlParam("series", "revenue");
+
+  const urlReady = daysReady && fromReady && toReady && seriesReady;
+
+  // An out-of-range or unparseable ?days= falls back to the default rather than
+  // sending the server something it will refuse — the DTO bounds it at 7..180.
+  const parsedDays = Number.parseInt(daysRaw, 10);
+  const days =
+    Number.isFinite(parsedDays) && parsedDays >= 7 && parsedDays <= 180
+      ? parsedDays
+      : 30;
+
+  /** A custom range is in force only when both ends are present. */
+  const custom = from && to ? { from, to } : null;
+
+  const setCustom = (range: { from: string; to: string } | null) => {
+    setFrom(range?.from ?? "");
+    setTo(range?.to ?? "");
+  };
+
+  const setDays = (next: number) => setDaysRaw(String(next));
+
+  // Same fail-safe direction as the KYC tab: an unrecognised series reads as
+  // the default rather than rendering an empty chart.
+  const series: SeriesKey = SERIES.some((o) => o.key === seriesRaw)
+    ? (seriesRaw as SeriesKey)
+    : "revenue";
+  const setSeries = (next: SeriesKey) => setSeriesRaw(next);
   const [data, setData] = useState<Analytics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -62,6 +95,8 @@ export default function AnalyticsPage() {
   const requestId = useRef(0);
 
   const load = useCallback(() => {
+    if (!urlReady) return;
+
     const id = ++requestId.current;
     setError(null);
     setData(null);
@@ -79,7 +114,7 @@ export default function AnalyticsPage() {
             : "Could not load analytics.",
         );
       });
-  }, [days, custom]);
+  }, [days, custom?.from, custom?.to, urlReady]);
 
   useEffect(load, [load]);
 
@@ -505,6 +540,18 @@ function RangePicker({
 }) {
   const [from, setFrom] = useState(value?.from ?? "");
   const [to, setTo] = useState(value?.to ?? "");
+
+  // Adopt the range once the URL has been read.
+  //
+  // The initial state above runs at mount, and the URL is read in an effect
+  // after it — so on a shared link carrying ?from=&to= the page would fetch the
+  // right data while these two boxes sat empty, which reads as the range having
+  // been ignored. Only follows the prop; local typing is untouched until the
+  // applied range actually changes.
+  useEffect(() => {
+    setFrom(value?.from ?? "");
+    setTo(value?.to ?? "");
+  }, [value?.from, value?.to]);
 
   const complete = from !== "" && to !== "";
 

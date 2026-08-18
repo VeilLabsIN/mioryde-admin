@@ -17,6 +17,7 @@ import {
   type PendingBankAccount,
   api,
 } from "@/lib/api";
+import { useUrlPage } from "@/lib/useUrlState";
 
 /**
  * Bank account verification.
@@ -39,7 +40,7 @@ import {
 export default function BankingPage() {
   const [accounts, setAccounts] = useState<PendingBankAccount[] | null>(null);
   const [meta, setMeta] = useState<PageMeta | null>(null);
-  const [page, setPage] = useState(0);
+  const [page, setPage, urlReady] = useUrlPage();
   const [error, setError] = useState<string | null>(null);
 
   // Guards against a slow response landing after a newer one and repainting
@@ -47,6 +48,8 @@ export default function BankingPage() {
   const requestId = useRef(0);
 
   const load = useCallback(() => {
+    if (!urlReady) return;
+
     const id = ++requestId.current;
     setError(null);
     setAccounts(null);
@@ -70,7 +73,7 @@ export default function BankingPage() {
             : "Could not load accounts waiting to be checked.",
         );
       });
-  }, [page]);
+  }, [page, urlReady, setPage]);
 
   useEffect(load, [load]);
 

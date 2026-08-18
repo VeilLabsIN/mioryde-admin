@@ -19,6 +19,7 @@ import {
   type PendingVehicle,
   api,
 } from "@/lib/api";
+import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
 
 /**
  * Reasons a document can be turned down.
@@ -54,12 +55,21 @@ const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
  * never knows which of the three they are doing.
  */
 export default function KycPage() {
-  const [tab, setTab] = useState<Tab>("review");
+  // The tab is in the URL, so "the countersign queue" is a link somebody can
+  // send. "review" is the fallback, so the default view has a clean address.
+  const [tabRaw, setTabRaw, tabReady] = useUrlParam("tab", "review");
+  // An unrecognised ?tab= reads as the first queue rather than rendering
+  // nothing — the same fail-safe direction the apps use for unknown wire
+  // values.
+  const tab: Tab = TABS.some((t) => t.value === tabRaw)
+    ? (tabRaw as Tab)
+    : "review";
   const [queue, setQueue] = useState<KycQueueItem[] | null>(null);
   const [countersign, setCountersign] = useState<CountersignItem[] | null>(null);
   const [vehicles, setVehicles] = useState<PendingVehicle[] | null>(null);
   const [meta, setMeta] = useState<PageMeta | null>(null);
-  const [page, setPage] = useState(0);
+  const [page, setPage, pageReady] = useUrlPage();
+  const urlReady = tabReady && pageReady;
   const [error, setError] = useState<string | null>(null);
 
   // Guards against a slow response for an old tab landing after a newer one
@@ -67,6 +77,8 @@ export default function KycPage() {
   const requestId = useRef(0);
 
   const load = useCallback(() => {
+    if (!urlReady) return;
+
     const id = ++requestId.current;
     setError(null);
 
@@ -104,12 +116,7 @@ export default function KycPage() {
       setVehicles(null);
       api.pendingVehicles(page).then(took(setVehicles)).catch(fail);
     }
-  }, [tab, page]);
-
-  // Switching tab starts at the top of the new queue.
-  useEffect(() => {
-    setPage(0);
-  }, [tab]);
+  }, [tab, page, urlReady, setPage]);
 
   useEffect(load, [load]);
 
@@ -124,7 +131,11 @@ export default function KycPage() {
         {TABS.map((item) => (
           <GhostButton
             key={item.value}
-            onClick={() => setTab(item.value)}
+            onClick={() => {
+              // Switching queue starts at the top of the new one.
+              setPage(0);
+              setTabRaw(item.value);
+            }}
             className={
               tab === item.value ? "border-accent text-fg" : "text-fg-faint"
             }

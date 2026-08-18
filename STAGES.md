@@ -228,7 +228,7 @@ in the footer. Remaining:
 
 ---
 
-## Stage 8 · URL as view state 🔨
+## Stage 8 · URL as view state ✅
 
 **Done for deliveries, customers and partners.** `useUrlParam` and `useUrlPage`
 in `lib/useUrlState.ts`; filters, search and page number are in the query
@@ -254,8 +254,9 @@ written as `?search=`, so two identical views always produce the same link.
 Page numbers are one-based in the URL and zero-based to the API, converted in
 one place and covered by five tests.
 
-**Remaining:** payouts, collections, banking, the KYC tab selection, the audit
-log filters, and the analytics date range.
+**All nine pages done.** The remaining tradeoff stands: `replaceState` means
+back does not step through page numbers. `push` for discrete actions and
+`replace` for continuous ones is the better answer and is still unbuilt.
 
 ---
 

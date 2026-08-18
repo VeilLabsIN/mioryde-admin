@@ -11,6 +11,7 @@ import {
   PageHeader,
 } from "@/components/ui";
 import { ApiError, type AuditEntry, type PageMeta, api } from "@/lib/api";
+import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
 
 /** Turns `payout.settled` into `Payout settled`. */
 function humanise(action: string): string {
@@ -61,9 +62,13 @@ export default function AuditPage() {
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
   const [meta, setMeta] = useState<PageMeta | null>(null);
   const [actions, setActions] = useState<string[]>([]);
-  const [action, setAction] = useState("");
-  const [subjectId, setSubjectId] = useState("");
-  const [page, setPage] = useState(0);
+  // All three in the URL: "who touched this record" is the question this page
+  // exists for, and the answer to it should be a link somebody can paste into
+  // an incident thread.
+  const [action, setAction, actionReady] = useUrlParam("action");
+  const [subjectId, setSubjectId, subjectReady] = useUrlParam("subject");
+  const [page, setPage, pageReady] = useUrlPage();
+  const urlReady = actionReady && subjectReady && pageReady;
   const [error, setError] = useState<string | null>(null);
 
   // Only sent once it is a complete UUID. Filtering on a partial id would
@@ -74,6 +79,8 @@ export default function AuditPage() {
     : undefined;
 
   const load = useCallback(() => {
+    if (!urlReady) return;
+
     setEntries(null);
     setError(null);
     api
@@ -89,7 +96,7 @@ export default function AuditPage() {
       .catch((e: unknown) =>
         setError(e instanceof ApiError ? e.message : "Could not load the log."),
       );
-  }, [page, action, subjectFilter]);
+  }, [page, action, subjectFilter, urlReady, setPage]);
 
   useEffect(load, [load]);
 
@@ -117,8 +124,8 @@ export default function AuditPage() {
             label="All actions"
             active={action === ""}
             onClick={() => {
-              setAction("");
               setPage(0);
+              setAction("");
             }}
           />
           {actions.map((value) => (
@@ -127,8 +134,8 @@ export default function AuditPage() {
               label={humanise(value)}
               active={action === value}
               onClick={() => {
-                setAction(value);
                 setPage(0);
+                setAction(value);
               }}
             />
           ))}
@@ -139,8 +146,8 @@ export default function AuditPage() {
             placeholder="Filter by record id"
             value={subjectId}
             onChange={(e) => {
-              setSubjectId(e.target.value);
               setPage(0);
+              setSubjectId(e.target.value);
             }}
           />
         </div>
@@ -187,8 +194,8 @@ export default function AuditPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setSubjectId(entry.subjectId ?? "");
                           setPage(0);
+                          setSubjectId(entry.subjectId ?? "");
                         }}
                         className="font-mono text-xs underline-offset-2 hover:underline"
                         title="Filter to this record"

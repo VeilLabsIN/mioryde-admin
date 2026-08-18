@@ -19,6 +19,7 @@ import {
   api,
   formatMoney,
 } from "@/lib/api";
+import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
 
 const FILTERS = [
   { value: "requested", label: "To action" },
@@ -51,11 +52,14 @@ const STATUS_LABEL: Record<string, string> = {
  * mark anything paid.
  */
 export default function PayoutsPage() {
-  const [status, setStatus] = useState<string>("requested");
+  // "requested" is the default and the fallback, so the opening view has a
+  // clean URL and only a deliberate change puts ?status= in it.
+  const [status, setStatus, statusReady] = useUrlParam("status", "requested");
   const [payouts, setPayouts] = useState<Payout[] | null>(null);
   const [pending, setPending] = useState<PayoutTotals | null>(null);
   const [meta, setMeta] = useState<PageMeta | null>(null);
-  const [page, setPage] = useState(0);
+  const [page, setPage, pageReady] = useUrlPage();
+  const urlReady = statusReady && pageReady;
   const [error, setError] = useState<string | null>(null);
 
   // Guards against a slow response for an old filter landing after a newer one
@@ -63,6 +67,8 @@ export default function PayoutsPage() {
   const requestId = useRef(0);
 
   const load = useCallback(() => {
+    if (!urlReady) return;
+
     const id = ++requestId.current;
     setPayouts(null);
     setError(null);
@@ -84,13 +90,7 @@ export default function PayoutsPage() {
           e instanceof ApiError ? e.message : "Could not load payouts.",
         );
       });
-  }, [status, page]);
-
-  // A filter change returns to page one. Narrowing to "requested" while on page
-  // three otherwise shows an empty queue that has work in it.
-  useEffect(() => {
-    setPage(0);
-  }, [status]);
+  }, [status, page, urlReady, setPage]);
 
   useEffect(load, [load]);
 
@@ -120,7 +120,12 @@ export default function PayoutsPage() {
         {FILTERS.map((f) => (
           <GhostButton
             key={f.value}
-            onClick={() => setStatus(f.value)}
+            onClick={() => {
+              // Two sequential URL writes; each re-reads the live query string,
+              // so the page reset is not overwritten by the status write.
+              setPage(0);
+              setStatus(f.value);
+            }}
             className={
               status === f.value ? "border-accent text-fg" : undefined
             }
