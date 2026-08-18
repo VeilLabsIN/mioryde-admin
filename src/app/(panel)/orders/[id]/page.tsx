@@ -83,7 +83,6 @@ export default function OrderDetailPage() {
       <div className="mx-auto max-w-[900px]">
         <PageHeader
           title={error.missing ? "No such delivery" : "Could not load"}
-          breadcrumb={[{ label: "Deliveries", href: "/orders" }]}
         />
         <div className="mt-6">
           <EmptyState
@@ -100,7 +99,6 @@ export default function OrderDetailPage() {
       <div className="mx-auto max-w-[900px]">
         <PageHeader
           title="Delivery"
-          breadcrumb={[{ label: "Deliveries", href: "/orders" }]}
         />
         <Card className="mt-6 overflow-hidden">
           <SkeletonRows rows={6} />
@@ -115,7 +113,6 @@ export default function OrderDetailPage() {
     <div className="mx-auto max-w-[1000px] space-y-5">
       <PageHeader
         title={order.code}
-        breadcrumb={[{ label: "Deliveries", href: "/orders" }]}
         subtitle={
           <>
             Placed {new Date(order.placedAt).toLocaleString("en-IN")}

@@ -243,6 +243,13 @@ rewrite.
 
 ## 7. Conventions worth matching
 
+- **The shell owns location, pages own content.** The top bar (mark, command
+  palette, identity) and the breadcrumb strip are rendered once by
+  `(panel)/layout.tsx`. Pages supply a title and nothing about where they sit —
+  `PageHeader` no longer takes a `breadcrumb` prop, because three pages passed
+  one and the rest did not, so the trail read as decoration rather than
+  furniture. `src/lib/nav.ts` is the single registry the sidebar, the palette
+  and the breadcrumbs all read.
 - **One `PageHeader` for every page.** Twelve pages had grown three heading
   treatments; they now share one component. Add a page, use it.
 - **Use the type scale, not raw pixel sizes.** `text-micro` (9px, uppercase,

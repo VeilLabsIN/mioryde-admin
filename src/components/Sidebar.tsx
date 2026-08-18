@@ -3,91 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLayoutEffect, useRef, useState } from "react";
-import { type AdminRole, type Capability, canAny } from "@/lib/permissions";
+import { type AdminRole, canAny } from "@/lib/permissions";
+import { NAV_GROUPS } from "@/lib/nav";
 import { ThemeSwitcher } from "./ThemeSwitcher";
-
-interface NavItem {
-  href: string;
-  label: string;
-  /** Two-character monogram. Icon fonts would be another network round trip
-   *  for something that renders identically as text. */
-  mark: string;
-  badge?: number;
-  /**
-   * Capabilities that make this destination useful. Shown when the role holds
-   * any of them.
-   *
-   * Filtering navigation is a courtesy, not a control: the API enforces the
-   * same matrix per route, so a hidden link typed directly leads to a page that
-   * loads nothing. Hiding it means an operator is not repeatedly offered doors
-   * that will not open.
-   */
-  needs: readonly Capability[];
-}
-
-/**
- * Navigation, grouped by what an operator is trying to do.
- *
- * A flat list was right at seven items and stopped being right at thirteen:
- * "Bank checks" and "Rate cards" sat adjacent while having nothing to do with
- * each other, so finding anything meant reading every label. The groups are
- * the questions people arrive with — what is happening now, who are these
- * people, where is the money, what did we agree.
- *
- * A group with no visible items is dropped entirely, so a support user never
- * sees an empty "Money" heading advertising pages they cannot open.
- */
-const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
-  {
-    label: "Operations",
-    items: [
-      { href: "/", label: "Overview", mark: "OV", needs: ["metrics.view"] },
-      { href: "/live", label: "Live", mark: "LV", needs: ["orders.view"] },
-      { href: "/orders", label: "Deliveries", mark: "DL", needs: ["orders.view"] },
-    ],
-  },
-  {
-    label: "People",
-    items: [
-      { href: "/customers", label: "Customers", mark: "CU", needs: ["customers.view"] },
-      { href: "/riders", label: "Partners", mark: "PT", needs: ["riders.view"] },
-      { href: "/kyc", label: "Verification", mark: "KY", needs: ["riders.review"] },
-    ],
-  },
-  {
-    label: "Money",
-    items: [
-      { href: "/payouts", label: "Payouts", mark: "PO", needs: ["payouts.view"] },
-      { href: "/banking", label: "Bank checks", mark: "BK", needs: ["payouts.settle"] },
-      { href: "/collections", label: "Collections", mark: "CO", needs: ["payouts.settle"] },
-      { href: "/pricing", label: "Rate cards", mark: "RC", needs: ["pricing.view"] },
-    ],
-  },
-  {
-    label: "Business",
-    items: [
-      { href: "/analytics", label: "Analytics", mark: "AN", needs: ["metrics.view"] },
-    ],
-  },
-  {
-    label: "Governance",
-    items: [
-      { href: "/agreement", label: "Agreement", mark: "AG", needs: ["pricing.edit"] },
-      { href: "/audit", label: "Audit log", mark: "AU", needs: ["audit.view"] },
-    ],
-  },
-  // Separate from Governance: those two are about what was agreed and what was
-  // done, these are about whether the machine is working and who can touch it.
-  // Filed together they read as one undifferentiated pile of admin screens.
-  {
-    label: "System",
-    items: [
-      { href: "/monitoring", label: "Monitoring", mark: "MO", needs: ["metrics.view"] },
-      { href: "/readiness", label: "Readiness", mark: "RD", needs: ["metrics.view"] },
-      { href: "/access", label: "Access control", mark: "AC", needs: ["access.manage"] },
-    ],
-  },
-];
 
 /**
  * The panel's navigation rail.

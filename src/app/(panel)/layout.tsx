@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BannerStrip } from "@/components/Banner";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { TopBar } from "@/components/TopBar";
 import { Sidebar } from "@/components/Sidebar";
 import { ToastProvider } from "@/components/ToastProvider";
 import { Spinner } from "@/components/ui";
@@ -93,7 +94,11 @@ export default function PanelLayout({
     // reaches them. Previously each page owned its own success and error
     // rendering, and anything that resolved after unmount was lost.
     <ToastProvider>
-    <div className="flex min-h-dvh">
+    {/* A column, not a row: the bar spans the full width above everything,
+        and the rail and content share the space beneath it. That is what
+        makes the product mark and the search box fixed furniture rather
+        than something the sidebar owns and can collapse away. */}
+    <div className="flex h-dvh flex-col">
       {/* Straight past fifteen nav items to the content. The first thing a
           keyboard or screen-reader user meets on every single page was the
           whole sidebar. */}
@@ -106,51 +111,22 @@ export default function PanelLayout({
         Skip to content
       </a>
 
-      <Sidebar role={admin.role} />
+      <TopBar admin={admin} />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-line px-6">
-          <div aria-hidden className="hazard h-1 w-16 opacity-50" />
+      <div className="flex min-h-0 flex-1">
+        <Sidebar role={admin.role} />
 
-          <div className="flex items-center gap-4">
-            {/* Your own name is where people look for their own account
-                settings, which is the only thing on the other end of this —
-                changing your password. It is deliberately not in the nav: it
-                belongs to every role, and the nav is organised by capability. */}
-            <Link
-              href="/security"
-              aria-label="Your account and password"
-              className="group text-right transition-colors duration-150"
-            >
-              <p className="text-body font-medium leading-tight group-hover:text-accent">
-                {admin.name}
-              </p>
-              <p className="font-mono text-micro uppercase text-fg-muted">
-                {admin.role}
-              </p>
-            </Link>
-            <button
-              type="button"
-              onClick={async () => {
-                await api.logout();
-                router.replace("/login");
-              }}
-              className="border border-edge px-3 py-1.5 font-mono text-micro uppercase
-                         text-fg-muted transition-colors duration-150
-                         hover:border-danger hover:text-danger"
-            >
-              Sign out
-            </button>
-          </div>
-        </header>
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Above the scroll container, so a critical banner does not scroll
+              away from an operator who is halfway down a long queue. */}
+          <BannerStrip />
 
-        {/* Above the scroll container, so a critical banner does not scroll
-            away from an operator who is halfway down a long queue. */}
-        <BannerStrip />
+          <Breadcrumbs />
 
-        <main id="panel-main" className="min-w-0 flex-1 overflow-y-auto p-6">
-          {children}
-        </main>
+          <main id="panel-main" className="min-w-0 flex-1 overflow-y-auto p-6">
+            {children}
+          </main>
+        </div>
       </div>
     </div>
     </ToastProvider>

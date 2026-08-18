@@ -58,7 +58,6 @@ export default function CustomerDetailPage() {
       <div className="mx-auto max-w-[900px]">
         <PageHeader
           title={error.missing ? "No such customer" : "Could not load"}
-          breadcrumb={[{ label: "Customers", href: "/customers" }]}
         />
         <div className="mt-6">
           <EmptyState
@@ -75,7 +74,6 @@ export default function CustomerDetailPage() {
       <div className="mx-auto max-w-[900px]">
         <PageHeader
           title="Customer"
-          breadcrumb={[{ label: "Customers", href: "/customers" }]}
         />
         <Card className="mt-6 overflow-hidden">
           <SkeletonRows rows={5} />
@@ -90,7 +88,6 @@ export default function CustomerDetailPage() {
     <div className="mx-auto max-w-[1000px] space-y-5">
       <PageHeader
         title={customer.name || "Unnamed customer"}
-        breadcrumb={[{ label: "Customers", href: "/customers" }]}
         subtitle={
           <>
             {customer.phone}
