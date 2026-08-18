@@ -243,6 +243,13 @@ rewrite.
 
 ## 7. Conventions worth matching
 
+- **Help lives in `src/lib/help.ts`, not in a model.** One entry per page:
+  what it is for, what people do there, and — the part that actually prevents
+  support calls — the behaviour that is correct but surprising. A chatbot was
+  asked for; this answers the same questions and cannot be confidently wrong
+  about our own system, costs nothing per question, and works when the API is
+  down. If a model is added later, ground it in this file rather than replace
+  it. Add an entry whenever a page is added.
 - **The shell owns location, pages own content.** The top bar (mark, command
   palette, identity) and the breadcrumb strip are rendered once by
   `(panel)/layout.tsx`. Pages supply a title and nothing about where they sit —

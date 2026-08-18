@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { CommandSearch } from "./CommandSearch";
+import { HelpDrawer } from "./HelpDrawer";
 import { type AdminIdentity, api, auth } from "@/lib/api";
 
 /**
@@ -20,6 +22,25 @@ import { type AdminIdentity, api, auth } from "@/lib/api";
  */
 export function TopBar({ admin }: { admin: AdminIdentity }) {
   const router = useRouter();
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  // `?` is the shortcut people try first, but it is also a character — so it
+  // only counts when nothing is being typed into.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "?") return;
+      const el = document.activeElement;
+      const typing =
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        (el instanceof HTMLElement && el.isContentEditable);
+      if (typing) return;
+      event.preventDefault();
+      setHelpOpen(true);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <header
@@ -56,6 +77,21 @@ export function TopBar({ admin }: { admin: AdminIdentity }) {
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
+        {/* Help and the legal pages belong to every role and to no section of
+            the nav, which is organised by capability. They live here, one
+            click from anywhere, rather than as a fifteenth sidebar item. */}
+        <button
+          type="button"
+          onClick={() => setHelpOpen(true)}
+          aria-label="Help — what is this page for"
+          title="Help (?)"
+          className="motion-change grid size-8 place-items-center rounded-full
+                     border border-edge text-body text-fg-muted transition-colors
+                     hover:border-accent hover:text-accent"
+        >
+          ?
+        </button>
+
         {/* Your own name is where people look for their own account settings,
             which is the only thing on the other end of this — changing your
             password. Deliberately not in the nav: it belongs to every role,
@@ -87,6 +123,8 @@ export function TopBar({ admin }: { admin: AdminIdentity }) {
           Sign out
         </button>
       </div>
+
+      {helpOpen && <HelpDrawer onClose={() => setHelpOpen(false)} />}
     </header>
   );
 }
