@@ -122,10 +122,10 @@ export default function PanelLayout({
               aria-label="Your account and password"
               className="group text-right transition-colors duration-150"
             >
-              <p className="text-[13px] font-medium leading-tight group-hover:text-accent">
+              <p className="text-body font-medium leading-tight group-hover:text-accent">
                 {admin.name}
               </p>
-              <p className="font-mono text-[10px] uppercase tracking-[1.5px] text-fg-muted">
+              <p className="font-mono text-micro uppercase text-fg-muted">
                 {admin.role}
               </p>
             </Link>
@@ -135,8 +135,8 @@ export default function PanelLayout({
                 await api.logout();
                 router.replace("/login");
               }}
-              className="border border-edge px-3 py-1.5 font-mono text-[10px] uppercase
-                         tracking-[1.5px] text-fg-muted transition-colors duration-150
+              className="border border-edge px-3 py-1.5 font-mono text-micro uppercase
+                         text-fg-muted transition-colors duration-150
                          hover:border-danger hover:text-danger"
             >
               Sign out

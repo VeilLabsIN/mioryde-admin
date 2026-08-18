@@ -165,17 +165,17 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
       {/* Brand */}
       <div className="flex h-16 items-center gap-3 border-b border-line px-4">
         <div className="grad-accent chamfer-sm grid size-8 shrink-0 place-items-center">
-          <span className="font-mono text-[13px] font-bold text-on-accent">M</span>
+          <span className="font-mono text-body font-bold text-on-accent">M</span>
         </div>
         <div
           className="min-w-0 overflow-hidden transition-opacity duration-200
                      group-data-[collapsed=true]/rail:opacity-0"
           aria-hidden={collapsed}
         >
-          <p className="truncate font-sans text-sm font-semibold leading-tight">
+          <p className="truncate font-sans text-body font-semibold leading-tight">
             Mioryde
           </p>
-          <p className="truncate font-mono text-[10px] uppercase tracking-[2px] text-fg-muted">
+          <p className="truncate font-mono text-micro uppercase text-fg-muted">
             Operations
           </p>
         </div>
@@ -210,7 +210,7 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
               {/* Hidden when collapsed: a 72px rail has no room for a word,
                   and a truncated heading is worse than none. */}
               <p
-                className="px-3 pb-1 font-mono text-[9px] uppercase tracking-[1.5px] text-fg-faint
+                className="px-3 pb-1 font-mono text-micro uppercase text-fg-faint
                            transition-opacity duration-200
                            group-data-[collapsed=true]/rail:opacity-0"
                 aria-hidden={collapsed}
@@ -239,6 +239,9 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
                     style={{ transform: `translateY(-50%) scaleY(${active ? 1 : 0})` }}
                   />
 
+                  {/* Off the scale on purpose: `text-micro` carries 2px of
+                      tracking, which pushes a two-letter mark off-centre in a
+                      fixed 28px box. This is a glyph, not a label. */}
                   <span
                     className={`grid size-7 shrink-0 place-items-center font-mono text-[10px]
                                 font-bold tracking-tight transition-colors duration-150
@@ -252,7 +255,7 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
                   </span>
 
                   <span
-                    className={`min-w-0 flex-1 truncate text-[13px] transition-[opacity,color] duration-200
+                    className={`min-w-0 flex-1 truncate text-body transition-[opacity,color] duration-200
                                 group-data-[collapsed=true]/rail:opacity-0
                                 ${
                                   active
@@ -265,7 +268,7 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
 
                   {item.badge !== undefined && item.badge > 0 && (
                     <span
-                      className="chamfer-sm bg-accent px-1.5 py-0.5 font-mono text-[10px]
+                      className="chamfer-sm bg-accent px-1.5 py-0.5 font-mono text-meta
                                  font-bold text-on-accent
                                  group-data-[collapsed=true]/rail:opacity-0"
                     >
@@ -311,7 +314,7 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
             </svg>
           </span>
           <span
-            className="truncate font-mono text-[10px] uppercase tracking-[2px]
+            className="truncate font-mono text-micro uppercase
                        transition-opacity duration-200
                        group-data-[collapsed=true]/rail:opacity-0"
           >

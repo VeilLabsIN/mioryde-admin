@@ -50,8 +50,8 @@ export function RevealPhone({
     return (
       <span className={`inline-flex items-center gap-2 ${className}`}>
         {/* Selectable: the point of revealing is usually to copy it. */}
-        <span className="select-all font-mono text-[13px]">{revealed}</span>
-        <span className="text-[10px] uppercase tracking-wide text-fg-faint">
+        <span className="select-all font-mono text-body">{revealed}</span>
+        <span className="text-micro uppercase text-fg-faint">
           logged
         </span>
       </span>
@@ -60,7 +60,7 @@ export function RevealPhone({
 
   return (
     <span className={`inline-flex items-center gap-2 ${className}`}>
-      <span className="font-mono text-[13px] text-fg-mid">{masked}</span>
+      <span className="font-mono text-body text-fg-mid">{masked}</span>
       <button
         type="button"
         onClick={reveal}
@@ -68,7 +68,7 @@ export function RevealPhone({
         // Named for what it does rather than "show": an operator should know
         // this is a request to the server, not a local toggle.
         aria-label="Reveal full phone number. This is recorded."
-        className="border border-edge px-1.5 py-0.5 text-[10px] uppercase tracking-wide
+        className="border border-edge px-1.5 py-0.5 text-micro uppercase
                    text-fg-faint transition-colors duration-150
                    hover:border-accent hover:text-accent
                    disabled:cursor-wait disabled:opacity-60"
@@ -76,7 +76,7 @@ export function RevealPhone({
         {busy ? "…" : "Reveal"}
       </button>
       {error && (
-        <span role="alert" className="text-[11px] text-danger">
+        <span role="alert" className="text-meta text-danger">
           {error}
         </span>
       )}

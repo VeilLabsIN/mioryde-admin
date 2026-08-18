@@ -245,6 +245,16 @@ rewrite.
 
 - **One `PageHeader` for every page.** Twelve pages had grown three heading
   treatments; they now share one component. Add a page, use it.
+- **Use the type scale, not raw pixel sizes.** `text-micro` (9px, uppercase,
+  tracked, bold), `text-meta` (11px), `text-body` (13px), `text-label` (15px),
+  `text-title` (24px, PageHeader only), `text-figure` (28px). Defined in
+  `globals.css`. Shared chrome — `ui.tsx`, `Sidebar`, `RevealPhone`,
+  `ThemeSwitcher`, `charts`, the panel layout — is fully on the scale; the page
+  files are not yet, and still carry roughly 150 raw sizes between them.
+  Three sites are off the scale deliberately and say so in a comment: the
+  sidebar nav marks and the two chart axis-tick sizes, because `text-micro`
+  bakes in 2px of tracking and bold weight that is right for a label and wrong
+  for a glyph or a column of numbers.
 - **Comments explain *why*, never *what*.** The codebase is dense with reasoning
   about failure modes. Match that; a comment restating the code is noise.
 - **Feature slices** in Flutter: `lib/features/<name>/{domain,data,presentation}`.

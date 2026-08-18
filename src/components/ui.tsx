@@ -14,7 +14,7 @@ export function Button({
   return (
     <button
       disabled={disabled || loading}
-      className={`grad-accent chamfer-sm relative h-10 px-5 font-sans text-sm font-semibold
+      className={`grad-accent chamfer-sm relative h-10 px-5 font-sans text-body font-semibold
                   text-on-accent transition-[filter,transform] duration-150
                   hover:brightness-110 active:scale-[0.98]
                   disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100
@@ -37,7 +37,7 @@ export function GhostButton({
 }: ComponentPropsWithoutRef<"button">) {
   return (
     <button
-      className={`h-9 border border-edge px-3 font-sans text-[13px] text-fg-mid
+      className={`h-9 border border-edge px-3 font-sans text-body text-fg-mid
                   transition-colors duration-150 hover:border-accent hover:text-accent
                   ${className}`}
       {...props}
@@ -137,7 +137,7 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="mb-3 flex items-center gap-2.5">
       <span className="inline-block h-[3px] w-[18px] bg-accent" />
-      <span className="font-mono text-[10px] font-bold uppercase tracking-[2.5px] text-accent">
+      <span className="font-mono text-micro uppercase text-accent">
         {children}
       </span>
     </div>
@@ -168,8 +168,8 @@ export function StatusPill({ status }: { status: string }) {
   const live = !["delivered", "cancelled"].includes(status);
   return (
     <span
-      className={`inline-flex items-center gap-1.5 border px-2 py-0.5 font-mono text-[10px]
-                  uppercase tracking-wide ${
+      className={`inline-flex items-center gap-1.5 border px-2 py-0.5 font-mono text-micro
+                  uppercase ${
                     STATUS_STYLES[status] ?? "border-edge text-fg-muted"
                   }`}
     >
@@ -193,8 +193,8 @@ export function EmptyState({
 }) {
   return (
     <div className="animate-rise grid place-items-center px-6 py-16 text-center">
-      <p className="font-sans text-sm text-fg-mid">{title}</p>
-      {hint && <p className="mt-1 text-[13px] text-fg-faint">{hint}</p>}
+      <p className="font-sans text-label text-fg-mid">{title}</p>
+      {hint && <p className="mt-1 text-body text-fg-faint">{hint}</p>}
     </div>
   );
 }

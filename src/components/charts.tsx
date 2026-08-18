@@ -52,7 +52,7 @@ export function TrendChart({
   const [hover, setHover] = useState<number | null>(null);
 
   if (points.length === 0) {
-    return <p className="text-fg-faint py-8 text-center text-sm">No data yet.</p>;
+    return <p className="text-fg-faint py-8 text-center text-body">No data yet.</p>;
   }
 
   const width = 760;
@@ -107,6 +107,9 @@ export function TrendChart({
               x={pad.left - 8}
               y={pad.top + inner.h * (1 - t) + 3}
               textAnchor="end"
+              // Axis ticks stay off the scale: `text-micro` bakes in 2px of
+              // tracking and bold weight, which is right for a label and wrong
+              // for a column of numbers meant to be compared down the axis.
               className="fill-fg-faint text-[9px] tabular-nums"
             >
               {format(max * t)}
@@ -187,7 +190,7 @@ export function TrendChart({
                     ? "end"
                     : "middle"
               }
-              className="fill-fg text-[11px] font-medium tabular-nums"
+              className="fill-fg text-meta font-medium tabular-nums"
             >
               {format(active.value)} · {active.label}
             </text>
@@ -230,7 +233,7 @@ export function BarList({
   total?: number;
 }) {
   if (points.length === 0) {
-    return <p className="text-fg-faint py-4 text-sm">No data yet.</p>;
+    return <p className="text-fg-faint py-4 text-body">No data yet.</p>;
   }
 
   const max = Math.max(...points.map((p) => p.value), 1);
@@ -242,7 +245,7 @@ export function BarList({
         const empty = point.value === 0;
         return (
           <li key={point.label}>
-            <div className="flex items-baseline justify-between gap-3 text-sm">
+            <div className="flex items-baseline justify-between gap-3 text-body">
               {/* A zero row is dimmed rather than hidden: knowing a vehicle
                   class earned nothing is a finding, and dropping it would make
                   the reader think it was never offered. */}
@@ -254,7 +257,7 @@ export function BarList({
               >
                 {format(point.value)}
                 {sum > 0 && !empty ? (
-                  <span className="text-fg-faint ml-2 text-xs">
+                  <span className="text-fg-faint ml-2 text-meta">
                     {((point.value / sum) * 100).toFixed(0)}%
                   </span>
                 ) : null}
@@ -305,11 +308,11 @@ export function Stat({
 
   return (
     <div className="border-edge bg-surface rounded border p-4">
-      <p className="text-fg-faint text-xs">{label}</p>
+      <p className="text-fg-faint text-meta">{label}</p>
       <p className="mt-1 font-mono text-2xl tabular-nums">{value}</p>
       {change !== null ? (
         <p
-          className={`mt-1 text-xs ${good ? "text-ok" : "text-warn"}`}
+          className={`mt-1 text-meta ${good ? "text-ok" : "text-warn"}`}
           title="Against the previous period of the same length"
         >
           {change > 0 ? "▲" : "▼"} {Math.abs(change * 100).toFixed(1)}%
@@ -319,7 +322,7 @@ export function Stat({
         // Said out loud rather than left blank. A card with nothing where a
         // comparison should be reads as a bug, and the page has just promised
         // every figure is measured against the previous period.
-        <p className="text-fg-faint mt-1 text-xs">
+        <p className="text-fg-faint mt-1 text-meta">
           {hint ?? "No data for the previous period"}
         </p>
       )}

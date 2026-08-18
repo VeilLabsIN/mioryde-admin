@@ -78,7 +78,7 @@ export function ThemeSwitcher({ collapsed }: { collapsed: boolean }) {
 
   return (
     <div className="px-1 py-1">
-      <p className="px-2 pb-1.5 font-mono text-[9px] uppercase tracking-[2px] text-fg-faint">
+      <p className="px-2 pb-1.5 font-mono text-micro uppercase text-fg-faint">
         Theme
       </p>
 
@@ -132,7 +132,7 @@ export function ThemeSwitcher({ collapsed }: { collapsed: boolean }) {
         wondering why their blue Windows accent did nothing.
       */}
       {theme === "system" && (
-        <p className="animate-slide-in px-2 pt-1.5 text-[10px] leading-snug text-fg-faint">
+        <p className="animate-slide-in px-2 pt-1.5 text-meta text-fg-faint">
           {usingSystemAccent
             ? "Using your system accent colour."
             : "Following system light/dark. This browser doesn't expose the OS accent colour."}
