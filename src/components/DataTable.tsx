@@ -10,7 +10,8 @@ export interface Column<T> {
   /** A CSS width for the column track, e.g. `104px`. Omit to size to content. */
   width?: string;
   align?: "left" | "right";
-  cell: (row: T) => ReactNode;
+  /** Optional: a table using `renderRow` defines its cells there instead. */
+  cell?: (row: T) => ReactNode;
 }
 
 /**
@@ -47,12 +48,39 @@ export function DataTable<T>({
   emptyTitle = "Nothing here",
   emptyHint,
   caption,
+  renderRow,
+  rowClassName,
 }: {
   columns: readonly Column<T>[];
   /** Null while loading. An empty array means genuinely nothing matched. */
   rows: T[] | null;
   rowKey: (row: T) => string;
   loading?: boolean;
+  /**
+   * Escape hatch for a row that owns state.
+   *
+   * `cell(row)` is a pure function of the row, which cannot express a row whose
+   * cells share something — the access page's row holds `busy`, an inline error
+   * and a confirmation toggle, and all three affect several cells at once.
+   * Forcing that through the column API would mean lifting per-row state into
+   * the page and keying it by id, which is worse code for no benefit.
+   *
+   * When given, this returns the `<td>` cells for one row and the component
+   * supplies the `<tr>`. The columns above still define the headers and the
+   * widths, so those stay in one place — which was the point of this component.
+   * The contract is that it must emit exactly `columns.length` cells.
+   */
+  renderRow?: (row: T) => ReactNode;
+  /**
+   * Extra classes for one row, from the row itself.
+   *
+   * The dispatch board marks a delivery that has been waiting too long with a
+   * coloured left edge on the row. That belongs on the `<tr>`, which this
+   * component owns, so a page cannot reach it any other way — and moving the
+   * marker onto the first cell would put it inside the padding instead of
+   * against the table edge.
+   */
+  rowClassName?: (row: T) => string;
   emptyTitle?: string;
   emptyHint?: string;
   /**
@@ -111,21 +139,26 @@ export function DataTable<T>({
           {rows.map((row) => (
             <tr
               key={rowKey(row)}
-              className="motion-change transition-colors hover:bg-panel"
+              className={`motion-change transition-colors hover:bg-panel ${
+                rowClassName?.(row) ?? ""
+              }`}
             >
-              {columns.map((column) => (
-                <td
-                  key={column.key}
-                  className={`px-4 py-3 align-middle ${
-                    column.align === "right" ? "text-right" : "text-left"
-                  }`}
-                >
-                  {/* min-w-0 lives on the cell's own wrapper rather than here,
-                      because `table-fixed` already constrains the width and a
-                      truncating child needs a block to truncate within. */}
-                  {column.cell(row)}
-                </td>
-              ))}
+              {renderRow
+                ? renderRow(row)
+                : columns.map((column) => (
+                    <td
+                      key={column.key}
+                      className={`px-4 py-3 align-middle ${
+                        column.align === "right" ? "text-right" : "text-left"
+                      }`}
+                    >
+                      {/* min-w-0 lives on the cell's own wrapper rather than
+                          here, because `table-fixed` already constrains the
+                          width and a truncating child needs a block to
+                          truncate within. */}
+                      {column.cell?.(row)}
+                    </td>
+                  ))}
             </tr>
           ))}
         </tbody>

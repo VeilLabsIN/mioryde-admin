@@ -19,6 +19,7 @@ import {
   api,
 } from "@/lib/api";
 import { ROLE_LABEL } from "@/lib/permissions";
+import { type Column, DataTable } from "@/components/DataTable";
 
 const ROLES: AdminRole[] = ["owner", "ops", "finance", "support"];
 
@@ -51,6 +52,21 @@ const ROLE_SUMMARY: Record<AdminRole, string> = {
  * nobody. Deactivating ends access immediately and keeps the record readable,
  * which is the property the audit log exists for.
  */
+
+/**
+ * Headers and widths for the admin table.
+ *
+ * No `cell` functions: this table uses `renderRow`, because each row owns state
+ * that several of its cells share. The columns still live here so the header
+ * text and the column widths are defined exactly once.
+ */
+const ADMIN_COLUMNS: readonly Column<AdminAccount>[] = [
+  { key: "account", header: "Account" },
+  { key: "role", header: "Role", width: "170px" },
+  { key: "lastSeen", header: "Last seen", width: "130px" },
+  { key: "actions", header: "Actions", width: "140px", align: "right" },
+];
+
 export default function AccessPage() {
   const [admins, setAdmins] = useState<AdminAccount[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -124,35 +140,26 @@ export default function AccessPage() {
         ) : admins.length === 0 ? (
           <EmptyState title="No admin accounts" />
         ) : (
-          <>
-            <div
-              className="grid grid-cols-[minmax(0,1fr)_150px_130px_120px] gap-4 border-b
-                         border-line bg-panel px-4 py-2 font-mono text-[9px] uppercase
-                         tracking-[2px] text-fg-muted"
-            >
-              <span>Account</span>
-              <span>Role</span>
-              <span>Last seen</span>
-              <span className="text-right">Actions</span>
-            </div>
-
-            <ul className="divide-y divide-line">
-              {admins.map((admin) => (
-                <AdminRow
-                  key={admin.id}
-                  admin={admin}
-                  // An owner may not demote the only other route back in.
-                  isLastOwner={
-                    admin.role === "owner" && admin.isActive && owners.length <= 1
-                  }
-                  onChanged={load}
-                  onReset={(result) =>
-                    setIssued({ ...result, reason: "reset" })
-                  }
-                />
-              ))}
-            </ul>
-          </>
+          <DataTable
+            caption="Admin accounts, owners first"
+            columns={ADMIN_COLUMNS}
+            rows={admins}
+            rowKey={(a) => a.id}
+            emptyTitle="No admin accounts"
+            // The row owns state — busy, an inline refusal, a confirmation
+            // toggle — which a per-cell function cannot express. Columns still
+            // define the headers and widths.
+            renderRow={(admin) => (
+              <AdminRow
+                admin={admin}
+                isLastOwner={
+                  admin.role === "owner" && admin.isActive && owners.length <= 1
+                }
+                onChanged={load}
+                onReset={(result) => setIssued({ ...result, reason: "reset" })}
+              />
+            )}
+          />
         )}
       </Card>
 
@@ -203,12 +210,14 @@ function AdminRow({
     }
   }
 
+  // A deactivated account is dimmed via each cell rather than the row, because
+  // the <tr> is supplied by DataTable.
+  const dim = admin.isActive ? "" : "opacity-55";
+
   return (
-    <li
-      className={`grid grid-cols-[minmax(0,1fr)_150px_130px_120px] items-center gap-4
-                  px-4 py-3 ${admin.isActive ? "" : "opacity-55"}`}
-    >
-      <span className="min-w-0">
+    <>
+      <td className={`px-4 py-3 align-middle ${dim}`}>
+        <span className="block min-w-0">
         <span className="block truncate text-[13px] font-medium">
           {admin.name}
         </span>
@@ -236,13 +245,14 @@ function AdminRow({
           )}
         </span>
         {error && (
-          <span role="alert" className="mt-1 block text-[12px] text-danger">
+          <span role="alert" className="mt-1 block text-meta text-danger">
             {error}
           </span>
         )}
-      </span>
+        </span>
+      </td>
 
-      <span>
+      <td className={`px-4 py-3 align-middle ${dim}`}>
         <select
           value={admin.role}
           disabled={busy || isLastOwner}
@@ -267,15 +277,16 @@ function AdminRow({
         <span className="mt-1 block text-[11px] leading-snug text-fg-faint">
           {isLastOwner ? "The last owner — promote someone else first." : ROLE_SUMMARY[admin.role]}
         </span>
-      </span>
+      </td>
 
-      <span className="font-mono text-[11px] tabular-nums text-fg-faint">
+      <td className={`px-4 py-3 align-middle font-mono text-meta tabular-nums text-fg-faint ${dim}`}>
         {admin.lastLoginAt
           ? new Date(admin.lastLoginAt).toLocaleDateString()
           : "Never"}
-      </span>
+      </td>
 
-      <span className="flex flex-col items-end gap-1.5">
+      <td className={`px-4 py-3 align-middle ${dim}`}>
+        <span className="flex flex-col items-end gap-1.5">
         <GhostButton
           disabled={busy || isLastOwner}
           onClick={() =>
@@ -321,8 +332,9 @@ function AdminRow({
             Reset password
           </GhostButton>
         )}
-      </span>
-    </li>
+        </span>
+      </td>
+    </>
   );
 }
 

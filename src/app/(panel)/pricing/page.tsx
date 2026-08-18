@@ -9,6 +9,89 @@ import {
   SkeletonRows,
 } from "@/components/ui";
 import { type RateCard, api, formatMoney } from "@/lib/api";
+import { type Column, DataTable } from "@/components/DataTable";
+
+
+/**
+ * Fare components, per vehicle.
+ *
+ * Every money column is right-aligned with tabular figures — a column of fares
+ * that does not line up on the decimal point is one nobody can scan for the
+ * odd one out, which is the only reason to look at this page.
+ */
+const RATE_COLUMNS: readonly Column<RateCard>[] = [
+  {
+    key: "vehicle",
+    header: "Vehicle",
+    cell: (card) => (
+      <span className="text-body font-medium">
+        {card.vehicle.name}
+        {card.includedKm > 0 && (
+          <span className="ml-2 font-mono text-meta text-fg-faint">
+            {card.includedKm} km included
+          </span>
+        )}
+      </span>
+    ),
+  },
+  {
+    key: "base",
+    header: "Base",
+    width: "116px",
+    align: "right",
+    cell: (card) => (
+      <span className="font-mono text-meta tabular-nums">
+        {formatMoney(card.baseFare, { alwaysShowDecimals: true })}
+      </span>
+    ),
+  },
+  {
+    key: "perKm",
+    header: "Per km",
+    width: "116px",
+    align: "right",
+    // Accented because it is the number that moves a fare most, and the one an
+    // operator is usually here to check.
+    cell: (card) => (
+      <span className="font-mono text-meta tabular-nums text-accent">
+        {formatMoney(card.perKm, { alwaysShowDecimals: true })}
+      </span>
+    ),
+  },
+  {
+    key: "perMinute",
+    header: "Per min",
+    width: "116px",
+    align: "right",
+    cell: (card) => (
+      <span className="font-mono text-meta tabular-nums text-fg-muted">
+        {formatMoney(card.perMinute, { alwaysShowDecimals: true })}
+      </span>
+    ),
+  },
+  {
+    key: "minFare",
+    header: "Min fare",
+    width: "96px",
+    align: "right",
+    cell: (card) => (
+      <span className="font-mono text-meta tabular-nums text-fg-muted">
+        {formatMoney(card.minFare, { alwaysShowDecimals: true })}
+      </span>
+    ),
+  },
+  {
+    key: "gst",
+    header: "GST",
+    width: "76px",
+    align: "right",
+    cell: (card) => (
+      <span className="font-mono text-meta tabular-nums text-fg-muted">
+        {card.gstPercent}%
+      </span>
+    ),
+  },
+];
 
 export default function PricingPage() {
   const [cards, setCards] = useState<RateCard[] | null>(null);
@@ -81,51 +164,13 @@ export default function PricingPage() {
           <section key={zone} className="mb-8">
             <SectionLabel>{zone}</SectionLabel>
             <Card className="overflow-hidden">
-              <div
-                className="grid grid-cols-[1fr_110px_110px_110px_90px_70px] gap-3 border-b
-                           border-line bg-panel px-4 py-2 font-mono text-[9px] uppercase
-                           tracking-[2px] text-fg-muted"
-              >
-                <span>Vehicle</span>
-                <span className="text-right">Base</span>
-                <span className="text-right">Per km</span>
-                <span className="text-right">Per min</span>
-                <span className="text-right">Min fare</span>
-                <span className="text-right">GST</span>
-              </div>
-              <ul className="stagger divide-y divide-line">
-                {zoneCards.map((card) => (
-                  <li
-                    key={card.id}
-                    className="grid grid-cols-[1fr_110px_110px_110px_90px_70px] items-center
-                               gap-3 px-4 py-3 transition-colors duration-150 hover:bg-panel"
-                  >
-                    <span className="text-[13px] font-medium">
-                      {card.vehicle.name}
-                      {card.includedKm > 0 && (
-                        <span className="ml-2 font-mono text-[11px] text-fg-faint">
-                          {card.includedKm} km included
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-right font-mono text-xs tabular-nums">
-                      {formatMoney(card.baseFare, { alwaysShowDecimals: true })}
-                    </span>
-                    <span className="text-right font-mono text-xs tabular-nums text-accent">
-                      {formatMoney(card.perKm, { alwaysShowDecimals: true })}
-                    </span>
-                    <span className="text-right font-mono text-xs tabular-nums text-fg-muted">
-                      {formatMoney(card.perMinute, { alwaysShowDecimals: true })}
-                    </span>
-                    <span className="text-right font-mono text-xs tabular-nums text-fg-muted">
-                      {formatMoney(card.minFare, { alwaysShowDecimals: true })}
-                    </span>
-                    <span className="text-right font-mono text-xs tabular-nums text-fg-muted">
-                      {card.gstPercent}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <DataTable
+                caption={`Rate card for ${zone}`}
+                columns={RATE_COLUMNS}
+                rows={zoneCards}
+                rowKey={(card) => card.id}
+                emptyTitle="No rate cards in this zone"
+              />
             </Card>
           </section>
         ))

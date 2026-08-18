@@ -12,6 +12,7 @@ import {
   StatusPill,
 } from "@/components/ui";
 import { type LiveOrder, api, formatMoney } from "@/lib/api";
+import { type Column, DataTable } from "@/components/DataTable";
 import {
   clockSkewMs,
   elapsedMs,
@@ -75,6 +76,23 @@ interface Snapshot {
   /** Local clock when this landed, for the "updated Ns ago" readout. */
   receivedAt: number;
 }
+
+
+/**
+ * The dispatch board's columns.
+ *
+ * Headers and widths only — the rows are rendered by `OrderRow`, which needs
+ * the board's ticking clock to compute elapsed time and cannot be expressed as
+ * a function of the order alone.
+ */
+const BOARD_COLUMNS: readonly Column<LiveOrder>[] = [
+  { key: "code", header: "Code", width: "104px" },
+  { key: "route", header: "Route" },
+  { key: "customer", header: "Customer", width: "156px" },
+  { key: "partner", header: "Partner", width: "176px" },
+  { key: "status", header: "Status", width: "136px" },
+  { key: "total", header: "Total", width: "92px", align: "right" },
+];
 
 export default function LivePage() {
   const [paused, setPaused] = useState(false);
@@ -234,31 +252,27 @@ export default function LivePage() {
                 }
               />
             ) : (
-              <>
-                <div
-                  className="grid grid-cols-[96px_minmax(0,1fr)_150px_170px_130px_86px] gap-4
-                             border-b border-line bg-panel px-4 py-2 font-mono text-[9px]
-                             uppercase tracking-[2px] text-fg-muted"
-                >
-                  <span>Code</span>
-                  <span>Route</span>
-                  <span>Customer</span>
-                  <span>Partner</span>
-                  <span>Status</span>
-                  <span className="text-right">Total</span>
-                </div>
-
-                <ul className="divide-y divide-line">
-                  {visible.map((order) => (
-                    <OrderRow
-                      key={order.id}
-                      order={order}
-                      now={now}
-                      skew={skew}
-                    />
-                  ))}
-                </ul>
-              </>
+              <DataTable
+                caption="Deliveries in flight, longest waiting first"
+                columns={BOARD_COLUMNS}
+                rows={visible}
+                rowKey={(order) => order.id}
+                // The row needs `now` and `skew` from the board's ticking clock,
+                // not just the order, so it cannot be a per-cell function.
+                renderRow={(order) => (
+                  <OrderRow order={order} now={now} skew={skew} />
+                )}
+                // The attention marker belongs against the table edge, on the
+                // row itself.
+                rowClassName={(order) =>
+                  needsAttention(
+                    order.status,
+                    elapsedMs(order.statusSince, now, skew),
+                  )
+                    ? "border-l-2 border-l-warn"
+                    : "border-l-2 border-l-transparent"
+                }
+              />
             )}
           </Card>
         </div>
@@ -282,39 +296,42 @@ function OrderRow({
   const attention = needsAttention(order.status, elapsed);
 
   return (
-    <li
-      className={`grid grid-cols-[96px_minmax(0,1fr)_150px_170px_130px_86px] items-center
-                  gap-4 px-4 py-3 transition-colors duration-150 hover:bg-panel
-                  ${attention ? "border-l-2 border-l-warn" : "border-l-2 border-l-transparent"}`}
-    >
-      <span className="min-w-0">
+    <>
+      <td className="px-4 py-3 align-middle">
+        <span className="block min-w-0">
         <span className="block truncate font-mono text-xs text-fg-mid">
           {order.code}
         </span>
         <span className="block font-mono text-[10px] uppercase tracking-wide text-fg-faint">
           {order.paymentMethod}
         </span>
-      </span>
+        </span>
+      </td>
 
-      <span className="min-w-0">
+      <td className="px-4 py-3 align-middle">
+        <span className="block min-w-0">
         <span className="block truncate text-[13px] text-fg-soft">
           {order.pickupAddress}
         </span>
         <span className="block truncate text-[12px] text-fg-faint">
           → {order.dropAddress}
         </span>
-      </span>
+        </span>
+      </td>
 
-      <span className="min-w-0">
+      <td className="px-4 py-3 align-middle">
+        <span className="block min-w-0">
         <span className="block truncate text-[13px]">
           {order.customer.name || "—"}
         </span>
         <span className="block truncate font-mono text-[11px] text-fg-faint">
           {order.customer.phone}
         </span>
-      </span>
+        </span>
+      </td>
 
-      <span className="min-w-0">
+      <td className="px-4 py-3 align-middle">
+        <span className="block min-w-0">
         {order.rider ? (
           <>
             <span className="block truncate text-[13px]">
@@ -334,9 +351,11 @@ function OrderRow({
             )}
           </span>
         )}
-      </span>
+        </span>
+      </td>
 
-      <span>
+      <td className="px-4 py-3 align-middle">
+        <span className="block">
         <StatusPill status={order.status} />
         <span
           className={`mt-1 block font-mono text-[11px] tabular-nums ${
@@ -350,12 +369,15 @@ function OrderRow({
           {formatElapsed(elapsed)}
           {attention ? " ⚑" : ""}
         </span>
-      </span>
+        </span>
+      </td>
 
-      <span className="text-right font-mono text-xs tabular-nums">
+      <td className="px-4 py-3 text-right align-middle">
+        <span className="font-mono text-xs tabular-nums">
         {formatMoney(order.total)}
-      </span>
-    </li>
+        </span>
+      </td>
+    </>
   );
 }
 

@@ -133,7 +133,7 @@ keeping `focus:border-accent` as reinforcement. One deletion.
 the compiled CSS or the browser's computed style. The appendix command for A5
 was the wrong command.
 
-### A6 · Five pages fake tables with CSS grid — *fixed on 2 of 5*
+### A6 · Five pages fake tables with CSS grid — *fixed*
 
 **Medium, accessibility and consistency.** `access`, `customers`, `live`,
 `orders` and `pricing` build tabular data as `<ul>` / `<li>` with
@@ -145,10 +145,25 @@ the grid versions — a cell is read as loose text with no idea which column it
 belongs to. It is also two different implementations of the same thing, which
 is the drift `PageHeader` was extracted to stop.
 
-**Fixed on deliveries and customers** via `components/DataTable.tsx`. Verified in
-a browser: a real `<table>`, every `<th>` carrying `scope="col"`, an `sr-only`
-`<caption>`, and widths applied through `<colgroup>` rather than repeated on
-each row. Three pages remain — `access`, `live` and `pricing`.
+**Fixed on all five** via `components/DataTable.tsx`. Verified in a browser:
+real `<table>`s, every `<th>` carrying `scope="col"`, an `sr-only` `<caption>`,
+and widths applied through `<colgroup>` rather than repeated on each row.
+
+Two of them needed the column API to grow, and the shape of that is worth
+recording. `cell(row)` is a pure function of the row, which cannot express:
+
+- **A row that owns state.** The access page's row holds `busy`, an inline
+  refusal and a confirmation toggle, all shared across several of its cells.
+- **A row that needs something the page holds.** The dispatch board's rows need
+  the ticking clock and the measured server skew to compute elapsed time.
+
+Both use `renderRow`, which returns the cells while `DataTable` still supplies
+the `<tr>` — so the headers and widths stay defined once, which was the point.
+`rowClassName` was added alongside it for the board's attention marker, which
+belongs on the row against the table edge rather than inside a cell's padding.
+
+The remaining `grid-cols-[...]` in `live/page.tsx` is the page's two-column
+layout, not a table. Leave it.
 
 ### A7 · No error boundary, no 404, no loading boundary — *fixed and proven*
 
