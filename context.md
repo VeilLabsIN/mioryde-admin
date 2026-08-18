@@ -296,7 +296,11 @@ Test counts at last update: api 203, admin 64, rider app 84, customer app 85.
   call kills it. If the containers are down, ask rather than trying.
 - **Flutter is not on PATH.** It lives at `C:\Users\datan\dev\flutter\bin`.
 - **The admin panel must run on 3100**, which `npm run dev` now pins. The API
-  holds 3000, and the API's CORS allowlist contains only 3100.
+  holds 3000, and the API's CORS allowlist contains only 3100. **`mioryde-web`
+  now pins 3200** — it defaulted to 3000 and silently answered the panel's API
+  requests, which presents as "Could not reach the server" on the login screen
+  with every process apparently running. If that message appears, check what
+  actually owns 3000 before anything else.
 - **`REDIS_URL` now points at a hosted Upstash instance**, not the local
   `mioryde-redis` container that is still running beside Postgres. Both work —
   ioredis speaks RESP over TLS to either. Redis is optional at one API
