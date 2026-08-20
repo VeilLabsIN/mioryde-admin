@@ -3,6 +3,8 @@ import Link from "next/link";
 import { RevealPhone } from "@/components/RevealPhone";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { RiderCard } from "@/components/RiderCard";
+import { ViewToggle, useListView } from "@/components/ViewToggle";
 import {
   Card,
   EmptyState,
@@ -48,6 +50,7 @@ export default function RidersPage() {
   const [page, setPage, pageReady] = useUrlPage();
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [view, setView] = useListView("riders", "table");
 
   // The URL is read after mount, so the first render holds defaults. Fetching
   // then would race a request for the default view against the one the URL
@@ -118,7 +121,7 @@ export default function RidersPage() {
             }
           />
         </div>
-        <div className="w-full max-w-[280px]">
+        <div className="flex w-full max-w-[340px] items-center gap-2">
           <Input
             value={search}
             onChange={(e) => {
@@ -128,6 +131,7 @@ export default function RidersPage() {
             placeholder="Name or phone"
             aria-label="Search partners"
           />
+          <ViewToggle view={view} onChange={setView} />
         </div>
       </div>
 
@@ -158,7 +162,19 @@ export default function RidersPage() {
         </p>
       )}
 
-      <Card className="overflow-hidden">
+      {view === "cards" && riders !== null && riders.length > 0 && (
+        <div className="stagger grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {riders.map((rider) => (
+            <RiderCard key={rider.id} rider={rider} />
+          ))}
+        </div>
+      )}
+
+      {/* The table keeps every action the grid does not carry — approve,
+          reject, reveal. A card is for finding somebody; the row is for doing
+          something to them, and duplicating destructive controls into a
+          fifty-up grid is how one gets clicked by accident. */}
+      <Card className={`overflow-hidden ${view === "cards" ? "hidden" : ""}`}>
         {riders === null ? (
           <SkeletonRows rows={6} />
         ) : riders.length === 0 ? (

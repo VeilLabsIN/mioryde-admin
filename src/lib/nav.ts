@@ -25,6 +25,15 @@ export interface NavItem {
    * that will not open.
    */
   needs: readonly Capability[];
+  /**
+   * Which half of the business this belongs to.
+   *
+   * Omitted means both, and most of the panel genuinely is both — a delivery
+   * has a customer at one end and a partner at the other, and the live board
+   * shows the same row to whoever is looking. Only the pages that are truly
+   * about one party carry a side.
+   */
+  side?: "customer" | "rider";
 }
 
 /**
@@ -55,17 +64,17 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: "People",
     items: [
-      { href: "/customers", label: "Customers", mark: "CU", needs: ["customers.view"] },
-      { href: "/riders", label: "Partners", mark: "PT", needs: ["riders.view"] },
-      { href: "/kyc", label: "Verification", mark: "KY", needs: ["riders.review"] },
+      { href: "/customers", label: "Customers", mark: "CU", needs: ["customers.view"], side: "customer" },
+      { href: "/riders", label: "Partners", mark: "PT", needs: ["riders.view"], side: "rider" },
+      { href: "/kyc", label: "Verification", mark: "KY", needs: ["riders.review"], side: "rider" },
     ],
   },
   {
     label: "Money",
     items: [
-      { href: "/payouts", label: "Payouts", mark: "PO", needs: ["payouts.view"] },
-      { href: "/banking", label: "Bank checks", mark: "BK", needs: ["payouts.settle"] },
-      { href: "/collections", label: "Collections", mark: "CO", needs: ["payouts.settle"] },
+      { href: "/payouts", label: "Payouts", mark: "PO", needs: ["payouts.view"], side: "rider" },
+      { href: "/banking", label: "Bank checks", mark: "BK", needs: ["payouts.settle"], side: "rider" },
+      { href: "/collections", label: "Collections", mark: "CO", needs: ["payouts.settle"], side: "rider" },
       { href: "/pricing", label: "Rate cards", mark: "RC", needs: ["pricing.view"] },
     ],
   },
@@ -78,7 +87,7 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: "Governance",
     items: [
-      { href: "/agreement", label: "Agreement", mark: "AG", needs: ["pricing.edit"] },
+      { href: "/agreement", label: "Agreement", mark: "AG", needs: ["pricing.edit"], side: "rider" },
       { href: "/audit", label: "Audit log", mark: "AU", needs: ["audit.view"] },
     ],
   },

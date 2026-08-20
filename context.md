@@ -163,6 +163,78 @@ with "requires array on right side". This has been fixed four times.
 
 ## 5. Where the work stands
 
+### Uncommitted work in the tree (2026-08-20)
+
+A large redesign and feature run that has **not been committed** — Nikhil
+commits himself. All of it typechecks, builds, and passes both suites
+(**API 245, panel 71**). Verified against real Postgres and a real API unless
+noted.
+
+**Design system.** Default theme is now `daylight` (warm off-white `#f7f5ee`,
+brand yellow, green as the second voice); dark is `tokyo` (Tokyo Night). The
+old `midnight` key migrates to `tokyo` in the boot script so nobody loses their
+choice. Two accent tokens exist because `--accent` is read as *text* in 39
+places: `--accent` is the deepest gold clearing 4.5:1, `--accent-bright` is the
+real brand yellow for fills. Radius scale 4/8/16px was adopted from the design
+spec; `chamfer` survives only on brand moments (logo, primary button, pills) —
+the rule is **chamfer if it is branding, radius if it is furniture**. Light mode
+gained a dot grid; `--panel` was retuned in both themes because the bottom of
+the foreground ramp measured 4.45:1 and 4.41:1 against it.
+
+**Night Mode arrival.** Full-screen dusk transition with the words the brief
+asked for. It deliberately does **not** reload — an ops panel reload discards a
+half-typed cancellation reason. `pointer-events: none` throughout, silent on
+first load and when leaving night, disabled under reduced motion.
+
+**Login.** Two-column composition centred in a 1040px container, animated SVG
+scene (drawn route, drifting light, city grid) spanning the whole page, form on
+its own card. Live greeting that knows the time of day and greets the local part
+of the typed email — derived client-side, so it cannot leak whether an account
+exists. Caps-lock warning, show/hide, and **Remember me**.
+
+**Sessions.** Absolute expiry: one day, or seven with Remember me. Rotation
+*inherits* the deadline rather than minting a new one — the old behaviour was a
+sliding window that never actually expired. Rotation now also revokes the row it
+replaced, so exactly one row per chain is live and signing out kills it.
+
+**WUDA + FAQ.** `0024_knowledge.sql`, a 40-entry curated corpus authored in
+code, Postgres full-text + `word_similarity` + tag-overlap retrieval, and a
+three-circle audience ladder (`everyone` / `internal` / `restricted`) **filtered
+in SQL**. Owner-only writes. The model layer is Gemini over `fetch`; with no key
+it degrades to returning entries verbatim and says so on screen.
+
+**Security.** `assertNoClientSecrets()` refuses to boot if a server secret's
+*value* appears under `NEXT_PUBLIC_`/`EXPO_PUBLIC_`/`VITE_`; a bundle scanner
+fails the panel's test run on credential-shaped strings in built JS; `redact()`
+strips keys from logs. `docs/secrets.md` explains which keys can be hidden and
+which can only be *restricted* at the provider. `.env` is now git-ignored in
+both Flutter apps.
+
+**Live map** (`/map`). New `GET /admin/live/map` snapshot; Leaflet with raster
+tiles (no API key in the browser); rider state derived from fix freshness, not
+`is_online`; markers updated in place so pins tween; click-to-focus with route
+highlight. Tile host flows into CSP `img-src` **and** `connect-src` — the map
+probes one tile with `fetch` because a rejected key returns HTTP 403 *with a
+valid PNG*, so `tileerror` never fires.
+
+**Dashboard.** New `GET /admin/dashboard`: four live figures plus 14 days of
+history in one round trip. KPI cards with sparklines and a delta against the
+*same slice* of yesterday.
+
+**Riders.** Card/table toggle (preference in `localStorage`, not the URL), new
+`GET /admin/riders/:id/orders`, tabbed detail (Overview / Deliveries / History).
+
+**Layer switch.** Sidebar control filtering nav to customer side, partner side,
+or everything. It is a **preference, not a permission** — `layers.test.ts` pins
+that every layer view is a strict subset of "everything" for every role.
+
+Not verified: WUDA's *grounded* answers (the Gemini project is denied — see §6),
+and the authenticated pages have only been driven through throwaway harnesses,
+never a real browser session.
+
+### Previously complete and verified against a live database
+
+
 Complete and verified against a live database:
 
 - Booking, quotes, fares (OSRM routing), dispatch, live tracking
@@ -231,6 +303,8 @@ and inert.
 | AWS S3 bucket, **ap-south-1 (Mumbai)** | KYC uploads, so all onboarding |
 | Firebase service account + `google-services.json` in both apps | Push notifications |
 | Counsel-drafted partner agreement | The seeded text is a marked placeholder |
+| **Gemini API access** — project denied `generateContent` (403) on two separate projects, so it is the Google *account*, not the project | WUDA composes answers; it currently only quotes entries |
+| MapTiler allowed origins — bare hostnames only, and `localhost` is absent | The basemap in local development; production origins are fine |
 
 Degraded but working without: Maps key, Exotel masked calling, Truecaller client
 id, Sentry DSN.

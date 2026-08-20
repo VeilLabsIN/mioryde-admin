@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useLayoutEffect, useRef, useState } from "react";
 import { type AdminRole, canAny } from "@/lib/permissions";
 import { NAV_GROUPS } from "@/lib/nav";
+import { LayerSwitch, useLayer } from "./LayerSwitch";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 
 /**
@@ -27,9 +28,25 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
   //
   // Empty groups are dropped so a support user is not shown a "Money" heading
   // with nothing under it.
+  const [layer, setLayer] = useLayer();
+
+  /**
+   * Role first, then side.
+   *
+   * The order matters and is not interchangeable. Role decides what an
+   * operator *may* reach and is mirrored from the server; side decides what
+   * they have asked to *look at* right now. Filtering by side first would let
+   * a preference appear to grant something — and a group left empty by a
+   * preference should still disappear, which is why the emptiness check comes
+   * after both.
+   */
   const groups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => canAny(role, item.needs)),
+    items: group.items.filter(
+      (item) =>
+        canAny(role, item.needs) &&
+        (layer === "both" || item.side === undefined || item.side === layer),
+    ),
   })).filter((group) => group.items.length > 0);
 
   const [collapsed, setCollapsed] = useState(false);
@@ -102,6 +119,11 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
       {/* Navigation */}
       {/* Labelled, so a screen reader announces it as the panel's navigation
           rather than as an unnamed region indistinguishable from any other. */}
+      {/* Above the navigation it filters, so the cause sits over the effect. */}
+      <div className="border-b border-line pt-2">
+        <LayerSwitch layer={layer} onChange={setLayer} collapsed={collapsed} />
+      </div>
+
       <nav
         ref={navRef}
         aria-label="Panel sections"

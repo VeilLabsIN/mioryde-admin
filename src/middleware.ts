@@ -63,10 +63,41 @@ export function middleware(request: NextRequest) {
    */
   let tileOrigin = "";
   try {
-    tileOrigin = new URL(
+    const template =
       process.env["NEXT_PUBLIC_MAP_TILES_URL"] ??
-        "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    ).origin;
+      "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+    /**
+     * `{s}` is Leaflet's subdomain placeholder, and it has to be handled here
+     * or the policy silently blocks the map.
+     *
+     * Some providers publish `https://{s}.tile.example.com/...`, where Leaflet
+     * substitutes `a`, `b`, `c` per request to parallelise loading. `new URL`
+     * accepts the placeholder happily and reports the origin as the literal
+     * string `https://{s}.tile.example.com` — which matches none of the hosts
+     * the browser actually contacts. The result is a blank map and one console
+     * line, which is a miserable thing to debug.
+     *
+     * So a template with `{s}` becomes a wildcard source. CSP supports exactly
+     * one level of subdomain wildcard, which is exactly what the placeholder
+     * expands to.
+     */
+    // Both basemaps. They are usually the same host with a different style in
+    // the path, but nothing guarantees that — and a dark style served from a
+    // second host would otherwise work all day and go blank the moment
+    // somebody switched to night mode.
+    const sources = new Set<string>();
+    for (const url of [template, process.env["NEXT_PUBLIC_MAP_TILES_URL_DARK"]]) {
+      if (!url) continue;
+      const wildcard = url.includes("{s}");
+      const parsed = new URL(url.replace("{s}", "a"));
+      sources.add(
+        wildcard
+          ? `${parsed.protocol}//*.${parsed.hostname.replace(/^a\./, "")}`
+          : parsed.origin,
+      );
+    }
+    tileOrigin = [...sources].join(" ");
   } catch {
     tileOrigin = "";
   }
@@ -94,7 +125,12 @@ export function middleware(request: NextRequest) {
     // slash, so `http://localhost:3000/v1` blocked every real call —
     // /v1/admin/auth/refresh is not /v1. Origins are what connect-src is for;
     // narrowing to a path prefix buys nothing once the origin is allowed.
-    `connect-src 'self' ${apiOrigin}${dev ? " ws: wss:" : ""}`,
+    // The tile host is here as well as in `img-src` because the map probes one
+    // tile with `fetch` to read its status — a rejected key comes back as a
+    // valid image, so the status code is the only way to tell. `img-src`
+    // alone would let the map draw the provider's "Invalid key" poster while
+    // the code that could say so was blocked.
+    `connect-src 'self' ${apiOrigin}${tileOrigin ? ` ${tileOrigin}` : ""}${dev ? " ws: wss:" : ""}`,
     "frame-ancestors 'none'",
     "frame-src 'none'",
     "object-src 'none'",

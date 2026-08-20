@@ -19,8 +19,10 @@ import { ApiError, api, auth } from "@/lib/api";
  * seen the product — and lets the form stay the same deliberate 380px it
  * always was. A wider form is not a better form.
  *
- * On narrow screens the scene collapses to a band above the form rather than
- * disappearing, so the page still identifies itself on a phone.
+ * On narrow screens the two columns stack. The scene is a single layer behind
+ * the whole viewport rather than a background on one column, so stacking does
+ * not produce a seam — the grid and the drifting light simply continue under
+ * the form.
  *
  * ## What is deliberately absent
  *
@@ -76,13 +78,41 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
-      {/* ── Left: what this is ─────────────────────────────────────────── */}
-      <section className="relative isolate flex flex-col justify-between overflow-hidden
-                          border-b border-line bg-panel p-8 lg:border-b-0 lg:border-r lg:p-12">
-        <LoginScene />
+    /**
+     * One surface, not two.
+     *
+     * This was a tinted `bg-panel` column beside a plain one, which at desktop
+     * width read as a deliberate split and at anything narrower stacked into a
+     * hard horizontal seam — a band of tint above, flat background below, with
+     * the scene stopping dead at the join. The form looked bolted onto the
+     * bottom of a different page.
+     *
+     * Now the scene is a single layer behind the whole viewport and neither
+     * column paints a background of its own, so the grid, the drifting light
+     * and the route run continuously underneath the form. The two-column
+     * *layout* is unchanged; only the boundary is gone.
+     */
+    <main className="relative isolate min-h-dvh">
+      <LoginScene />
 
-        <div aria-hidden className="hazard absolute inset-x-0 top-0 h-1 opacity-60" />
+      <div aria-hidden className="hazard absolute inset-x-0 top-0 h-1 opacity-60" />
+
+      {/*
+        One centred composition rather than two full-height columns.
+
+        `justify-between` pushed the brand to the ceiling and the legal line to
+        the floor, so at anything short of a very tall window the middle was a
+        void with the form floating in it and nothing to sit against. Centring
+        the two columns against each other inside a container that stops at
+        1040px gives the page a middle again — and the scene behind it becomes
+        a backdrop rather than the only thing filling the space.
+      */}
+      <div className="relative mx-auto flex min-h-dvh max-w-[1040px] flex-col
+                      justify-center gap-10 px-6 py-14
+                      lg:grid lg:grid-cols-[1fr_380px] lg:items-center lg:gap-16 lg:px-10">
+
+      {/* ── Left: what this is ─────────────────────────────────── */}
+      <section className="relative flex flex-col gap-8">
 
         <div className="relative animate-rise">
           <div className="flex items-center gap-3">
@@ -100,7 +130,7 @@ export default function LoginPage() {
 
         {/* The middle is deliberately mostly the scene. This is three lines of
             orientation, not a marketing page. */}
-        <div className="relative my-10 max-w-[420px] lg:my-0">
+        <div className="relative max-w-[440px]">
           <h1 className="font-sans text-title">
             The panel the business runs on.
           </h1>
@@ -136,8 +166,21 @@ export default function LoginPage() {
       </section>
 
       {/* ── Right: the form ────────────────────────────────────────────── */}
-      <section className="grid place-items-center px-6 py-10 lg:px-12">
-        <div className="animate-rise w-full max-w-[380px]">
+      {/*
+          The form on its own surface, and this is what fixes the background.
+
+          Lying the fields straight on the scene put a dot grid and a drifting
+          route line *behind the inputs*, so the texture read as interference
+          rather than atmosphere — the eye kept resolving the line crossing the
+          password field. A card gives the form somewhere to sit: the scene is
+          unchanged and becomes context, because there is finally something in
+          front of it to be context for.
+        */}
+        {/* Capped when stacked. Below the two-column breakpoint the card would
+            otherwise stretch to the full container — a 970px-wide sign-in form,
+            which is a text field the width of a table. */}
+        <section className="relative mx-auto w-full max-w-[420px] lg:mx-0 lg:max-w-none">
+        <div className="animate-rise w-full rounded-lg border border-line bg-surface p-6 [box-shadow:var(--shadow-panel)] sm:p-7">
           <p className="flex items-center gap-2 font-mono text-micro uppercase text-accent">
             {/* A live dot rather than a static bullet: this is the one element
                 on the page that says the panel is running and reachable. */}
@@ -314,6 +357,7 @@ export default function LoginPage() {
           </p>
         </div>
       </section>
+      </div>
     </main>
   );
 }

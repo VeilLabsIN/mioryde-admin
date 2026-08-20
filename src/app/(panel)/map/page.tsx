@@ -61,6 +61,7 @@ export default function MapPage() {
   const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
+  const [tilesBroken, setTilesBroken] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,7 +148,25 @@ export default function MapPage() {
           snapshot={snapshot}
           focusedOrderId={focused}
           onSelectOrder={onSelectOrder}
+          onTileError={setTilesBroken}
         />
+
+        {/*
+          The basemap and the fleet data fail independently, and the message
+          says which. A provider rejecting the key still draws pins in the
+          right places — the positions are ours, only the imagery is theirs.
+        */}
+        {tilesBroken && (
+          <div
+            role="status"
+            className="absolute inset-x-3 top-14 z-[400] rounded-md border border-warn/60
+                       bg-surface px-3 py-2 text-meta text-warn"
+          >
+            The basemap will not load. The pins are still correct — only the
+            imagery is missing. Usually the tile provider is rejecting this
+            site&rsquo;s address: check the allowed origins on the key.
+          </div>
+        )}
 
         {/* Floating summary. Over the map rather than above it, so the map
             keeps the full height of the frame. */}

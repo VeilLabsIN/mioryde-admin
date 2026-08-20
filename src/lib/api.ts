@@ -290,6 +290,10 @@ export const api = {
   /** Distinct actions present in the log, for the filter control. */
   auditActions: () => request<{ results: string[] }>("/admin/audit-log/actions"),
 
+  /** A partner's last fifty deliveries. Capped, not paged — see the API. */
+  riderOrders: (id: string) =>
+    request<{ results: RiderTrip[] }>(`/admin/riders/${id}/orders`),
+
   riderById: (id: string) => request<RiderDetail>(`/admin/riders/${id}`),
 
   /**
@@ -534,6 +538,11 @@ export const api = {
     request<{ gaps: { question: string; asked: number; lastAsked: string }[] }>(
       "/admin/knowledge/gaps",
     ),
+
+  // ── Dashboard ─────────────────────────────────────────────────────────
+
+  /** The landing page's figures and the fourteen days behind each of them. */
+  dashboard: () => request<DashboardSnapshot>("/admin/dashboard"),
 
   // ── Live map ─────────────────────────────────────────────────────────────
 
@@ -1233,4 +1242,41 @@ export interface LiveMapSnapshot {
   staleAfterSeconds: number;
   riders: MapRider[];
   orders: MapOrder[];
+}
+
+export interface DashboardTrendPoint {
+  /** `YYYY-MM-DD`, server-side, so it does not shift with the browser's zone. */
+  day: string;
+  placed: number;
+  delivered: number;
+  cancelled: number;
+  /** Whole paise. */
+  revenueMinor: number;
+}
+
+export interface DashboardSnapshot {
+  now: string;
+  activeOrders: number;
+  unassignedOrders: number;
+  ridersOnDuty: number;
+  /** A Money object, like every other amount in this client. */
+  revenueToday: { minor: number; currency: string };
+  /** The same slice of yesterday, not all of it — otherwise every morning
+   *  would report a collapse. */
+  revenueYesterday: { minor: number; currency: string };
+  deliveredToday: number;
+  deliveredYesterday: number;
+  placedToday: number;
+  trend: DashboardTrendPoint[];
+}
+
+export interface RiderTrip {
+  id: string;
+  code: string;
+  status: string;
+  total: { minor: number; currency: string };
+  pickupAddress: string;
+  dropAddress: string;
+  placedAt: string;
+  distanceMeters: number;
 }
