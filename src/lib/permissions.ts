@@ -126,9 +126,12 @@ const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   ["/pricing", "pricing.view"],
   ["/audit", "audit.view"],
   ["/access", "access.manage"],
-  // `/security` is deliberately absent. Unlisted paths are open to every role,
-  // and changing your own password is the one action an account must never
-  // lose — including an account whose role was narrowed to nothing.
+  // `/security` is deliberately absent, along with `/help`, `/legal`,
+  // `/support`, `/about` and `/privacy`. Unlisted paths are open to every
+  // role: changing your own password is the one action an account must never
+  // lose — including an account whose role was narrowed to nothing — and the
+  // rest are things a person is entitled to read about a tool they are being
+  // asked to use.
   // Last, because every path starts with "/".
   ["/", "metrics.view"],
 ];

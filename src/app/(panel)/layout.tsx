@@ -2,8 +2,9 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BannerStrip } from "@/components/Banner";
+import { AttentionProvider, BannerStrip } from "@/components/Banner";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { PanelFooter } from "@/components/PanelFooter";
 import { TopBar } from "@/components/TopBar";
 import { Sidebar } from "@/components/Sidebar";
 import { ToastProvider } from "@/components/ToastProvider";
@@ -94,6 +95,10 @@ export default function PanelLayout({
     // reaches them. Previously each page owned its own success and error
     // rendering, and anything that resolved after unmount was lost.
     <ToastProvider>
+    {/* One health check for the whole shell. The banner strip and the footer's
+        status light are the same question asked twice, and two polls of two
+        role-gated endpoints could disagree with each other on screen. */}
+    <AttentionProvider>
     {/* A column, not a row: the bar spans the full width above everything,
         and the rail and content share the space beneath it. That is what
         makes the product mark and the search box fixed furniture rather
@@ -126,9 +131,15 @@ export default function PanelLayout({
           <main id="panel-main" className="min-w-0 flex-1 overflow-y-auto p-6">
             {children}
           </main>
+
+          {/* Outside <main>, so it does not scroll away from an operator two
+              thousand rows down a delivery table — which is exactly when
+              "is the system healthy" and "who do I tell" get asked. */}
+          <PanelFooter role={admin.role} />
         </div>
       </div>
     </div>
+    </AttentionProvider>
     </ToastProvider>
   );
 }

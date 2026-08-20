@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { allNavItems } from "@/lib/nav";
+import { siteLinksNotInNav } from "@/lib/siteLinks";
 import { type AdminRole, canAny } from "@/lib/permissions";
 
 /**
@@ -28,20 +29,29 @@ export function CommandSearch({ role }: { role: AdminRole }) {
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const destinations = useMemo(
-    () => allNavItems().filter((item) => canAny(role, item.needs)),
-    [role],
-  );
+  // Nav first, then the pages that belong to everyone. Somebody looking for
+  // "privacy" or "support" was previously told there were no matches, on the
+  // one control in the panel that is supposed to know where everything is.
+  const destinations = useMemo(() => {
+    const nav = allNavItems().filter((item) => canAny(role, item.needs));
+    const site = siteLinksNotInNav(allNavItems().map((i) => i.href)).filter(
+      (link) => link.needs === undefined || canAny(role, link.needs),
+    );
+    return [...nav, ...site];
+  }, [role]);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return destinations.slice(0, 8);
     return destinations
-      .filter(
-        (item) =>
+      .filter((item) => {
+        const blurb = "blurb" in item ? item.blurb.toLowerCase() : "";
+        return (
           item.label.toLowerCase().includes(q) ||
-          item.group.toLowerCase().includes(q),
-      )
+          item.group.toLowerCase().includes(q) ||
+          blurb.includes(q)
+        );
+      })
       .slice(0, 8);
   }, [destinations, query]);
 

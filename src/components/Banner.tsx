@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
 export type BannerTone = "critical" | "warning";
@@ -27,6 +27,26 @@ const MAX_VISIBLE = 2;
 const POLL_MS = 5 * 60_000;
 
 /**
+ * What the health check could actually see.
+ *
+ * Both sources are role-gated and support can read neither, so "nothing is
+ * wrong" and "you are not allowed to know" are the same empty list. The footer
+ * reports system status from this, and a green light shown to somebody whose
+ * requests were all refused would be a lie — so the count of sources that
+ * answered travels with the findings.
+ */
+export interface Attention {
+  items: BannerItem[];
+  /** How many of the two checks returned data. 0 means the status is unknown. */
+  sources: number;
+  /** False until the first check settles, so nothing reports "all clear" early. */
+  loaded: boolean;
+}
+
+const EMPTY: Attention = { items: [], sources: 0, loaded: false };
+const AttentionContext = createContext<Attention>(EMPTY);
+
+/**
  * Things wrong with the system, wherever the operator happens to be.
  *
  * The panel knew all of this already and said none of it unless you opened the
@@ -36,15 +56,21 @@ const POLL_MS = 5 * 60_000;
  *
  * Every banner carries an action. A notice that tells you something is wrong and
  * leaves you to find the page is a notice that gets ignored the second time.
+ *
+ * A provider rather than a plain hook because two pieces of furniture now want
+ * the same answer — the banner strip and the footer's status light. Two
+ * callers of the same hook would mean two independent polls of two role-gated
+ * endpoints, and the two could disagree with each other on screen.
  */
-export function useAttention(): BannerItem[] {
-  const [items, setItems] = useState<BannerItem[]>([]);
+export function AttentionProvider({ children }: { children: React.ReactNode }) {
+  const [state, setState] = useState<Attention>(EMPTY);
 
   useEffect(() => {
     let cancelled = false;
 
     const check = async () => {
       const next: BannerItem[] = [];
+      let sources = 0;
 
       // Both are role-gated, and support can read neither. A 403 here is a
       // policy outcome, not a failure — it means this operator has no action
@@ -55,6 +81,7 @@ export function useAttention(): BannerItem[] {
       ]);
 
       if (monitoring.status === "fulfilled") {
+        sources += 1;
         const m = monitoring.value;
 
         // First, and the only thing here that is about money being wrong
@@ -87,6 +114,7 @@ export function useAttention(): BannerItem[] {
       }
 
       if (readiness.status === "fulfilled") {
+        sources += 1;
         const outstanding = readiness.value.checks.filter(
           (check) => check.blocking && !check.ready,
         );
@@ -113,7 +141,7 @@ export function useAttention(): BannerItem[] {
         }
       }
 
-      if (!cancelled) setItems(next);
+      if (!cancelled) setState({ items: next, sources, loaded: true });
     };
 
     void check();
@@ -124,7 +152,14 @@ export function useAttention(): BannerItem[] {
     };
   }, []);
 
-  return items;
+  return (
+    <AttentionContext.Provider value={state}>{children}</AttentionContext.Provider>
+  );
+}
+
+/** Reads the shared check. Outside the provider this reports "unknown". */
+export function useAttention(): Attention {
+  return useContext(AttentionContext);
 }
 
 const TONE: Record<BannerTone, string> = {
@@ -149,7 +184,7 @@ const TONE_TEXT: Record<BannerTone, string> = {
  * make it go away is it no longer being true.
  */
 export function BannerStrip() {
-  const items = useAttention();
+  const { items } = useAttention();
   const [dismissed, setDismissed] = useState<string[]>([]);
 
   const visible = items

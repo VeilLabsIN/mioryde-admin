@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Card, PageHeader, SectionLabel } from "@/components/ui";
+import { Card, Fact, PageHeader, Point, SectionLabel } from "@/components/ui";
 
 /**
  * The legal and policy hub.
@@ -51,15 +51,18 @@ export default function LegalPage() {
           somebody will act on it.
         </p>
         <ul className="mt-3 space-y-2.5">
-          <Outstanding
+          <Point
+            tone="warn"
             title="GST registration"
             detail="No GSTIN has been supplied. Every invoice the platform issues carries a placeholder and is not a valid tax invoice. Invoices are immutable and consecutively numbered by law, so these cannot be corrected later — only credited."
           />
-          <Outstanding
+          <Point
+            tone="warn"
             title="Customer terms of service and privacy policy"
             detail="Required before the apps go to a store. India's DPDP Act 2023 governs the personal data already being collected."
           />
-          <Outstanding
+          <Point
+            tone="warn"
             title="Partner agreement"
             detail="Publishable from the Agreement page once counsel supplies the text. Version 1.0 was used in testing, so the real terms must go out under a new version number."
           />
@@ -82,19 +85,19 @@ export default function LegalPage() {
           that, and they are enforced rather than requested.
         </p>
         <ul className="mt-3 space-y-2.5">
-          <Obligation
+          <Point
             title="Look only at what you need"
             detail="Revealing a phone number and opening an identity document are both recorded against your name, with a timestamp. The record exists so that access can be reviewed — including yours."
           />
-          <Obligation
+          <Point
             title="Your account is yours"
             detail="Do not share it. Roles decide what can be reached, so a shared login makes the audit log say the wrong name about who did something."
           />
-          <Obligation
+          <Point
             title="Interventions need a reason"
             detail="Cancelling a delivery or blocking a customer asks for one because somebody will later need to know why — usually the person affected."
           />
-          <Obligation
+          <Point
             title="Nothing here is deletable"
             detail="The ledger and the audit log are append-only by design. A mistake is corrected by a further entry, never by rewriting what happened."
           />
@@ -128,42 +131,5 @@ export default function LegalPage() {
         </p>
       </Card>
     </div>
-  );
-}
-
-function Fact({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div>
-      <dt className="font-mono text-micro uppercase text-fg-muted">{label}</dt>
-      <dd className={`text-body text-fg-soft ${mono ? "font-mono" : ""}`}>
-        {value}
-      </dd>
-    </div>
-  );
-}
-
-function Outstanding({ title, detail }: { title: string; detail: string }) {
-  return (
-    <li className="border-l-2 border-warn pl-3">
-      <p className="text-body font-medium text-fg">{title}</p>
-      <p className="text-meta text-fg-mid">{detail}</p>
-    </li>
-  );
-}
-
-function Obligation({ title, detail }: { title: string; detail: string }) {
-  return (
-    <li className="border-l-2 border-edge pl-3">
-      <p className="text-body font-medium text-fg">{title}</p>
-      <p className="text-meta text-fg-mid">{detail}</p>
-    </li>
   );
 }

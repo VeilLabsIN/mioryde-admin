@@ -132,6 +132,56 @@ export function Card({
   );
 }
 
+/**
+ * A labelled fact, for the reference pages.
+ *
+ * Lives in a <dl> rather than a table because these are definitions, not rows
+ * to compare — and a screen reader announces "CIN, U49224…" instead of
+ * reading two disconnected cells.
+ */
+export function Fact({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <dt className="font-mono text-micro uppercase text-fg-muted">{label}</dt>
+      <dd className={`text-body text-fg-soft ${mono ? "font-mono" : ""}`}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * A titled point with a coloured left edge — an obligation, an outstanding
+ * item, a step. Same rule as the card tones: the edge marks it in a scan and
+ * then gets out of the way.
+ */
+export function Point({
+  title,
+  detail,
+  tone = "neutral",
+}: {
+  title: string;
+  detail: React.ReactNode;
+  tone?: "neutral" | "warn" | "ok";
+}) {
+  const edge =
+    tone === "warn" ? "border-warn" : tone === "ok" ? "border-ok" : "border-edge";
+  return (
+    <li className={`border-l-2 pl-3 ${edge}`}>
+      <p className="text-body font-medium text-fg">{title}</p>
+      <p className="text-meta text-fg-mid">{detail}</p>
+    </li>
+  );
+}
+
 export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="mb-3 flex items-center gap-2.5">

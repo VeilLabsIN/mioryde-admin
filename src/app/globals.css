@@ -104,12 +104,27 @@
    and "the brand's other colour" stay one idea instead of two near-identical
    greens nobody can tell apart.
    ──────────────────────────────────────────────────────────────────────── */
+/*
+ * `--panel` is a hair off the obvious value in both themes, and measured
+ * rather than picked.
+ *
+ * It is the recessed tone — inset cards, the command palette's active row,
+ * the footer's site map — which makes it the *lightest* ground in daylight
+ * and the *darkest* in tokyo that body text lands on. At #f0eee4 and #292e42
+ * the bottom of the foreground ramp measured 4.45:1 and 4.41:1 against it:
+ * under 4.5:1, on 9px group labels and 11px descriptions.
+ *
+ * Moving the ground rather than the text was the cheaper fix. Squeezing
+ * `--fg-faint` up to clear it collapsed it into `--fg-muted` — in tokyo the
+ * two came out one hex digit apart — and that trades a contrast failure for
+ * a ramp with no steps left in it.
+ */
 :root,
 :root[data-theme="daylight"] {
   --bg: #f7f5ee;
   --surface: #fffefa;
   --raised: #ffffff;
-  --panel: #f0eee4;
+  --panel: #f3f1e8;
   --line: #e6e3d7;
   --edge: #d8d4c5;
   --edge-strong: #a9a493;
@@ -162,7 +177,7 @@
   --bg: #16161e;
   --surface: #1a1b26;
   --raised: #1f2233;
-  --panel: #292e42;
+  --panel: #222739;
   --line: #2f334d;
   --edge: #3b4261;
   --edge-strong: #545c7e;
@@ -213,7 +228,7 @@
   --bg: light-dark(#f7f5ee, #16161e);
   --surface: light-dark(#fffefa, #1a1b26);
   --raised: light-dark(#ffffff, #1f2233);
-  --panel: light-dark(#f0eee4, #292e42);
+  --panel: light-dark(#f3f1e8, #222739);
   --line: light-dark(#e6e3d7, #2f334d);
   --edge: light-dark(#d8d4c5, #3b4261);
   --edge-strong: light-dark(#a9a493, #545c7e);
