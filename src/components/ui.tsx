@@ -14,7 +14,7 @@ export function Button({
     <button
       disabled={disabled || loading}
       className={`grad-accent chamfer-sm relative h-10 px-5 font-sans text-body font-semibold
-                  text-on-accent transition-[filter,transform] duration-150
+                  text-on-accent-bright transition-[filter,transform] duration-150
                   hover:brightness-110 active:scale-[0.98]
                   disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100
                   disabled:active:scale-100 ${className}`}
@@ -135,7 +135,7 @@ export function Card({
 export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="mb-3 flex items-center gap-2.5">
-      <span className="inline-block h-[3px] w-[18px] bg-accent" />
+      <span className="inline-block h-[3px] w-[18px] bg-accent-bright" />
       <span className="font-mono text-micro uppercase text-accent">
         {children}
       </span>

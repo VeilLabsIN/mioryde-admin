@@ -54,7 +54,7 @@ export default function LoginPage() {
       <div className="animate-rise w-full max-w-[380px]">
         <div className="mb-8 flex items-center gap-3">
           <div className="grad-accent chamfer grid size-11 place-items-center">
-            <span className="font-mono text-lg font-bold text-on-accent">M</span>
+            <span className="font-mono text-lg font-bold text-on-accent-bright">M</span>
           </div>
           <div>
             <p className="font-sans text-lg font-semibold leading-tight">Mioryde</p>

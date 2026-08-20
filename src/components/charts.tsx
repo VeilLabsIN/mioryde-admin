@@ -268,7 +268,7 @@ export function BarList({
                   reads as "a little", which is the opposite of true. */}
               {!empty ? (
                 <div
-                  className="bg-accent h-full rounded-full transition-[width] duration-500"
+                  className="bg-accent-bright h-full rounded-full transition-[width] duration-500"
                   style={{ width: `${(point.value / max) * 100}%` }}
                 />
               ) : null}

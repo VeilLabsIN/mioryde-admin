@@ -46,7 +46,7 @@ export default function RootLayout({
       <head>
         {/*
           Blocking and inline, before any paint. It sets data-theme from
-          localStorage so a midnight user never sees a white flash while React
+          localStorage so a tokyo user never sees a light flash while React
           hydrates. suppressHydrationWarning above is required because this
           mutates <html> before React sees it.
         */}

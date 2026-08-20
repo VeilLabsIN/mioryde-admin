@@ -4,11 +4,7 @@ import { useTheme } from "./ThemeProvider";
 import type { Theme } from "@/lib/theme";
 
 const OPTIONS: { value: Theme; label: string; glyph: React.ReactNode }[] = [
-  {
-    value: "midnight",
-    label: "Midnight",
-    glyph: <circle cx="7" cy="7" r="4" fill="currentColor" />,
-  },
+  // Daylight first, because it is the default and the order should say so.
   {
     value: "daylight",
     label: "Daylight",
@@ -22,6 +18,16 @@ const OPTIONS: { value: Theme; label: string; glyph: React.ReactNode }[] = [
           strokeLinecap="round"
         />
       </>
+    ),
+  },
+  {
+    value: "tokyo",
+    label: "Tokyo Night",
+    glyph: (
+      <path
+        d="M10.5 8.6A4.2 4.2 0 0 1 5.4 3.5a4.3 4.3 0 1 0 5.1 5.1Z"
+        fill="currentColor"
+      />
     ),
   },
   {
@@ -62,8 +68,8 @@ export function ThemeSwitcher({ collapsed }: { collapsed: boolean }) {
       <button
         type="button"
         onClick={() => setTheme(OPTIONS[(index + 1) % OPTIONS.length]!.value)}
-        title={`Theme: ${OPTIONS[index]?.label ?? "Midnight"}`}
-        aria-label={`Theme: ${OPTIONS[index]?.label ?? "Midnight"}. Click to change.`}
+        title={`Theme: ${OPTIONS[index]?.label ?? "Daylight"}`}
+        aria-label={`Theme: ${OPTIONS[index]?.label ?? "Daylight"}. Click to change.`}
         className="flex h-9 w-full items-center px-3 text-fg-faint transition-colors
                    duration-150 hover:text-accent"
       >
@@ -128,7 +134,7 @@ export function ThemeSwitcher({ collapsed }: { collapsed: boolean }) {
       {/*
         Honest about what "System" actually did. The OS accent is only readable
         in Firefox and Safari — in Chromium the theme still follows OS
-        light/dark, but the accent stays Mioryde amber. Saying so beats a user
+        light/dark, but the accent stays Mioryde gold. Saying so beats a user
         wondering why their blue Windows accent did nothing.
       */}
       {theme === "system" && (

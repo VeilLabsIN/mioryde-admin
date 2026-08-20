@@ -55,9 +55,9 @@ export function TopBar({ admin }: { admin: AdminIdentity }) {
       >
         <span
           aria-hidden
-          className="chamfer-sm grid size-8 place-items-center bg-accent"
+          className="chamfer-sm grid size-8 place-items-center bg-accent-bright"
         >
-          <span className="font-mono text-body font-bold text-on-accent">M</span>
+          <span className="font-mono text-body font-bold text-on-accent-bright">M</span>
         </span>
         <span className="hidden sm:block">
           <span className="block font-sans text-body font-semibold leading-tight">

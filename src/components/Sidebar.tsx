@@ -83,7 +83,7 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
       {/* Brand */}
       <div className="flex h-16 items-center gap-3 border-b border-line px-4">
         <div className="grad-accent chamfer-sm grid size-8 shrink-0 place-items-center">
-          <span className="font-mono text-body font-bold text-on-accent">M</span>
+          <span className="font-mono text-body font-bold text-on-accent-bright">M</span>
         </div>
         <div
           className="min-w-0 overflow-hidden transition-opacity duration-200
@@ -152,7 +152,7 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
                   <span
                     aria-hidden
                     className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 origin-center
-                               bg-accent transition-transform duration-300
+                               bg-accent-bright transition-transform duration-300
                                ease-[var(--ease-spring)]"
                     style={{ transform: `translateY(-50%) scaleY(${active ? 1 : 0})` }}
                   />
@@ -186,8 +186,8 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
 
                   {item.badge !== undefined && item.badge > 0 && (
                     <span
-                      className="chamfer-sm bg-accent px-1.5 py-0.5 font-mono text-meta
-                                 font-bold text-on-accent
+                      className="chamfer-sm bg-accent-bright px-1.5 py-0.5 font-mono text-meta
+                                 font-bold text-on-accent-bright
                                  group-data-[collapsed=true]/rail:opacity-0"
                     >
                       {item.badge > 99 ? "99+" : item.badge}

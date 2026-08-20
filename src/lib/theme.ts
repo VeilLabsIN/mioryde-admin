@@ -1,12 +1,15 @@
-export const THEMES = ["midnight", "daylight", "system"] as const;
+export const THEMES = ["daylight", "tokyo", "system"] as const;
 export type Theme = (typeof THEMES)[number];
 
 /**
- * `system` by default: a new operator gets whatever their OS is already set to,
- * and their accent colour where the browser exposes it. Someone who prefers a
- * fixed look picks midnight or daylight, and that choice is remembered.
+ * `daylight` by default, not `system`.
+ *
+ * The panel is designed light — warm off-white, yellow, a green second voice.
+ * Deferring to the OS meant roughly half of new operators saw a dark panel they
+ * never asked for as their first impression of the product, which is not the
+ * product. Dark is a preference someone opts into, and it is remembered.
  */
-export const DEFAULT_THEME: Theme = "system";
+export const DEFAULT_THEME: Theme = "daylight";
 export const THEME_STORAGE_KEY = "mioryde-admin-theme";
 
 export function isTheme(value: unknown): value is Theme {
@@ -17,9 +20,14 @@ export function isTheme(value: unknown): value is Theme {
  * Runs before first paint, injected into <head> as a blocking script.
  *
  * Without this the server renders the default theme, then the client corrects
- * it after hydration — a white flash on every load for anyone using midnight.
- * It has to be blocking and inline: a deferred or external script is already
- * too late.
+ * it after hydration — a dark flash on every load for anyone using tokyo. It
+ * has to be blocking and inline: a deferred or external script is already too
+ * late.
+ *
+ * The "midnight" line migrates the old pitch-black theme, whose key is still
+ * sitting in localStorage for everyone who picked it. Without it those users
+ * would silently be dropped back to daylight, which reads as the panel
+ * forgetting their choice rather than as a redesign.
  *
  * Kept deliberately tiny and dependency-free, because it is on the critical
  * path of every single page load.
@@ -28,7 +36,8 @@ export const themeBootScript = `
 (function(){
   try {
     var t = localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
-    if (t !== "midnight" && t !== "daylight" && t !== "system") t = ${JSON.stringify(DEFAULT_THEME)};
+    if (t === "midnight") t = "tokyo";
+    if (t !== "daylight" && t !== "tokyo" && t !== "system") t = ${JSON.stringify(DEFAULT_THEME)};
     document.documentElement.dataset.theme = t;
   } catch (e) {
     document.documentElement.dataset.theme = ${JSON.stringify(DEFAULT_THEME)};
@@ -46,7 +55,7 @@ export const themeBootScript = `
  * JavaScript API for it either.
  *
  * So this returns null more often than not, and the caller falls back to the
- * Mioryde amber. That fallback is not a failure mode — it is the common path,
+ * Mioryde gold. That fallback is not a failure mode — it is the common path,
  * and it has to look intentional rather than broken.
  */
 export function readSystemAccent(): string | null {

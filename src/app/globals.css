@@ -6,11 +6,23 @@
    Three themes, resolved to the same variable names so every component styles
    itself once:
 
-     midnight  pitch black (#000) — the default, matches mioryde.com
-     daylight  light
+     daylight  warm off-white, yellow accent, green as the second voice — the
+               default, and the one the panel is designed for
+     tokyo     Tokyo Night. Dark is an option for people who want it, not the
+               house style
      system    follows the OS light/dark preference, and picks up the OS accent
                colour where the browser exposes it (see the note on
                `AccentColor` below)
+
+   ## Why two accent tokens
+
+   `--accent` is read as *text* in 39 places and as a border in 30. Brand yellow
+   at 1.9:1 on an off-white ground would make every one of those unreadable, so
+   `--accent` is the deepest gold that still clears 4.5:1, and `--accent-bright`
+   carries the actual brand yellow into the handful of places that are pure
+   fill — a logo mark, a nav indicator, a progress bar. In `tokyo` the two
+   collapse to one value, because on a dark ground the bright one is already
+   readable.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /*
@@ -78,86 +90,112 @@
   --text-figure--line-height: 1.15;
 }
 
-/* ── midnight (default) ─────────────────────────────────────────────────── */
-:root,
-:root[data-theme="midnight"] {
-  --bg: #000000;
-  --surface: #0b0b0b;
-  --raised: #141414;
-  --panel: #1a1a1a;
-  --line: #232323;
-  --edge: #313131;
-  --edge-strong: #444444;
-
-  --fg: #ffffff;
-  --fg-soft: #e6e6e6;
-  --fg-mid: #b9b9b9;
-  /*
-   * `muted` and `faint` both clear 4.5:1 against the lightest surface they
-   * appear on (--raised). They are not decoration — faint carries drop
-   * addresses and phone numbers in the deliveries table, which people read all
-   * day. The earlier #5f5f5f measured 3.08:1 and failed.
-   */
-  --fg-muted: #9a9a9a;
-  --fg-faint: #808080;
-
-  --accent: #ffc107;
-  --accent-deep: #ff9800;
-  --on-accent: #000000;
-
-  --ok: #7bd88f;
-  --warn: #ffb020;
-  --danger: #ff6b6b;
-
-  --shadow-panel: 0 1px 0 0 rgb(255 255 255 / 0.03) inset;
-
-  --glow: rgb(255 193 7 / 0.055);
-  --grain-opacity: 0.02;
-  color-scheme: dark;
-}
-
-/* ── daylight ───────────────────────────────────────────────────────────────
+/* ── daylight (default) ───────────────────────────────────────
    Warm off-white, not paper white.
 
    A pure #fff panel under fluorescent office lighting is genuinely tiring to
-   read for a full shift, and it makes the amber accent look acidic. Pulling the
-   whole neutral ramp a few degrees toward yellow keeps it soft, and lets the
-   accent sit in the same family as the background rather than fighting it.
-   Greys are warm too — a cool grey on a warm ground reads as dirty.
-   ─────────────────────────────────────────────────────────────────────────── */
+   read for a full shift, and it makes yellow look acidic. Pulling the whole
+   neutral ramp a few degrees toward yellow keeps it soft, and lets the accent
+   sit in the same family as the background rather than fighting it. Greys are
+   warm too — a cool grey on a warm ground reads as dirty.
+
+   Green is the second voice rather than a third accent: `--accent-alt` and
+   `--ok` are deliberately the same value, so on an operations panel "healthy"
+   and "the brand's other colour" stay one idea instead of two near-identical
+   greens nobody can tell apart.
+   ──────────────────────────────────────────────────────────────────────── */
+:root,
 :root[data-theme="daylight"] {
-  --bg: #f6f4ec;
-  --surface: #fcfbf6;
-  --raised: #fffefb;
-  --panel: #efede3;
-  --line: #e3e0d4;
-  --edge: #d5d1c2;
-  --edge-strong: #a8a394;
+  --bg: #f7f5ee;
+  --surface: #fffefa;
+  --raised: #ffffff;
+  --panel: #f0eee4;
+  --line: #e6e3d7;
+  --edge: #d8d4c5;
+  --edge-strong: #a9a493;
 
-  --fg: #1a1915;
-  --fg-soft: #26241e;
-  --fg-mid: #4a4740;
-  /* Both clear 4.5:1 on --raised. Warm greys, matching the ground. */
-  --fg-muted: #655f50;
-  --fg-faint: #767261;
+  --fg: #1b1a16;
+  --fg-soft: #2a2823;
+  --fg-mid: #4e4a42;
+  /*
+   * Both clear 4.5:1 on --raised (5.88:1 and 5.17:1). They are not decoration —
+   * faint carries drop addresses and phone numbers in the deliveries table,
+   * which people read all day.
+   */
+  --fg-muted: #6a6456;
+  --fg-faint: #726d5d;
 
-  --accent: #b45309;
-  --accent-deep: #92400e;
-  --on-accent: #fffefb;
+  --accent: #a16207;
+  --accent-deep: #7c4a06;
+  --on-accent: #fffefa;
 
-  --ok: #15803d;
+  /* The brand yellow itself. Fills only — see the note at the top. */
+  --accent-bright: #f5b301;
+  --accent-bright-deep: #d18f00;
+  --on-accent-bright: #1b1a16;
+
+  --accent-alt: #2f7d52;
+
+  --ok: #2f7d52;
   --warn: #b45309;
   --danger: #b91c1c;
 
   /* Warm-tinted shadow. A neutral black shadow on a cream ground reads grey. */
   --shadow-panel: 0 1px 2px 0 rgb(90 74 40 / 0.06);
 
-  --glow: rgb(180 83 9 / 0.05);
+  --glow: rgb(245 179 1 / 0.07);
   --grain-opacity: 0.035;
   color-scheme: light;
 }
 
-/* ── system ─────────────────────────────────────────────────────────────────
+/* ── tokyo ───────────────────────────────────────────────────────
+   Tokyo Night, mapped onto the same ramp.
+
+   The palette is borrowed rather than invented because it is already tuned:
+   the blue-violet neutrals and desaturated accents were designed to be stared
+   at for hours, which is exactly the use here. The one liberty taken is the
+   bottom of the foreground ramp — Tokyo Night's comment grey (#565f89)
+   measures 2.5:1 on a card and fails even the 3:1 graphics floor, so `muted`
+   and `faint` are lifted to 5.6:1 and 5.2:1. Same hue, readable.
+   ──────────────────────────────────────────────────────────────────────── */
+:root[data-theme="tokyo"] {
+  --bg: #16161e;
+  --surface: #1a1b26;
+  --raised: #1f2233;
+  --panel: #292e42;
+  --line: #2f334d;
+  --edge: #3b4261;
+  --edge-strong: #545c7e;
+
+  --fg: #c0caf5;
+  --fg-soft: #a9b1d6;
+  --fg-mid: #9aa5ce;
+  --fg-muted: #8f98c2;
+  --fg-faint: #8a92ba;
+
+  --accent: #e0af68;
+  --accent-deep: #c8994f;
+  --on-accent: #16161e;
+
+  /* Already 7.9:1 on a card, so the bright token needs no separate value. */
+  --accent-bright: #e0af68;
+  --accent-bright-deep: #c8994f;
+  --on-accent-bright: #16161e;
+
+  --accent-alt: #9ece6a;
+
+  --ok: #9ece6a;
+  --warn: #ff9e64;
+  --danger: #f7768e;
+
+  --shadow-panel: 0 1px 0 0 rgb(192 202 245 / 0.04) inset;
+
+  --glow: rgb(224 175 104 / 0.06);
+  --grain-opacity: 0.02;
+  color-scheme: dark;
+}
+
+/* ── system ───────────────────────────────────────────────────────
    Follows the OS light/dark preference. The accent is overridden at runtime
    by ThemeProvider when the browser exposes the OS accent colour.
 
@@ -165,41 +203,47 @@
    Safari 16.4+ resolve it to the real OS accent; Chromium does not, and there
    is no JS API for it either. So this is best-effort by design: where the
    browser cooperates the panel adopts the user's Windows accent, and where it
-   does not it falls back to Mioryde amber. Both look deliberate.
-   ─────────────────────────────────────────────────────────────────────────── */
+   does not it falls back to Mioryde gold. Both look deliberate.
+   ──────────────────────────────────────────────────────────────────────── */
 :root[data-theme="system"] {
   color-scheme: light dark;
 
-  /* Same warm ramp as daylight on the light side, so switching between
-     `system` and `daylight` is not a visible jump. */
-  --bg: light-dark(#f6f4ec, #000000);
-  --surface: light-dark(#fcfbf6, #0b0b0b);
-  --raised: light-dark(#fffefb, #141414);
-  --panel: light-dark(#efede3, #1a1a1a);
-  --line: light-dark(#e3e0d4, #232323);
-  --edge: light-dark(#d5d1c2, #313131);
-  --edge-strong: light-dark(#a8a394, #444444);
+  /* Same ramps as daylight and tokyo, so switching between `system` and a
+     fixed theme is not a visible jump. */
+  --bg: light-dark(#f7f5ee, #16161e);
+  --surface: light-dark(#fffefa, #1a1b26);
+  --raised: light-dark(#ffffff, #1f2233);
+  --panel: light-dark(#f0eee4, #292e42);
+  --line: light-dark(#e6e3d7, #2f334d);
+  --edge: light-dark(#d8d4c5, #3b4261);
+  --edge-strong: light-dark(#a9a493, #545c7e);
 
-  --fg: light-dark(#1a1915, #ffffff);
-  --fg-soft: light-dark(#26241e, #e6e6e6);
-  --fg-mid: light-dark(#4a4740, #b9b9b9);
-  --fg-muted: light-dark(#655f50, #9a9a9a);
-  --fg-faint: light-dark(#767261, #808080);
+  --fg: light-dark(#1b1a16, #c0caf5);
+  --fg-soft: light-dark(#2a2823, #a9b1d6);
+  --fg-mid: light-dark(#4e4a42, #9aa5ce);
+  --fg-muted: light-dark(#6a6456, #8f98c2);
+  --fg-faint: light-dark(#726d5d, #8a92ba);
 
   /* Overridden by ThemeProvider with the real OS accent where available. */
-  --accent: light-dark(#b45309, #ffc107);
-  --accent-deep: light-dark(#92400e, #ff9800);
-  --on-accent: light-dark(#ffffff, #000000);
+  --accent: light-dark(#a16207, #e0af68);
+  --accent-deep: light-dark(#7c4a06, #c8994f);
+  --on-accent: light-dark(#fffefa, #16161e);
 
-  --ok: light-dark(#15803d, #7bd88f);
-  --warn: light-dark(#b45309, #ffb020);
-  --danger: light-dark(#b91c1c, #ff6b6b);
+  --accent-bright: light-dark(#f5b301, #e0af68);
+  --accent-bright-deep: light-dark(#d18f00, #c8994f);
+  --on-accent-bright: light-dark(#1b1a16, #16161e);
+
+  --accent-alt: light-dark(#2f7d52, #9ece6a);
+
+  --ok: light-dark(#2f7d52, #9ece6a);
+  --warn: light-dark(#b45309, #ff9e64);
+  --danger: light-dark(#b91c1c, #f7768e);
 
   --shadow-panel: light-dark(0 1px 2px 0 rgb(90 74 40 / 0.06),
-                             0 1px 0 0 rgb(255 255 255 / 0.03) inset);
+                             0 1px 0 0 rgb(192 202 245 / 0.04) inset);
 
   /* Tinted with the live accent, so under `system` the ambient glow picks up
-     the user's OS colour rather than staying amber. */
+     the user's OS colour rather than staying gold. */
   --glow: color-mix(in oklab, var(--accent) 6%, transparent);
   --grain-opacity: light-dark(0.035, 0.02);
 }
@@ -223,6 +267,10 @@
   --color-accent: var(--accent);
   --color-accent-deep: var(--accent-deep);
   --color-on-accent: var(--on-accent);
+  --color-accent-bright: var(--accent-bright);
+  --color-accent-bright-deep: var(--accent-bright-deep);
+  --color-on-accent-bright: var(--on-accent-bright);
+  --color-accent-alt: var(--accent-alt);
 
   --color-ok: var(--ok);
   --color-warn: var(--warn);
@@ -257,8 +305,18 @@
     color-mix(in oklab, var(--bg) 88%, transparent) 8px 16px
   );
 }
+/*
+ * The brand gradient, and the only place the yellow gets to be loud: the logo
+ * mark and the primary button.
+ *
+ * Both stops are bright on purpose. Running `--accent-bright` down to
+ * `--accent-deep` looked like the obvious gradient and was wrong — the two
+ * ends are 9.4:1 and 3.5:1 against the same dark ink, so a label readable at
+ * one end of the button faded out at the other. Keeping both stops inside the
+ * yellow (9.4:1 and 6.3:1) means one ink works across the whole fill.
+ */
 @utility grad-accent {
-  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent-bright-deep));
 }
 
 @layer base {
