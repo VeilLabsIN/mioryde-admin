@@ -146,7 +146,12 @@ async function request<T>(
 }
 
 export const api = {
-  async login(email: string, password: string) {
+  /**
+   * @param rememberMe Keeps the session for a week instead of a day. The
+   * server decides both figures and defaults to the shorter one, so passing
+   * nothing is the safe call rather than the long one.
+   */
+  async login(email: string, password: string, rememberMe = false) {
     const body = await request<{
       accessToken: string;
       admin: AdminIdentity;
@@ -154,7 +159,7 @@ export const api = {
       "/admin/auth/login",
       {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
         // The response sets the refresh cookie; without this the browser
         // discards it and the session dies at the first reload.
         credentials: "include",
@@ -488,6 +493,57 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ status, ...(reason ? { reason } : {}) }),
     }),
+
+  // ── Knowledge and WUDA ──────────────────────────────────────────────
+
+  /**
+   * Ask WUDA.
+   *
+   * No special timeout handling: the server falls back to answering from
+   * retrieval alone when the model is slow or unavailable, so a request that
+   * takes a while still returns something usable rather than an error.
+   */
+  ask: (question: string) =>
+    request<WudaAnswer>("/admin/knowledge/ask", {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    }),
+
+  faq: () => request<FaqPayload>("/admin/knowledge/faq"),
+
+  starters: () => request<{ starters: string[] }>("/admin/knowledge/starters"),
+
+  saveNote: (note: {
+    question: string;
+    answer: string;
+    category?: string;
+    audience: KnowledgeAudience;
+  }) =>
+    request<{ id: string; saved: boolean }>("/admin/knowledge/notes", {
+      method: "POST",
+      body: JSON.stringify(note),
+    }),
+
+  knowledgeNotes: () =>
+    request<{ notes: KnowledgeNote[] }>("/admin/knowledge/notes"),
+
+  archiveNote: (id: string) =>
+    request<void>(`/admin/knowledge/notes/${id}`, { method: "DELETE" }),
+
+  knowledgeGaps: () =>
+    request<{ gaps: { question: string; asked: number; lastAsked: string }[] }>(
+      "/admin/knowledge/gaps",
+    ),
+
+  // ── Live map ─────────────────────────────────────────────────────────────
+
+  /**
+   * One snapshot of everything the map draws.
+   *
+   * Polled rather than streamed: positions change every few seconds per rider
+   * and nobody needs the intermediate frames, only where things are now.
+   */
+  liveMap: () => request<LiveMapSnapshot>("/admin/live/map"),
 
   // ── Monitoring ─────────────────────────────────────────────────────────────
 
@@ -1087,4 +1143,94 @@ export function formatMoney(
     minimumFractionDigits: whole && !options.alwaysShowDecimals ? 0 : 2,
     maximumFractionDigits: whole && !options.alwaysShowDecimals ? 0 : 2,
   }).format(amount.minor / 100);
+}
+
+/** Who a knowledge entry may be shown to. Mirrors the API's enum. */
+export type KnowledgeAudience = "everyone" | "internal" | "restricted";
+
+export interface KnowledgeEntry {
+  id: string;
+  /** `curated` was authored in the repository; `note` was typed by a person. */
+  kind: "curated" | "note";
+  question: string;
+  answer: string;
+  category: string;
+  tags: string[];
+  audience: KnowledgeAudience;
+}
+
+export interface FaqPayload {
+  categories: string[];
+  audiences: KnowledgeAudience[];
+  entries: KnowledgeEntry[];
+}
+
+export interface KnowledgeNote {
+  id: string;
+  question: string;
+  answer: string;
+  category: string;
+  audience: KnowledgeAudience;
+  authorName: string | null;
+  createdAt: string;
+}
+
+export interface WudaAnswer {
+  answer: string;
+  /**
+   * `grounded` — a model composed this from the retrieved entries.
+   * `retrieval` — the entries are shown as found, because the model was
+   *   unavailable. The panel says which one happened rather than passing the
+   *   second off as the first.
+   * `unanswered` — nothing relevant was found.
+   */
+  mode: "grounded" | "retrieval" | "unanswered";
+  sources: {
+    id: string;
+    question: string;
+    category: string;
+    source: string | null;
+  }[];
+  degraded?: string;
+}
+
+/** A rider's derived state.  covers both off duty and gone quiet. */
+export type RiderMapStatus = "delivering" | "idle" | "offline";
+
+export interface MapRider {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  /** Degrees clockwise from north, when the device reported one. */
+  heading: number | null;
+  secondsAgo: number;
+  status: RiderMapStatus;
+  activeOrderId: string | null;
+  activeOrderCode: string | null;
+}
+
+export interface MapOrder {
+  id: string;
+  code: string;
+  status: string;
+  pickup: { lat: number; lng: number };
+  drop: { lat: number; lng: number };
+  pickupAddress: string;
+  dropAddress: string;
+  riderId: string | null;
+  riderName: string | null;
+  customerName: string | null;
+  placedAt: string;
+  statusSince: string;
+  distanceMeters: number;
+  durationSeconds: number;
+}
+
+export interface LiveMapSnapshot {
+  /** Server clock, so ages are computed without trusting the browser's. */
+  now: string;
+  staleAfterSeconds: number;
+  riders: MapRider[];
+  orders: MapOrder[];
 }

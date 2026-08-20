@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AdminProvider } from "@/components/AdminProvider";
 import { AttentionProvider, BannerStrip } from "@/components/Banner";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PanelFooter } from "@/components/PanelFooter";
@@ -95,6 +96,11 @@ export default function PanelLayout({
     // reaches them. Previously each page owned its own success and error
     // rendering, and anything that resolved after unmount was lost.
     <ToastProvider>
+    {/* Who is signed in, readable from any page rather than only here. Pages
+        that need to show one thing to an owner and another to support had no
+        way to ask, which is how the company's PAN ended up on a page every
+        support account could open. */}
+    <AdminProvider admin={admin}>
     {/* One health check for the whole shell. The banner strip and the footer's
         status light are the same question asked twice, and two polls of two
         role-gated endpoints could disagree with each other on screen. */}
@@ -140,6 +146,7 @@ export default function PanelLayout({
       </div>
     </div>
     </AttentionProvider>
+    </AdminProvider>
     </ToastProvider>
   );
 }

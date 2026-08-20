@@ -31,6 +31,23 @@ export interface SiteLink {
 
 export const SITE_LINK_GROUPS: { label: string; links: SiteLink[] }[] = [
   {
+    label: "Ask",
+    links: [
+      {
+        href: "/wuda",
+        mark: "WU",
+        label: "Ask WUDA",
+        blurb: "The assistant. Ask anything about the business or this panel, however you phrase it.",
+      },
+      {
+        href: "/faq",
+        mark: "FQ",
+        label: "Questions and answers",
+        blurb: "The whole knowledge base, searchable and filterable, for when you do not know what to ask.",
+      },
+    ],
+  },
+  {
     label: "Help and support",
     links: [
       {
@@ -111,10 +128,14 @@ export function allSiteLinks(): SiteLink[] {
  * having decided to go looking, and the site map holds the rest.
  */
 export const FOOTER_PRIMARY: readonly string[] = [
-  "/help",
+  // WUDA leads. It is the only one of these that answers a question you have
+  // not already worked out how to look up, which makes it the right first stop
+  // for the person who does not know where to start — and the footer is where
+  // that person is looking.
+  "/wuda",
+  "/faq",
   "/support",
   "/privacy",
-  "/legal",
 ];
 
 /**

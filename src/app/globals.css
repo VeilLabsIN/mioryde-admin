@@ -40,6 +40,26 @@
 }
 
 @theme {
+  /* ── Corner radius ───────────────────────────────────────────────────────
+     Three steps, from the design spec: 4px on inputs, 8px as standard, 16px
+     on the large cards that carry a whole section.
+
+     These live alongside `chamfer`, they do not replace it. The angular cut
+     corner is the brand's shape and is carried over from mioryde.com — it
+     stays on the moments that are *about* the brand: the logo mark, the
+     primary button, status pills. Everyday containers get the radius, because
+     a table row with a notched corner is a novelty the eye has to parse
+     several hundred times a shift.
+
+     Two shape languages only work if the rule for choosing is boring. It is:
+     chamfer if it is branding, radius if it is furniture.
+     ─────────────────────────────────────────────────────────────────────── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+
   /* Motion. One scale, so nothing in the app invents its own timing. */
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -160,6 +180,8 @@
 
   --glow: rgb(245 179 1 / 0.07);
   --grain-opacity: 0.035;
+  /* Barely there. At 0.05 it is texture; at 0.12 it is graph paper. */
+  --dot-color: rgb(90 74 40 / 0.055);
   color-scheme: light;
 }
 
@@ -207,6 +229,8 @@
 
   --glow: rgb(224 175 104 / 0.06);
   --grain-opacity: 0.02;
+  /* Off in tokyo — dots on a dark ground read as dust. */
+  --dot-color: transparent;
   color-scheme: dark;
 }
 
@@ -261,6 +285,7 @@
      the user's OS colour rather than staying gold. */
   --glow: color-mix(in oklab, var(--accent) 6%, transparent);
   --grain-opacity: light-dark(0.035, 0.02);
+  --dot-color: light-dark(rgb(90 74 40 / 0.055), transparent);
 }
 
 /* Expose the tokens to Tailwind so `bg-surface`, `text-fg-muted` etc. work. */
@@ -368,9 +393,30 @@
     inset: 0;
     z-index: -2;
     pointer-events: none;
-    background:
+    /* Layers set in the rule below, which adds the dot grid on top. */
+  }
+
+  /*
+   * Dot grid — light theme only.
+   *
+   * The spec asks for a faint dot grid in light and noise in night, and the
+   * reason the two differ is what each ground needs. A warm off-white is flat
+   * and wants structure; a near-black already has depth from the accent glow
+   * and wants only enough grain to stop it banding.
+   *
+   * Drawn with a radial-gradient rather than an SVG or an image: one paint,
+   * no request, and it tiles natively at 24px. Sits above the ambient glow and
+   * below the grain, all three fixed so scrolling repaints none of them.
+   *
+   * Hidden outright in tokyo. A dot grid over a dark ground reads as dust on
+   * the screen, which people try to wipe off.
+   */
+  body::before {
+    background-image:
       radial-gradient(60rem 40rem at 12% -8%, var(--glow), transparent 62%),
-      radial-gradient(48rem 34rem at 92% 108%, var(--glow), transparent 60%);
+      radial-gradient(48rem 34rem at 92% 108%, var(--glow), transparent 60%),
+      radial-gradient(circle at 1px 1px, var(--dot-color) 1px, transparent 0);
+    background-size: auto, auto, 24px 24px;
   }
 
   /*
@@ -495,6 +541,90 @@
   animation: slide-in var(--dur-base) var(--ease-out-quint) both;
 }
 
+/* ── Sign-in scene ──────────────────────────────────────────────────
+   Used on one page, so it lives here rather than in the shared scale above.
+
+   Everything animates `transform`, `opacity` or `stroke-dashoffset` — all
+   composited or cheap. The sign-in page is the first thing that paints on a
+   cold load, often on the panel's oldest machine, and an animated background
+   that costs layout is a slow first impression rather than a good one.
+
+   Every one of these is switched off under `prefers-reduced-motion` at the
+   bottom of this file's motion block; the scene is designed to be legible
+   standing still.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* The delivery route drawing itself, over and over. */
+@keyframes route-draw {
+  0%   { stroke-dashoffset: var(--route-length); }
+  55%  { stroke-dashoffset: 0; }
+  85%  { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+/* The vehicle running the route. Driven by `offset-distance`, so the marker
+   follows the same path data the line is drawn from and the two cannot drift
+   apart the way two hand-tuned keyframe tracks would. */
+@keyframes route-run {
+  0%,  8%  { offset-distance: 0%;   opacity: 0; }
+  14%      { opacity: 1; }
+  60%      { offset-distance: 100%; opacity: 1; }
+  72%, 100% { offset-distance: 100%; opacity: 0; }
+}
+
+/* Ambient light behind the scene. Two blobs on different periods so the
+   composite never visibly repeats. */
+@keyframes drift-a {
+  0%,100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%     { transform: translate3d(6%, -4%, 0) scale(1.12); }
+}
+@keyframes drift-b {
+  0%,100% { transform: translate3d(0, 0, 0) scale(1.08); }
+  50%     { transform: translate3d(-5%, 5%, 0) scale(1); }
+}
+
+/* A pin registering a stop. */
+@keyframes pin-drop {
+  0%   { transform: translate3d(0, -10px, 0) scale(0.8); opacity: 0; }
+  60%  { transform: translate3d(0, 0, 0) scale(1.06); opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+
+.scene-orb-a { animation: drift-a 18s ease-in-out infinite; }
+.scene-orb-b { animation: drift-b 24s ease-in-out infinite; }
+.scene-route { animation: route-draw 7s var(--ease-out-quint) infinite; }
+.scene-vehicle { animation: route-run 7s var(--ease-out-quint) infinite; }
+.scene-pin { animation: pin-drop var(--dur-slow) var(--ease-spring) both; }
+
+/* ── Night mode arrival ─────────────────────────────────────────────────
+   Plays over the panel without replacing it. Deliberately *not* a reload:
+   an operator may be halfway through a cancellation reason or a filtered
+   queue, and losing that to a theme change would be an odd way to be charming.
+
+   The overlay is `pointer-events: none` throughout, so a click during the
+   dissolve reaches whatever is underneath rather than being swallowed.
+   ──────────────────────────────────────────────────────────────────────── */
+@keyframes dusk-veil {
+  0%   { opacity: 0; }
+  18%  { opacity: 1; }
+  72%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes dusk-rise {
+  0%   { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.94); }
+  30%  { opacity: 1; transform: none; }
+  70%  { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translate3d(0, -8px, 0); }
+}
+@keyframes moon-sweep {
+  0%   { transform: rotate(-18deg) scale(0.9); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+.dusk-veil { animation: dusk-veil 2200ms var(--ease-out-quint) both; }
+.dusk-rise { animation: dusk-rise 2200ms var(--ease-out-quint) both; }
+.dusk-moon { animation: moon-sweep 2200ms var(--ease-out-quint) both; }
+
 /* Staggered list entrance. Capped at 8 so a 500-row table does not schedule
    500 delayed animations — beyond that everything appears together. */
 .stagger > * { animation: rise var(--dur-slow) var(--ease-out-quint) both; }
@@ -524,6 +654,34 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /*
+   * The sign-in scene stops entirely rather than slowing down. A drifting
+   * background is exactly the kind of ambient movement this query exists to
+   * remove, and the composition reads fine static — the route is drawn, the
+   * pins are placed, nothing is mid-transit.
+   */
+  /*
+   * The night-mode flourish does not play at all under reduced motion. It is
+   * pure decoration — the theme still changes instantly, which is the part
+   * that was actually asked for.
+   */
+  .dusk-veil,
+  .dusk-rise,
+  .dusk-moon {
+    animation: none !important;
+    opacity: 0 !important;
+  }
+
+  .scene-orb-a,
+  .scene-orb-b,
+  .scene-route,
+  .scene-vehicle,
+  .scene-pin {
+    animation: none !important;
+  }
+  .scene-route { stroke-dashoffset: 0 !important; opacity: 1 !important; }
+  .scene-vehicle { offset-distance: 62% !important; opacity: 1 !important; }
+
   html { scroll-behavior: auto; }
   *,
   ::before,

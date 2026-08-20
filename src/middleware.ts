@@ -46,6 +46,31 @@ export function middleware(request: NextRequest) {
     apiOrigin = "";
   }
 
+  /**
+   * The basemap's tile host, derived from the configured tile URL.
+   *
+   * Derived rather than hard-coded because the tile provider is configuration:
+   * OpenStreetMap's public server is right for development and wrong for a
+   * dispatch desk refreshing all day, so production points this somewhere
+   * else. Pinning the host here would mean changing the provider silently
+   * produced a blank map with only a console error to explain it — which is
+   * exactly what happened the first time this map was loaded, before this
+   * existed.
+   *
+   * The URL carries `{z}/{x}/{y}` placeholders that `new URL` parses happily,
+   * since only the origin is wanted. An unparseable value yields an empty
+   * string and the policy simply stays as strict as it was.
+   */
+  let tileOrigin = "";
+  try {
+    tileOrigin = new URL(
+      process.env["NEXT_PUBLIC_MAP_TILES_URL"] ??
+        "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    ).origin;
+  } catch {
+    tileOrigin = "";
+  }
+
   const csp = [
     "default-src 'self'",
     // 'unsafe-inline' is here reluctantly, and it is the weakest line in this
@@ -58,7 +83,10 @@ export function middleware(request: NextRequest) {
     // Tailwind injects styles inline. Nonces do not help here — the framework
     // emits style attributes, not one script tag we can mark.
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    // The tile host is the one external image source. Everything else stays
+    // first-party: an operations panel has no reason to load a picture from
+    // somewhere nobody chose.
+    `img-src 'self' data: blob:${tileOrigin ? ` ${tileOrigin}` : ""}`,
     "font-src 'self' data:",
     // The API **origin**, not the full URL.
     //

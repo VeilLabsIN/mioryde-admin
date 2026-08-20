@@ -103,6 +103,8 @@ const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   // starts empty. Support arriving at "Waiting for activity" instead of their
   // work queue is a worse first screen than the one they came for.
   ["/live", "orders.view"],
+  // Same right as the board it draws.
+  ["/map", "orders.view"],
   ["/customers", "customers.view"],
   ["/riders", "riders.view"],
   // Verification is the same job as reviewing a partner, so it rides on the
@@ -127,11 +129,17 @@ const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   ["/audit", "audit.view"],
   ["/access", "access.manage"],
   // `/security` is deliberately absent, along with `/help`, `/legal`,
-  // `/support`, `/about` and `/privacy`. Unlisted paths are open to every
-  // role: changing your own password is the one action an account must never
-  // lose — including an account whose role was narrowed to nothing — and the
-  // rest are things a person is entitled to read about a tool they are being
-  // asked to use.
+  // `/support`, `/about`, `/privacy`, `/faq` and `/wuda`. Unlisted paths are
+  // open to every role: changing your own password is the one action an
+  // account must never lose — including an account whose role was narrowed to
+  // nothing — and the rest are things a person is entitled to read about a
+  // tool they are being asked to use.
+  //
+  // `/faq` and `/wuda` are open on purpose and are not a gap. A support
+  // operator asking "why can this partner not go on duty" is the case the
+  // assistant exists for, and putting it behind a capability would leave the
+  // newest staff with nowhere to ask. What they can see is narrowed inside the
+  // answer instead: every knowledge read filters by audience in SQL.
   // Last, because every path starts with "/".
   ["/", "metrics.view"],
 ];

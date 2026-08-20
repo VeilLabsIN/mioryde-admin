@@ -82,9 +82,12 @@ export function Input({
       // making the text field the one control in the panel that lost its
       // keyboard focus ring, keeping only a border colour change. The border
       // shift stays as reinforcement; the outline does the actual work.
-      className={`motion-change h-10 w-full border border-edge bg-panel px-3 font-sans
-                  text-body text-fg transition-colors placeholder:text-fg-faint
-                  focus:border-accent ${className}`}
+      // 4px, the smallest step on the radius scale. Inputs get less than
+      // cards on purpose: a text field is a slot to type into, and the more
+      // its corners round the more it drifts toward looking like a button.
+      className={`motion-change h-10 w-full rounded-xs border border-edge bg-panel px-3
+                  font-sans text-body text-fg transition-colors
+                  placeholder:text-fg-faint focus:border-accent ${className}`}
       {...props}
     />
   );
@@ -116,17 +119,38 @@ const CARD_TONES: Record<CardTone, string> = {
   ok: "border-line border-l-2 border-l-ok bg-surface",
 };
 
-/** Panel with the brand's bottom-right corner cut. */
+/**
+ * The panel that holds almost everything.
+ *
+ * Rounded, not notched. This carried the brand's cut bottom-right corner until
+ * the design spec set a radius scale, and the notch lost the argument on
+ * volume: `Card` is the most repeated shape in the product — several hundred
+ * instances in a single shift — and a corner that asks to be noticed that
+ * often stops being a signature and becomes a tic.
+ *
+ * The chamfer is not gone; it moved to where it earns its place. The logo
+ * mark, the primary button, the status pills and the sliding theme marker all
+ * keep it, and because they are now the *only* things that carry it, it reads
+ * as deliberate again.
+ *
+ * `--radius-lg` (16px) for a card that owns a whole section, `--radius` (8px)
+ * everywhere else, set by the caller through `size`.
+ */
 export function Card({
   className = "",
   tone = "default",
+  size = "md",
   ...props
-}: ComponentPropsWithoutRef<"div"> & { tone?: CardTone }) {
+}: ComponentPropsWithoutRef<"div"> & {
+  tone?: CardTone;
+  /** `lg` for a card that carries a whole section of a page. */
+  size?: "md" | "lg";
+}) {
   return (
     <div
-      className={`corner-cut border ${CARD_TONES[tone]} ${
-        tone === "inset" ? "" : "[box-shadow:var(--shadow-panel)]"
-      } ${className}`}
+      className={`border ${size === "lg" ? "rounded-lg" : "rounded-md"} ${
+        CARD_TONES[tone]
+      } ${tone === "inset" ? "" : "[box-shadow:var(--shadow-panel)]"} ${className}`}
       {...props}
     />
   );

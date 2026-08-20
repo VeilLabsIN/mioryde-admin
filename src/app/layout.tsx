@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Poppins } from "next/font/google";
+import { NightModeArrival } from "@/components/NightModeArrival";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { themeBootScript } from "@/lib/theme";
 import "./globals.css";
@@ -53,7 +54,13 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body className={`${poppins.variable} ${jetbrains.variable}`}>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          {/* Outside the panel shell on purpose: the flourish should play over
+              the sign-in page too, and it must survive a route change part-way
+              through its two seconds. */}
+          <NightModeArrival />
+        </ThemeProvider>
       </body>
     </html>
   );

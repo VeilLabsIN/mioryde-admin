@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useAdmin } from "@/components/AdminProvider";
 import { Card, Fact, PageHeader, Point, SectionLabel } from "@/components/ui";
+import { can } from "@/lib/permissions";
 
 /**
  * The legal and policy hub.
@@ -21,6 +23,8 @@ import { Card, Fact, PageHeader, Point, SectionLabel } from "@/components/ui";
  * everyone and is reached from the ? menu in the top bar.
  */
 export default function LegalPage() {
+  const admin = useAdmin();
+
   return (
     <div className="mx-auto max-w-[900px] space-y-5">
       <PageHeader
@@ -28,20 +32,49 @@ export default function LegalPage() {
         subtitle="The operating entity, your obligations when using this panel, and what is still outstanding."
       />
 
-      <Card tone="raised" className="p-5">
-        <SectionLabel>Operating entity</SectionLabel>
-        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-          <Fact label="Legal name" value="MIORIGIN PRIVATE LIMITED" />
-          <Fact label="CIN" value="U49224PB2026PTC066792" mono />
-          <Fact label="PAN" value="AAUCM3341F" mono />
-          <Fact label="Udyam" value="UDYAM-PB-12-0279716" mono />
-          <Fact label="Incorporated" value="6 January 2026" />
-          <Fact
-            label="Registered office"
-            value="#7125A, St No 8, Samrala Chowk, Guru Arjan Dev Nagar, Millerganj, Ludhiana, Punjab 141003"
-          />
-        </dl>
-      </Card>
+      {/*
+        The company's PAN used to be here, beside the CIN, visible to every
+        support account that opened the page. It has been removed outright
+        rather than hidden: a PAN is a confidential identifier used to
+        authenticate the company to banks and the tax department, it is never
+        needed to operate a delivery, and no amount of role-gating justifies
+        shipping it to a browser that has no use for it.
+
+        What is left is public or near-public and stays:
+
+          - **CIN** is on the MCA register. Companies are required to print it
+            on letterheads and invoices, so anyone can look it up from the
+            company name. Hiding it would be theatre.
+          - **Udyam** appears on MSME invoices, so every customer already has
+            it.
+          - **Registered office** is a matter of public record.
+
+        Gated to `access.manage` anyway — owner only. Not because any single
+        line is dangerous, but because the block as a whole is company
+        administration rather than delivery operations, and support has no
+        errand here. The narrower the audience for a page like this, the fewer
+        chances there are for the next value added to it to be another PAN.
+      */}
+      {can(admin?.role, "access.manage") ? (
+        <Card tone="raised" className="p-5">
+          <SectionLabel>Operating entity</SectionLabel>
+          <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+            <Fact label="Legal name" value="MIORIGIN PRIVATE LIMITED" />
+            <Fact label="CIN" value="U49224PB2026PTC066792" mono />
+            <Fact label="Udyam" value="UDYAM-PB-12-0279716" mono />
+            <Fact label="Incorporated" value="6 January 2026" />
+            <Fact
+              label="Registered office"
+              value="#7125A, St No 8, Samrala Chowk, Guru Arjan Dev Nagar, Millerganj, Ludhiana, Punjab 141003"
+            />
+          </dl>
+          <p className="mt-3 text-meta text-fg-faint">
+            Registration identifiers only. Tax and banking credentials — the
+            company PAN, bank account numbers, signing keys — are deliberately
+            not held anywhere in this panel.
+          </p>
+        </Card>
+      ) : null}
 
       <Card tone="warning" className="p-5">
         <SectionLabel>Not yet in place</SectionLabel>

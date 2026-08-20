@@ -45,6 +45,10 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/", label: "Overview", mark: "OV", needs: ["metrics.view"] },
       { href: "/live", label: "Live", mark: "LV", needs: ["orders.view"] },
+      // The same deliveries as Live, drawn spatially. Both exist because they
+      // answer different questions: the board is for triage "what needs me
+      // next", the map is for geography "who is near this pickup".
+      { href: "/map", label: "Map", mark: "MP", needs: ["orders.view"] },
       { href: "/orders", label: "Deliveries", mark: "DL", needs: ["orders.view"] },
     ],
   },
