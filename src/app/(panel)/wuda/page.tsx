@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AnswerText } from "@/components/AnswerText";
 import { useAdmin } from "@/components/AdminProvider";
-import { Button, Card, PageHeader, SectionLabel, Spinner } from "@/components/ui";
+import { Button, Card, SectionLabel } from "@/components/ui";
+import { WudaMark } from "@/components/wuda/WudaMark";
 import { type KnowledgeAudience, type WudaAnswer, api } from "@/lib/api";
 import { can } from "@/lib/permissions";
+import styles from "./wuda.module.css";
 
 /**
  * WUDA.
@@ -118,21 +120,46 @@ export default function WudaPage() {
   }
 
   return (
-    <div className="mx-auto flex h-full max-w-[900px] flex-col gap-5">
-      <PageHeader
-        title="WUDA"
-        subtitle="Ask anything about how Mioryde works or how to use this panel. Answers come from a reviewed knowledge base, and every one shows its sources."
-        actions={
+    // `font-wuda` is set once, here, and inherited by everything below it.
+    // This is the only subtree in the panel that uses it — see app/layout.tsx.
+    <div className="mx-auto flex h-full max-w-[900px] flex-col gap-5 font-wuda">
+      {/* The identity block, deliberately not a PageHeader.
+
+          Every other page in the panel announces a section of the business and
+          shares one heading treatment, which is right: they are furniture and
+          they should not each look invented. This one announces something you
+          address rather than something you read, and it is the only page where
+          the subject of the page is also the thing answering you. Same
+          information as a PageHeader would carry, given a face. */}
+      <header className={`${styles.hero} -mx-2 px-2 pb-5 pt-1`}>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-4">
+          <WudaMark size={72} thinking={busy} className="shrink-0" />
+
+          <div className="min-w-0 flex-1">
+            <h1 className={`${styles.wordmark} text-[38px] font-bold leading-none`}>
+              WUDA
+            </h1>
+            <p className="mt-1 font-mono text-micro uppercase text-fg-muted">
+              Mioryde&rsquo;s in-house assistant
+            </p>
+            <p className="mt-2.5 max-w-[52ch] text-body text-fg-mid">
+              Ask anything about how Mioryde works or how to use this panel.
+              Answers come from a reviewed knowledge base, and every one shows
+              its sources.
+            </p>
+          </div>
+
           <Link
             href="/faq"
-            className="motion-change border border-edge px-3 py-2 font-mono text-micro
-                       uppercase text-fg-mid transition-colors hover:border-accent
-                       hover:text-accent"
+            className="motion-change shrink-0 self-start rounded-xs border border-edge px-3 py-2
+                       font-mono text-micro uppercase text-fg-mid transition-colors
+                       hover:border-accent hover:text-accent"
           >
             Browse all answers
           </Link>
-        }
-      />
+        </div>
+        <hr className={`${styles.heroRule} mt-5`} />
+      </header>
 
       {turns.length === 0 && (
         <Card tone="raised" className="p-5">
@@ -143,8 +170,8 @@ export default function WudaPage() {
                 key={s}
                 type="button"
                 onClick={() => void ask(s)}
-                className="motion-change group border border-line p-3 text-left
-                           transition-colors hover:border-accent"
+                className={`${styles.starter} group rounded-md border border-line
+                            bg-surface p-3 text-left`}
               >
                 <span className="block text-body text-fg-soft group-hover:text-accent">
                   {s}
@@ -162,7 +189,7 @@ export default function WudaPage() {
 
       <div className="space-y-4">
         {turns.map((turn, i) => (
-          <div key={i} className="motion-enter space-y-2.5">
+          <div key={i} className={`${styles.turn} space-y-2.5`}>
             {/* The question, offset right and quieter than the answer. A
                 transcript where both sides look the same is one you have to
                 read to navigate. */}
@@ -176,16 +203,17 @@ export default function WudaPage() {
             </div>
 
             {turn.answer === null ? (
+              // No spinner any more. The mark is the indicator, and it sits in
+              // exactly the spot the answer will occupy — so the eye is
+              // already in the right place when the reply lands, instead of
+              // being pulled to a control that then vanishes.
               <div className="flex items-center gap-2.5">
-                <WudaMark />
-                <span className="flex items-center gap-2 text-meta text-fg-muted">
-                  <Spinner className="size-3.5" />
-                  Looking it up…
-                </span>
+                <WudaMark size={32} thinking className="shrink-0" />
+                <span className="text-meta text-fg-muted">Looking it up…</span>
               </div>
             ) : (
               <div className="flex gap-2.5">
-                <WudaMark />
+                <WudaMark size={32} className="mt-0.5 shrink-0" />
 
                 <Card
                   tone={turn.answer.mode === "unanswered" ? "warning" : "default"}
@@ -258,20 +286,29 @@ export default function WudaPage() {
           e.preventDefault();
           void ask(input);
         }}
-        className="sticky bottom-0 flex gap-2 border-t border-line bg-bg pt-3"
+        className="sticky bottom-0 z-10 bg-bg pt-3"
       >
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask WUDA anything about Mioryde…"
-          aria-label="Your question"
-          className="h-11 min-w-0 flex-1 border border-edge bg-surface rounded-xs px-3 text-body
-                     text-fg outline-none transition-colors placeholder:text-fg-faint
-                     focus:border-accent"
-        />
-        <Button type="submit" loading={busy} className="shrink-0">
-          Ask
-        </Button>
+        {/* One bordered field holding the mark, the input and the button,
+            rather than an input sitting next to a button. It reads as the
+            thing you speak into, and the mark inside it is the same object as
+            the one in the header — the assistant, waiting for you. */}
+        <div
+          className={`${styles.composer} flex items-center gap-2 rounded-md border
+                      border-edge bg-surface py-1.5 pl-2.5 pr-1.5`}
+        >
+          <WudaMark size={26} thinking={busy} className="shrink-0" />
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask WUDA anything about Mioryde…"
+            aria-label="Your question"
+            className="h-9 min-w-0 flex-1 bg-transparent text-body text-fg outline-none
+                       placeholder:text-fg-faint"
+          />
+          <Button type="submit" loading={busy} className="shrink-0">
+            Ask
+          </Button>
+        </div>
       </form>
 
       {can(admin?.role, "access.manage") && <TeachWuda />}
@@ -288,19 +325,6 @@ export default function WudaPage() {
  * first careless note company-wide. Neither is a decision the form should make
  * on somebody's behalf.
  */
-/** WUDA's mark, so the answer side of the transcript is scannable at a glance. */
-function WudaMark() {
-  return (
-    <span
-      aria-hidden
-      className="grad-accent chamfer-sm mt-0.5 grid size-7 shrink-0 place-items-center
-                 font-mono text-micro font-bold text-on-accent-bright"
-    >
-      W
-    </span>
-  );
-}
-
 function TeachWuda() {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");

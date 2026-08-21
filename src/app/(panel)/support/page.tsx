@@ -182,18 +182,13 @@ export default function SupportPage() {
             }
           />
           <Fact label="Registered phone" value="+91 97794 80280" mono />
+          {/* See the note on the About page: no URL has been supplied for
+              Technobyte Developers, and a dead link here is worse than a name,
+              because this row is what somebody reads when the panel is the
+              thing that is broken. */}
           <Fact
             label="The panel itself — bugs and outages"
-            value={
-              <a
-                href="https://veillabs.in"
-                target="_blank"
-                rel="noreferrer noopener"
-                className="hover:text-accent"
-              >
-                VeilLabs — veillabs.in
-              </a>
-            }
+            value="Technobyte Developers"
           />
           <Fact label="Your own account and password" value={<Link href="/security" className="hover:text-accent">Account security</Link>} />
         </dl>

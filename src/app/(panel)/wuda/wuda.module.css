@@ -1,0 +1,185 @@
+/*
+ * The WUDA page's own surface.
+ *
+ * ## How far this is allowed to go
+ *
+ * WUDA is the one page in the panel that is not a record of the company's own
+ * data — it is something you talk to — so it gets an identity. But it is
+ * reached from the same sidebar, in the same shell, by the same person doing
+ * the same shift, and a page that looked like a different product would read
+ * as a page that belongs to a different product.
+ *
+ * The rule used here: **every colour comes from the panel's tokens, and the
+ * only things WUDA owns are shape, light and motion.** Nothing below hardcodes
+ * a hex. Flip the theme and this page flips with everything else, which is the
+ * property that keeps it feeling native rather than bolted on.
+ */
+
+/* ── The hero's atmosphere ────────────────────────────────────────────────
+   Two soft accent washes behind the mark, drifting against each other. It is
+   the only place in the panel with an ambient effect, which is the point: it
+   marks the boundary between "here is a table of your deliveries" and "here
+   is the thing you ask questions of".
+   ─────────────────────────────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.hero::before,
+.hero::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  /* color-mix against the accent rather than a fixed rgba, so the wash keeps
+     the right hue in tokyo, where the whole accent ramp changes. */
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--accent-bright) 22%, transparent) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.hero::before {
+  inset-block-start: -40%;
+  inset-inline-start: -10%;
+  inline-size: 420px;
+  block-size: 420px;
+  animation: wuda-drift-a 18s ease-in-out infinite;
+}
+
+.hero::after {
+  inset-block-start: -30%;
+  inset-inline-end: 4%;
+  inline-size: 320px;
+  block-size: 320px;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--accent-alt) 18%, transparent) 0%,
+    transparent 70%
+  );
+  animation: wuda-drift-b 22s ease-in-out infinite;
+}
+
+/* The hairline under the hero. Fades out at both ends rather than stopping
+   dead, so the identity block dissolves into the page instead of being boxed
+   off from it. */
+.heroRule {
+  block-size: 1px;
+  border: 0;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--edge-strong) 18%,
+    var(--edge-strong) 82%,
+    transparent
+  );
+}
+
+@keyframes wuda-drift-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(38px, 22px, 0) scale(1.12);
+  }
+}
+
+@keyframes wuda-drift-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.08);
+  }
+  50% {
+    transform: translate3d(-32px, 26px, 0) scale(1);
+  }
+}
+
+/* ── The wordmark ─────────────────────────────────────────────────────────
+   Tight tracking and a gradient fill, which is the one piece of pure styling
+   on the page that exists only to say "this is a name, not a heading".
+   ─────────────────────────────────────────────────────────────────────── */
+.wordmark {
+  letter-spacing: -0.02em;
+  background: linear-gradient(
+    135deg,
+    var(--accent-bright),
+    var(--accent-bright-deep)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Falls back to a readable colour where background-clip is unsupported.
+   Without it the name renders invisible rather than merely unstyled, which is
+   the worst possible failure mode for the one word that names the page. */
+@supports not ((background-clip: text) or (-webkit-background-clip: text)) {
+  .wordmark {
+    background: none;
+    color: var(--accent);
+  }
+}
+
+/* ── Starters ─────────────────────────────────────────────────────────────
+   They lift toward the reader on hover. Slight, and only on the axis that
+   suggests depth, so it belongs to the same world as the mark above it.
+   ─────────────────────────────────────────────────────────────────────── */
+.starter {
+  transition:
+    transform var(--dur-base) var(--ease-out-quint),
+    border-color var(--dur-base) ease,
+    box-shadow var(--dur-base) ease;
+}
+
+.starter:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px -8px color-mix(in oklab, var(--accent) 55%, transparent);
+}
+
+/* ── The composer ─────────────────────────────────────────────────────────
+   A focus ring in the accent rather than the browser default, matched to the
+   mark's halo so the two read as the same light source.
+   ─────────────────────────────────────────────────────────────────────── */
+.composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent);
+}
+
+.composer {
+  transition:
+    border-color var(--dur-base) ease,
+    box-shadow var(--dur-base) ease;
+}
+
+/* Each answer arrives rather than appearing. Short, because it plays on every
+   single reply and anything longer becomes a wait. */
+.turn {
+  animation: wuda-arrive var(--dur-slow) var(--ease-out-quint) both;
+}
+
+@keyframes wuda-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero::before,
+  .hero::after,
+  .turn {
+    animation: none;
+  }
+  .starter:hover {
+    transform: none;
+  }
+}

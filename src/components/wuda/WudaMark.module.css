@@ -1,0 +1,176 @@
+/*
+ * WUDA's mark, in motion.
+ *
+ * A CSS module rather than Tailwind utilities because none of this is a
+ * utility: it is one bespoke object with six co-ordinated keyframes, and
+ * expressing that as a class soup would make it unreadable and unreusable.
+ * Everything else on the page stays on the design system.
+ *
+ * ## The illusion
+ *
+ * Three isometric plates lit from the top-left, stacked with a gap. Depth
+ * comes from three things doing their job at once — the faces are shaded as
+ * separate surfaces, the plates bob with staggered delays so they part and
+ * close like real objects at different depths, and the shadow beneath tightens
+ * as the stack rises. Remove any one and it flattens into a logo.
+ *
+ * ## Why it animates at all
+ *
+ * The idle float is what makes it read as a thing rather than a picture, and
+ * the thinking state is load-bearing: it is the only signal on the page that
+ * WUDA is working, and it appears in the same place the answer will. A
+ * spinner elsewhere would move the eye away from where the reply lands.
+ */
+
+.mark {
+  display: block;
+  overflow: visible;
+}
+
+/* The whole stack drifts. Slow and small — a mark that bobs enough to notice
+   is a mark you keep noticing, and this one sits on screen for a whole shift. */
+.stack {
+  animation: wuda-float 5.2s var(--ease-out-quint) infinite;
+  transform-origin: 60px 60px;
+}
+
+/* Staggered, so the gaps between the plates open and close.
+   Identical timing on all three would move the stack as one rigid block. */
+.plateTop {
+  animation: wuda-plate 5.2s ease-in-out infinite;
+}
+.plateMid {
+  animation: wuda-plate 5.2s ease-in-out infinite;
+  animation-delay: -0.42s;
+}
+.plateLow {
+  animation: wuda-plate 5.2s ease-in-out infinite;
+  animation-delay: -0.84s;
+}
+
+/* Tightens as the stack lifts, which is what sells the lift. */
+.shadow {
+  animation: wuda-shadow 5.2s var(--ease-out-quint) infinite;
+  transform-origin: 60px 104px;
+}
+
+/* The spark orbits the core: the one element that is unmistakably not a static
+   logo, and the thing that speeds up while an answer is being fetched. */
+.orbit {
+  animation: wuda-orbit 6.5s linear infinite;
+  transform-origin: 60px 60px;
+}
+
+/* Idle: barely there. It exists so the transition into thinking is a change in
+   intensity rather than something appearing from nothing. */
+.halo {
+  animation: wuda-halo 5.2s ease-in-out infinite;
+  transform-origin: 60px 60px;
+}
+
+/* ── Thinking ─────────────────────────────────────────────────────────────
+   Not a different animation, the same ones run harder. Swapping to a separate
+   motion would read as the mark being replaced rather than as WUDA reacting.
+   ──────────────────────────────────────────────────────────────────────── */
+.thinking .stack {
+  animation-duration: 1.6s;
+}
+.thinking .plateTop,
+.thinking .plateMid,
+.thinking .plateLow {
+  animation-duration: 1.6s;
+}
+.thinking .plateMid {
+  animation-delay: -0.13s;
+}
+.thinking .plateLow {
+  animation-delay: -0.26s;
+}
+.thinking .shadow {
+  animation-duration: 1.6s;
+}
+.thinking .orbit {
+  animation-duration: 1.15s;
+}
+.thinking .halo {
+  animation-duration: 1.6s;
+}
+
+@keyframes wuda-float {
+  0%,
+  100% {
+    transform: translateY(2px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+/* Each plate's own small vertical travel, on top of the group's. */
+@keyframes wuda-plate {
+  0%,
+  100% {
+    transform: translateY(1.6px);
+  }
+  50% {
+    transform: translateY(-1.6px);
+  }
+}
+
+@keyframes wuda-shadow {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleX(0.84);
+    opacity: 0.32;
+  }
+}
+
+@keyframes wuda-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes wuda-halo {
+  0%,
+  100% {
+    opacity: 0.16;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(1.03);
+  }
+}
+
+/*
+ * Reduced motion stops the movement, not the mark.
+ *
+ * The thinking state still has to be legible to somebody who has asked for no
+ * animation, because it is the only indication their question was received.
+ * The halo therefore stays lit rather than pulsing — a state, not a motion.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .stack,
+  .plateTop,
+  .plateMid,
+  .plateLow,
+  .shadow,
+  .orbit,
+  .halo {
+    animation: none;
+  }
+  .halo {
+    opacity: 0.14;
+  }
+  .thinking .halo {
+    opacity: 0.34;
+  }
+}

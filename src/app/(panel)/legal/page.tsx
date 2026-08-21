@@ -156,7 +156,7 @@ export default function LegalPage() {
         <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
           <Fact label="Operator" value="mioryde86@gmail.com" />
           <Fact label="Registered phone" value="+91 97794 80280" mono />
-          <Fact label="Built by" value="VeilLabs — veillabs.in" />
+          <Fact label="Built by" value="Technobyte Developers" />
         </dl>
         <p className="mt-3 text-meta text-fg-faint">
           A grievance officer must be named publicly before launch. That has not

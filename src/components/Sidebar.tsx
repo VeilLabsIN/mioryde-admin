@@ -97,24 +97,15 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
                  transition-[width] duration-300 ease-[var(--ease-out-quint)]
                  w-[248px] data-[collapsed=true]:w-[72px]"
     >
-      {/* Brand */}
-      <div className="flex h-16 items-center gap-3 border-b border-line px-4">
-        <div className="grad-accent chamfer-sm grid size-8 shrink-0 place-items-center">
-          <span className="font-mono text-body font-bold text-on-accent-bright">M</span>
-        </div>
-        <div
-          className="min-w-0 overflow-hidden transition-opacity duration-200
-                     group-data-[collapsed=true]/rail:opacity-0"
-          aria-hidden={collapsed}
-        >
-          <p className="truncate font-sans text-body font-semibold leading-tight">
-            Mioryde
-          </p>
-          <p className="truncate font-mono text-micro uppercase text-fg-muted">
-            Operations
-          </p>
-        </div>
-      </div>
+      {/* No brand block here.
+
+          The rail used to open with the mark and "Mioryde / Operations",
+          directly beneath the identical pair in the top bar — two marks and
+          two wordmarks stacked in the same corner, which reads as a rendering
+          fault rather than as branding. The top bar owns it: it spans the full
+          width and cannot be collapsed away, which is what makes it furniture.
+          A rail that can shrink to 72px is the wrong place to keep the one
+          element that must always be legible. */}
 
       {/* Navigation */}
       {/* Labelled, so a screen reader announces it as the panel's navigation

@@ -37,6 +37,11 @@
 @theme inline {
   --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, "Cascadia Mono", monospace;
+
+  /* WUDA only. See the note in app/layout.tsx for why the assistant gets a
+     face of its own, and why nothing else in the panel may use this one. */
+  --font-wuda: var(--font-space-grotesk), var(--font-poppins), ui-sans-serif,
+    system-ui, sans-serif;
 }
 
 @theme {

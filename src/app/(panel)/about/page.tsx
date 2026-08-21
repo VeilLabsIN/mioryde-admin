@@ -96,19 +96,13 @@ export default function AboutPage() {
             mono
           />
           <Fact label="Operating entity" value="MIORIGIN PRIVATE LIMITED" />
-          <Fact
-            label="Built by"
-            value={
-              <a
-                href="https://veillabs.in"
-                target="_blank"
-                rel="noreferrer noopener"
-                className="hover:text-accent"
-              >
-                VeilLabs — veillabs.in
-              </a>
-            }
-          />
+          {/* Plain text, not a link. The builder changed to Technobyte
+              Developers and no public URL has been supplied for them; pointing
+              at the old one would be wrong and inventing a new one would be a
+              dead link on the page an operator opens to find out who to tell
+              about a broken panel. Make it an anchor once there is an address
+              to anchor to. */}
+          <Fact label="Built by" value="Technobyte Developers" />
         </dl>
         <p className="mt-3 text-meta text-fg-faint">
           Quote the version and the API host in any bug report — they are the
