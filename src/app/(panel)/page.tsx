@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAttention } from "@/components/Banner";
+import { Freshness } from "@/components/Freshness";
+import { LiveValue } from "@/components/LiveValue";
 import { Delta, Sparkline } from "@/components/Sparkline";
 import {
   Card,
@@ -54,6 +56,9 @@ export default function OverviewPage() {
   const [data, setData] = useState<DashboardSnapshot | null>(null);
   const [recent, setRecent] = useState<AdminOrder[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // When the figures last landed. The list below them is fetched once and
+  // deliberately not refreshed, so this describes the cards only.
+  const [countsAt, setCountsAt] = useState<number | null>(null);
   const { items: alerts } = useAttention();
 
   useEffect(() => {
@@ -64,6 +69,7 @@ export default function OverviewPage() {
         const next = await api.dashboard();
         if (!cancelled) {
           setData(next);
+          setCountsAt(Date.now());
           setError(null);
         }
       } catch (e) {
@@ -104,6 +110,7 @@ export default function OverviewPage() {
         <PageHeader
           title="Overview"
           subtitle="What is moving right now, and how today compares."
+          actions={<Freshness at={countsAt} />}
         />
       </div>
 
@@ -163,6 +170,7 @@ export default function OverviewPage() {
         <Kpi
           label="Revenue today"
           value={data ? formatMoney(data.revenueToday) : undefined}
+          watch={data?.revenueToday.minor}
           href="/analytics"
           hint="Delivered orders only"
           series={trend.map((t) => t.revenueMinor)}
@@ -227,6 +235,7 @@ export default function OverviewPage() {
 function Kpi({
   label,
   value,
+  watch,
   href,
   hint,
   series,
@@ -236,6 +245,13 @@ function Kpi({
 }: {
   label: string;
   value?: number | string;
+  /**
+   * What to watch for a change, when the displayed value is formatted.
+   *
+   * "₹1,240" is the same string for two amounts that differ by paise, so
+   * comparing the display would miss a change the underlying figure records.
+   */
+  watch?: number;
   href: string;
   hint: string;
   series: number[];
@@ -269,7 +285,7 @@ function Kpi({
               alarm ? "text-warn" : "text-fg"
             }`}
           >
-            {value}
+            <LiveValue value={watch ?? value}>{value}</LiveValue>
           </p>
         )}
 

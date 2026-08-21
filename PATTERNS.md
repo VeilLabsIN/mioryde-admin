@@ -637,7 +637,7 @@ toggles and quiet hours, plus an admin page. Low urgency until push actually
 works (Firebase is unconfigured), but it is on the roadmap and the shape is
 small.
 
-### D8 · Pricing is a read-only page over a writable endpoint
+### D8 · Pricing is a read-only page over a writable endpoint — *fixed*
 
 Confirmed: `pricing/page.tsx` calls `api.rateCards()` and contains **zero**
 buttons, click handlers or form submissions — it renders the fare table and
@@ -651,12 +651,78 @@ them does not. Fare changes are a SQL insert today.
 `GET /admin/zones` and `GET /admin/vehicle-types` have no write counterpart at
 all, so launching a new city is also a manual insert.
 
-### D9 · Export beyond one CSV
+**Fixed for rate cards.** `components/RateCardEditor.tsx`, reached from a Change
+action on every row and gated on `pricing.edit`. Three things worth knowing:
 
-`analytics/daily.csv` is the only export. The pattern is now established
-(BOM, `Content-Disposition`, `Access-Control-Expose-Headers`); apply it to
-payouts, collections, the audit log and the partner leaderboard, all of which
-are things somebody will be asked to produce for a spreadsheet.
+- **It publishes all six numbers at once**, matching the server, which
+  supersedes rather than edits. Saving a per-km rate on its own would leave the
+  live fare in a state nobody chose for the seconds in between.
+- **The preview is computed by the server**, through `FareCalculator` — the same
+  code that prices a customer's quote — via a new `POST /admin/rate-cards/preview`
+  that reads and writes nothing. Adding the fare up in the browser would be a
+  second implementation of the formula, and a preview that drifts is worse than
+  none, because it keeps looking authoritative. The old fare is shown beside the
+  new one for a sample trip: "₹98.65 → ₹87.32", not "this changes pricing".
+- **Rupees become paise as text**, never `Math.round(Number(x) * 100)` —
+  `lib/rupees.ts`, with tests pinning `1.15` and `8.7`, both of which a float
+  gets wrong.
+
+Also fixed while here: the server returned its one fare-ordering validation as a
+`NotFoundException`, so a base fare above the minimum answered 404 and sent the
+operator looking for a missing zone.
+
+Zones and vehicle types still have no write UI. `POST /admin/vehicle-types`
+exists and nothing in the panel calls it.
+
+### D9 · Export beyond one CSV — *fixed*
+
+`analytics/daily.csv` was the only export. The pattern it established (BOM,
+`Content-Disposition`, `Access-Control-Expose-Headers`) now lives in
+`common/csv.ts` and carries four more — payouts, collections, the audit log and
+the partner leaderboard — each filtered the same way the screen it was taken
+from is. `components/ExportButton.tsx` is the one caller-side implementation of
+the token fetch and the object-URL dance.
+
+Two things the shared helper adds that a table of dates and numbers never
+needed:
+
+- **Quoting.** A partner named `Kumar, R.` split into two columns and shifted
+  every column after it — silently, in a file whose purpose is to be summed by
+  somebody who was not there when it was produced.
+- **Formula neutralisation.** A cell beginning `=`, `+`, `-` or `@` is executed
+  by Excel when the file is opened, and a payout note is operator-supplied text.
+  A test caught the obvious over-correction: `-42.00` is a number, and prefixing
+  it turns a money column into text that sums to zero.
+
+The partner's phone number is **masked** in the payouts export, as it is
+everywhere else in the panel — an export leaves the building and records nothing
+about who read it. The masking happens in the query handler rather than in the
+export, so the two cannot disagree; see D11.
+
+### D11 · The payouts page printed unmasked partner phone numbers — *fixed*
+
+**Found while building D9.** Every other admin surface masks a phone and makes
+revealing one an audited action — `/riders` returns `maskPhone(...)` and
+`POST /admin/riders/:id/reveal-phone` writes an audit row. `GET /admin/payouts`
+returned `(r.phone_cc || r.phone)` in full and `payouts/page.tsx` rendered it
+beside the amount, so the one screen finance lives on was also the one screen
+where a partner's number could be read, copied and screenshotted without a
+trace.
+
+**Fixed in `list()`,** so the CSV export cannot un-mask it either — it now takes
+the already-masked value, because `maskPhone` is not idempotent: a second pass
+does not recognise the shape, fails closed, and blanks the column. The page uses
+the same `RevealPhone` control as `/riders`, `/live` and the partner detail page.
+
+**The reveal route now accepts `finance` as well as `ops`, and that is a
+tightening.** Finance already read every number at will; they now go through the
+audited door, or they could not do the job the masking interrupted. Support is
+still refused — verified live, 403 on both the reveal and the payouts list.
+
+`test/admin-phone-masking.test.ts` reads the source and fails if any admin list
+handler assigns a `phone` field that is not built by `maskPhone`. Confirmed to
+fail when the mask is removed, rather than being a test that asserts nothing —
+this is invisible to a typecheck, since the field is a string either way.
 
 ### D10 · Reconciliation
 

@@ -274,6 +274,35 @@ export const api = {
 
   rateCards: () => request<{ results: RateCard[] }>("/admin/rate-cards"),
   zones: () => request<{ results: Zone[] }>("/admin/zones"),
+  vehicleTypes: () =>
+    request<{ results: VehicleType[] }>("/admin/vehicle-types"),
+
+  /**
+   * Publishes a new rate card for a zone and vehicle.
+   *
+   * Supersedes rather than edits — the server closes the live card and inserts
+   * a new one — so past orders keep the price they were charged. Finance and
+   * owner only.
+   */
+  publishRateCard: (input: RateCardInput) =>
+    request<{ id: string }>("/admin/rate-cards", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  /**
+   * What one trip would cost under amounts that have not been published.
+   *
+   * A POST because it carries a body, not because it changes anything: the
+   * server reads nothing and writes nothing. The arithmetic is deliberately
+   * left there — doing it here would mean a second implementation of the fare
+   * formula, drifting silently from the one that actually charges customers.
+   */
+  previewFare: (input: FarePreviewInput) =>
+    request<FarePreview>("/admin/rate-cards/preview", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
   auditLog: (
     params: { page?: number; action?: string; subjectId?: string } = {},
   ) => {
@@ -397,7 +426,7 @@ export const api = {
    * the endpoint would answer 401 and the browser would save the error body as
    * a file called `daily.csv`. Failing loudly here is the whole point.
    */
-  async downloadDailyCsv(range: { days?: number; from?: string; to?: string } = {}) {
+  downloadDailyCsv(range: { days?: number; from?: string; to?: string } = {}) {
     const query = new URLSearchParams();
     if (range.from && range.to) {
       query.set("from", range.from);
@@ -406,21 +435,40 @@ export const api = {
       query.set("days", String(range.days ?? 30));
     }
 
-    const token = auth.accessToken();
-    const res = await fetch(`${BASE_URL}/admin/analytics/daily.csv?${query}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    return downloadCsv(`/admin/analytics/daily.csv?${query}`);
+  },
 
-    if (!res.ok) {
-      throw new ApiError(res.status, `Could not export (${res.status}).`);
+  /** Every partner who delivered in the period, not just the top fifteen. */
+  downloadPartnersCsv(range: { days?: number; from?: string; to?: string } = {}) {
+    const query = new URLSearchParams();
+    if (range.from && range.to) {
+      query.set("from", range.from);
+      query.set("to", range.to);
+    } else {
+      query.set("days", String(range.days ?? 30));
     }
+    return downloadCsv(`/admin/analytics/partners.csv?${query}`);
+  },
 
-    // The server names the file, including the period it covers. Parsed rather
-    // than reconstructed here so the two cannot drift apart.
-    const disposition = res.headers.get("Content-Disposition") ?? "";
-    const named = /filename="([^"]+)"/.exec(disposition)?.[1];
+  /** The payout queue, narrowed to the same status the screen is showing. */
+  downloadPayoutsCsv(status?: string) {
+    return downloadCsv(
+      `/admin/payouts.csv${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+    );
+  },
 
-    return { blob: await res.blob(), filename: named ?? "mioryde-daily.csv" };
+  /** Partners holding cash. */
+  downloadCollectionsCsv() {
+    return downloadCsv("/admin/cash/outstanding.csv");
+  },
+
+  /** The audit log, carrying whichever filters the screen has applied. */
+  downloadAuditCsv(filters: { action?: string; subjectId?: string } = {}) {
+    const query = new URLSearchParams();
+    if (filters.action) query.set("action", filters.action);
+    if (filters.subjectId) query.set("subjectId", filters.subjectId);
+    const qs = query.toString();
+    return downloadCsv(`/admin/audit-log.csv${qs ? `?${qs}` : ""}`);
   },
 
   // ── Partner agreement ──────────────────────────────────────────────────────
@@ -644,6 +692,37 @@ export interface Money {
 }
 
 /**
+ * Fetches an export and hands back the bytes plus the name the server gave it.
+ *
+ * **Not a plain `<a href>`.** A link carries no `Authorization` header, so the
+ * endpoint answers 401 and the browser cheerfully saves the error body as a
+ * file — an operator ends up with `payouts.csv` containing `{"statusCode":401}`
+ * and no indication anything went wrong. Fetching means a failure is an
+ * exception the page can show.
+ *
+ * The filename is *parsed from the response*, never rebuilt here: the server
+ * puts the period, the filter and any truncation marker into it, and a second
+ * construction of that name in the panel would drift from the first.
+ */
+async function downloadCsv(
+  path: string,
+): Promise<{ blob: Blob; filename: string }> {
+  const token = auth.accessToken();
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!res.ok) {
+    throw new ApiError(res.status, `Could not export (${res.status}).`);
+  }
+
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const named = /filename="([^"]+)"/.exec(disposition)?.[1];
+
+  return { blob: await res.blob(), filename: named ?? "mioryde-export.csv" };
+}
+
+/**
  * Pagination metadata returned alongside a list.
  *
  * Added because every list endpoint used to return a bare `{results}`, so the
@@ -831,6 +910,56 @@ export interface RateCard {
   includedKm: number;
   gstPercent: number;
   effectiveFrom: string;
+}
+
+export interface VehicleType {
+  id: string;
+  /** `2w`, `3w`, `tata_ace` — what an order records, and immutable for that
+   *  reason. */
+  code: string;
+  name: string;
+  capacityLabel: string;
+}
+
+/**
+ * A rate card as submitted, in the units the API takes.
+ *
+ * Every amount is integer paise and the tax rate is basis points — 1800 is
+ * 18%. Both are integers so nothing in the chain from the operator's keyboard
+ * to the `numeric(12,2)` column is ever a float.
+ */
+export interface RateCardInput {
+  zoneId: string;
+  vehicleTypeId: string;
+  baseFare: number;
+  perKm: number;
+  perMinute: number;
+  minFare: number;
+  includedKm: number;
+  gstBasisPoints: number;
+}
+
+/** The same amounts, priced against a trip that has not happened. */
+export type FarePreviewInput = Omit<
+  RateCardInput,
+  "zoneId" | "vehicleTypeId"
+> & {
+  distanceKm: number;
+  minutes: number;
+};
+
+export interface FarePreview {
+  base: Money;
+  distance: Money;
+  time: Money;
+  tax: Money;
+  total: Money;
+  /**
+   * True when the components do not sum to the total because the minimum fare
+   * held it up. Said out loud, because otherwise the page looks like it cannot
+   * add up.
+   */
+  minFareApplied: boolean;
 }
 
 export interface Zone {

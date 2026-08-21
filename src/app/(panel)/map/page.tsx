@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Freshness } from "@/components/Freshness";
+import { LiveValue } from "@/components/LiveValue";
 import { Spinner } from "@/components/ui";
 import {
   type LiveMapSnapshot,
@@ -62,6 +64,9 @@ export default function MapPage() {
   const [focused, setFocused] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
   const [tilesBroken, setTilesBroken] = useState(false);
+  // When the last snapshot landed. A map whose polling has quietly stopped
+  // looks exactly like a city where nothing is moving.
+  const [receivedAt, setReceivedAt] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +76,7 @@ export default function MapPage() {
         const next = await api.liveMap();
         if (!cancelled) {
           setSnapshot(next);
+          setReceivedAt(Date.now());
           setError(null);
         }
       } catch (e) {
@@ -177,6 +183,7 @@ export default function MapPage() {
           {counts.unassigned > 0 && (
             <Tally label="Unassigned" value={counts.unassigned} dot="bg-danger" alarm />
           )}
+          <Freshness at={receivedAt} className="bg-surface" />
         </div>
 
         {error && (
@@ -298,7 +305,12 @@ function Tally({
         className={`size-1.5 rounded-full ${dot} ${alarm ? "motion-safe:animate-pulse" : ""}`}
       />
       <span className="font-mono text-micro uppercase text-fg-muted">{label}</span>
-      <span className="text-body font-medium tabular-nums text-fg">{value}</span>
+      {/* Flashed on change. The map polls every four seconds and a
+          dispatcher is watching pins, not chips — a count that moves without
+          saying so may as well not have moved. */}
+      <span className="text-body font-medium tabular-nums text-fg">
+        <LiveValue value={value} />
+      </span>
     </span>
   );
 }

@@ -213,18 +213,40 @@ A1). Needs the backend first: no list endpoint returns a total.
 
 ---
 
-## Stage 7 · Sidebar ⬜
+## Stage 7 · Sidebar ✅
 
-Already good — grouped, collapsible, a single sliding indicator, theme switcher
-in the footer. Remaining:
+Already good — grouped, a single sliding indicator, theme switcher in the
+footer. What was left, and what happened to it:
 
-- Sections do not collapse individually; with a sixth group the rail will need
-  it.
-- No keyboard shortcut to focus navigation, and no skip-link past it (15 items
-  before content on every page).
-- Active state is the indicator only; the label itself does not change weight,
-  so at a glance the current page is a colour rather than a word.
-- Fixed width, no responsive behaviour below `lg`.
+- **Sections collapse individually**, stored per browser by label. *Shut* is
+  what is stored rather than *open*, so a group added later appears instead of
+  arriving folded. A group holding the current page refuses to fold — it holds
+  the item the sliding indicator is measuring.
+- **Alt+N focuses the rail.** The skip link goes *past* navigation, which is
+  right for reading a page and useless for reaching a different one. Alt is
+  modified, so it cannot fire mid-word in a search box. It focuses
+  synchronously: `requestAnimationFrame` does not run in a hidden document,
+  which is exactly where a second monitor is.
+- The skip link already existed, in `(panel)/layout.tsx`.
+- The active label already changes weight as well as colour. That bullet was
+  stale when it was written.
+- **Below `md` the rail is a drawer** — opened from a control in the top bar,
+  closed by Escape, by the backdrop, by its own control, or by navigating.
+  Between `md` and `lg` it opens collapsed to icons, unless the operator has
+  stored a preference, which always wins.
+
+**Verified in a browser** against a production build, through a throwaway route
+that rendered the real component (since signing in is not available): folding
+Money took the visible links from 17 to 13 and survived a reload; Alt+N moved
+focus to the first nav link; at 375px the rail sat at `left: -248` until opened,
+then at `left: 0` with a backdrop, and Escape returned it, with the document
+never scrolling sideways; at 768px it opened collapsed.
+
+**One measurement caveat, because it cost time.** CSS transitions do not advance
+while the browser pane is hidden, so a rail mid-transition measures 248px and
+looks like the collapse is broken — including through `elementFromPoint`, which
+is otherwise immune to the stale-`getComputedStyle` problem. Set
+`style.transition = "none"` before believing a width.
 
 ---
 
@@ -260,17 +282,33 @@ back does not step through page numbers. `push` for discrete actions and
 
 ---
 
-## Stage 9 · Liveliness ⬜
+## Stage 9 · Liveliness 🔨
 
-The panel has real-time data and mostly presents it as static. What exists is
-good — the pulsing live dot only pulses on a genuinely open stream, elapsed
-times tick every second, the connection badge tells the truth. To extend:
+The panel has real-time data and mostly presented it as static. What already
+existed is good — the pulsing live dot only pulses on a genuinely open stream,
+elapsed times tick every second, the connection badge tells the truth.
 
-- Values that change should transition rather than snap, so a number moving is
-  visible peripherally.
-- A row arriving on the dispatch board should enter, not appear.
-- Freshness should be visible on every polled page, not just two.
-- **Audio for attention only** — see Stage 10.
+- **Values that change now flash.** `components/LiveValue.tsx`, on the four
+  dashboard KPIs, the monitoring metrics, the live board's status chips and the
+  map's tallies. A flash rather than a count-up: tweening 6 → 7 renders values
+  that were never true, and the one time that matters is the time somebody
+  screenshots it. Nothing flashes on first paint — a dashboard that lights up
+  all four cards on arrival has said only that it loaded.
+
+  `motion-value-changed` had been in `globals.css` since the motion pass,
+  carrying a comment that the dispatch board and the monitoring page used it.
+  A grep found the definition and no callers. This is that comment becoming
+  true.
+- **Freshness is on every polled page.** `components/Freshness.tsx`, added to
+  the overview and the map, with monitoring rewired onto it. The live board
+  keeps its own richer badge, which also reports *stale* and *failing*; worth
+  unifying only when a third page needs those states. Local time only —
+  anything measured against a *server* instant still goes through `clockSkewMs`.
+- **A row arriving on the board already enters**: `tbody.stagger` animates each
+  newly mounted row, and existing rows keep their key and do not replay it.
+  That bullet was stale.
+- **Audio for attention only** — see Stage 10. Not started, which is why this
+  stage is not marked done.
 
 ---
 

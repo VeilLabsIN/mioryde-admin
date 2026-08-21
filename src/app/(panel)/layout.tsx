@@ -31,6 +31,7 @@ export default function PanelLayout({
   const pathname = usePathname();
   const [admin, setAdmin] = useState<AdminIdentity | null>(null);
   const [checked, setChecked] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,10 +123,18 @@ export default function PanelLayout({
         Skip to content
       </a>
 
-      <TopBar admin={admin} />
+      {/* The drawer's open state lives here rather than in the rail because
+          the control that opens it is in the top bar, and two siblings cannot
+          share state without a parent holding it. */}
+      <TopBar admin={admin} onOpenNav={() => setNavOpen(true)} />
 
       <div className="flex min-h-0 flex-1">
-        <Sidebar role={admin.role} />
+        <Sidebar
+          role={admin.role}
+          open={navOpen}
+          onOpen={() => setNavOpen(true)}
+          onClose={() => setNavOpen(false)}
+        />
 
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Above the scroll container, so a critical banner does not scroll
@@ -134,7 +143,12 @@ export default function PanelLayout({
 
           <Breadcrumbs />
 
-          <main id="panel-main" className="min-w-0 flex-1 overflow-y-auto p-6">
+          {/* Tighter below `sm`: 24px of padding on each side of a 375px
+              screen spends an eighth of the width on nothing. */}
+          <main
+            id="panel-main"
+            className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6"
+          >
             {children}
           </main>
 

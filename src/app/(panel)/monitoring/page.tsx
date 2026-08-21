@@ -11,7 +11,8 @@ import {
 } from "@/components/ui";
 import { type Monitoring, api } from "@/lib/api";
 import { formatElapsed } from "@/lib/elapsed";
-import { useNow } from "@/lib/useNow";
+import { Freshness } from "@/components/Freshness";
+import { LiveValue } from "@/components/LiveValue";
 
 /** Slow enough not to be a load generator, quick enough to watch a queue drain. */
 const POLL_MS = 20_000;
@@ -44,7 +45,6 @@ export default function MonitoringPage() {
   // purely local question, so there is no clock skew to correct for.
   const [receivedAt, setReceivedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const now = useNow();
 
   const load = useCallback(async () => {
     try {
@@ -75,11 +75,7 @@ export default function MonitoringPage() {
         subtitle="Queues, dispatch and the integrity of the books."
         actions={
           <div className="flex items-center gap-2">
-            {receivedAt !== null && now > 0 && (
-              <span className="rounded border border-edge px-2 py-1 font-mono text-[10px] tabular-nums text-fg-faint">
-                {formatElapsed(Math.max(0, now - receivedAt))} old
-              </span>
-            )}
+            <Freshness at={receivedAt} />
             <GhostButton onClick={() => void load()}>Refresh</GhostButton>
           </div>
         }
@@ -347,7 +343,11 @@ function Metric({
           bad ? "text-warn" : "text-fg"
         }`}
       >
-        {typeof value === "number" ? value.toLocaleString("en-IN") : value}
+        {/* Flashed on change: this page is polled and an operator watching
+            a queue depth is not staring at one cell. */}
+        <LiveValue value={value}>
+          {typeof value === "number" ? value.toLocaleString("en-IN") : value}
+        </LiveValue>
       </p>
       {hint && (
         <p className="mt-0.5 text-[11px] leading-snug text-fg-faint">{hint}</p>

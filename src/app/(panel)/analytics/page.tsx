@@ -10,6 +10,7 @@ import {
   SkeletonRows,
 } from "@/components/ui";
 import { ApiError, type Analytics, api, formatMoney } from "@/lib/api";
+import { ExportButton } from "@/components/ExportButton";
 import { useUrlParam } from "@/lib/useUrlState";
 
 const RANGES = [7, 30, 90] as const;
@@ -89,7 +90,6 @@ export default function AnalyticsPage() {
   const setSeries = (next: SeriesKey) => setSeriesRaw(next);
   const [data, setData] = useState<Analytics | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
 
   // Guards against a slow response for an old range landing after a newer one.
   const requestId = useRef(0);
@@ -117,31 +117,6 @@ export default function AnalyticsPage() {
   }, [days, custom?.from, custom?.to, urlReady]);
 
   useEffect(load, [load]);
-
-  async function exportCsv() {
-    setExporting(true);
-    setError(null);
-    try {
-      const { blob, filename } = await api.downloadDailyCsv(custom ?? { days });
-      // Object URL and a synthetic click. Revoked immediately after — the blob
-      // is held in memory until it is, and an operator exporting repeatedly
-      // over a shift would otherwise accumulate every copy.
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    } catch (caught: unknown) {
-      setError(
-        caught instanceof ApiError ? caught.message : "Could not export.",
-      );
-    } finally {
-      setExporting(false);
-    }
-  }
 
   const rupees = (minor: number) => formatMoney({ minor, currency: "INR" });
   const active = SERIES.find((option) => option.key === series)!;
@@ -194,13 +169,22 @@ export default function AnalyticsPage() {
             {range} days
           </GhostButton>
           )),
-          <GhostButton
+          <ExportButton
             key="export"
-            onClick={() => void exportCsv()}
-            disabled={exporting || data === null}
-          >
-            {exporting ? "Exporting…" : "Export CSV"}
-          </GhostButton>,
+            label="Daily CSV"
+            fetcher={() => api.downloadDailyCsv(custom ?? { days })}
+            disabled={data === null ? "Still loading." : null}
+          />,
+          // Separate from the daily series because it answers a different
+          // question — the daily table is the business, this is the fleet —
+          // and because the screen shows only the top fifteen partners while
+          // the file carries everyone who delivered in the period.
+          <ExportButton
+            key="partners"
+            label="Partners CSV"
+            fetcher={() => api.downloadPartnersCsv(custom ?? { days })}
+            disabled={data === null ? "Still loading." : null}
+          />,
         ]}
       />
 

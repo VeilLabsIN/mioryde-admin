@@ -8,9 +8,8 @@ change". Everything here is verified against the code, not remembered.
 > architecture, invariants, status, or blockers. A stale handoff is worse than
 > none — it is believed.
 
-**Last updated:** 18 August 2026 (dispatch board, access control, monitoring,
-deeper analytics, GST credit notes, pagination, order and customer detail,
-launch readiness)
+**Last updated:** 21 August 2026 (rate card editing, CSV exports, sidebar
+collapse and drawer, liveliness)
 
 ---
 
@@ -162,6 +161,78 @@ worse than an obvious error.
 with "requires array on right side". This has been fixed four times.
 
 ## 5. Where the work stands
+
+### Uncommitted work in the tree (2026-08-21)
+
+Panel work, plus the API endpoints it needed. Typechecks, lints, and both
+suites pass — **API 257, panel 78**. Both repos build.
+
+**Rate card editing** (`PATTERNS.md` D8). `RateCardEditor` publishes all six
+amounts at once, because the server supersedes rather than edits. Rupees become
+paise through `lib/rupees.ts` as *text* — never `Math.round(Number(x) * 100)`,
+which gets `1.15` and `8.7` wrong. New `POST /admin/rate-cards/preview` prices a
+hypothetical trip through `FareCalculator`, so the panel shows "₹98.65 → ₹87.32"
+without owning a second copy of the fare formula. The fare-ordering validation
+on publish was a `NotFoundException`; it is now a 400.
+
+**Four more CSV exports** (D9). `common/csv.ts` carries the BOM, CRLF, quoting
+and formula-neutralisation; `components/ExportButton.tsx` carries the token
+fetch and the object-URL dance. Payouts, collections, the audit log and the
+partner leaderboard, each filtered the way its screen is. `daily.csv` was
+refactored onto the same helper.
+
+**Sidebar, keyboard and responsive** (`STAGES.md` 7). Per-group collapse stored
+per browser, Alt+N to focus the rail, and a drawer below `md` with a control in
+the top bar.
+
+**Liveliness** (`STAGES.md` 9, partial). `LiveValue` flashes a figure that
+changed — dashboard, monitoring, live board, map — and `Freshness` says how old
+a polled page is. Audio (Stage 10) is not started.
+
+**Verified against a real Postgres, a booted API and a browser**, through
+throwaway routes that render the real page components with a token already in
+memory (the panel's pages sit behind a client-side auth guard and signing in
+through the form is not available):
+
+- Publishing from the UI moved the 8ft Truck from ₹24.00/km to ₹20.00/km. The
+  preview showed "₹401.20 → ₹377.60" for a 5 km trip *before* the click, the
+  table reloaded with the new rate, exactly one live card remained for the
+  pair, the old row was closed with `effective_to`, and `rate_card.publish`
+  appeared in the audit log.
+- The preview endpoint returns ₹98.65 for the published 2-wheeler card and
+  reports `minFareApplied` when the floor bites — the same figures
+  `fare.calculator.test.ts` pins.
+- A base fare above the minimum answers **400** with the server's own sentence.
+- All five CSV endpoints answer 200 with a BOM, the right filename and the
+  exposed `Content-Disposition`. A partner named `Kumar, R. "Raju"` and a
+  reference of `=HYPERLINK("http://evil.example","claim")` both came out
+  quoted and neutralised, with the phone masked.
+- The payouts page's Export button read the server-supplied filename
+  cross-origin (`:3105` → `:3005`), which is what the expose header exists for.
+- Switching from one card to another *in the same zone* re-initialises the
+  form. It did not before — React reused the instance, and the second card was
+  edited through the first card's numbers. The reset lives **in the editor**,
+  not in a `key` at the call site, and was re-proven with a harness rendering
+  two editors in one position with no key: switching discarded an abandoned
+  edit and reloaded every field from the new card.
+- The payouts queue masks the number and reveals it through the audited route:
+  as `finance`, the list and the CSV both read `+••••••• 00002`, the Reveal
+  button returned `+919876500002`, and `rider.phone_revealed` was written with
+  the operator's name and IP. As `support`, both the reveal and the list are
+  403.
+
+Everything was torn down afterwards: no containers, no dev servers, no
+harnesses.
+
+**Phone masking on the payouts queue.** That page returned partner numbers in
+full while every other surface masked them and audited a reveal. `list()` now
+masks, so the CSV export cannot un-mask it either, and the page uses the same
+`RevealPhone` control as `/riders`. `POST /admin/riders/:id/reveal-phone`
+accepts `finance` as well as `ops` — a tightening, since finance previously read
+numbers with no record at all, and a mask with no reveal on their own screen
+would just have created pressure to remove it again. Support is still refused.
+`test/admin-phone-masking.test.ts` fails if any admin list assigns an unmasked
+`phone`.
 
 ### Uncommitted work in the tree (2026-08-20)
 
@@ -376,7 +447,8 @@ rewrite.
 | Money handling | `mioryde-api/src/common/money.ts` |
 | Ledger rules | `mioryde-api/migrations/0018_ledger.sql` |
 
-Test counts at last update: api 203, admin 64, rider app 84, customer app 85.
+Test counts at last update: api 257, admin 78, rider app 84, customer app 85.
+The two app figures have not been re-run since 18 August.
 
 ## 9. Environment quirks that waste an hour if you do not know them
 

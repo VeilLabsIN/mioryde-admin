@@ -19,6 +19,8 @@ import {
   api,
   formatMoney,
 } from "@/lib/api";
+import { ExportButton } from "@/components/ExportButton";
+import { RevealPhone } from "@/components/RevealPhone";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
 
 const FILTERS = [
@@ -100,6 +102,13 @@ export default function PayoutsPage() {
         <PageHeader
           title="Payouts"
           subtitle="Withdrawal requests from delivery partners."
+        />
+        {/* Carries the filter the screen is on: an export that ignored it
+            would answer a question nobody asked. */}
+        <ExportButton
+          fetcher={() => api.downloadPayoutsCsv(status || undefined)}
+          label="Export queue"
+          disabled={payouts?.length === 0 ? "Nothing to export." : null}
         />
         {pending && pending.count > 0 && (
           <div className="chamfer-sm border border-warn/40 bg-panel px-3 py-2">
@@ -223,9 +232,14 @@ function PayoutRow({
             </span>
           </div>
           <p className="mt-1 truncate text-[13px]">{payout.rider.name}</p>
-          <p className="mt-0.5 font-mono text-[11px] text-fg-faint">
-            {payout.rider.phone} · earned{" "}
-            {formatMoney(payout.rider.lifetimeEarned)} lifetime
+          <p className="mt-0.5 flex flex-wrap items-center gap-2 font-mono text-[11px] text-fg-faint">
+            {/* Masked, with the same audited reveal every other partner
+                surface uses. This printed the number in full until the server
+                started masking it. */}
+            <RevealPhone riderId={payout.rider.id} masked={payout.rider.phone} />
+            <span>
+              · earned {formatMoney(payout.rider.lifetimeEarned)} lifetime
+            </span>
           </p>
           <p className="mt-0.5 text-[11px] text-fg-faint">
             Requested {new Date(payout.requestedAt).toLocaleString("en-IN")}

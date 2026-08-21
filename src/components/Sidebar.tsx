@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type AdminRole, canAny } from "@/lib/permissions";
 import { NAV_GROUPS } from "@/lib/nav";
 import { LayerSwitch, useLayer } from "./LayerSwitch";
@@ -20,7 +20,32 @@ import { ThemeSwitcher } from "./ThemeSwitcher";
  * 2. **Collapse is width-only on a grid track**, and the labels fade rather
  *    than unmount. Unmounting them would reflow the whole rail mid-animation.
  */
-export function Sidebar({ role }: { role: AdminRole | undefined }) {
+const COLLAPSED_KEY = "mioryde-rail-collapsed";
+const SHUT_GROUPS_KEY = "mioryde-rail-shut-groups";
+
+/**
+ * Wide enough for content but not for a 248px rail beside it — a tablet, or a
+ * laptop with a browser at half width. Matches Tailwind's `lg`, so the query
+ * and the classes cannot disagree about where the rail changes shape.
+ *
+ * Below `md` it stops sharing the row at all and becomes a drawer; that switch
+ * is pure CSS and needs no query here.
+ */
+const NARROW_BELOW = "(max-width: 1023px)";
+
+export function Sidebar({
+  role,
+  /** Drawer state. Only consulted below `md`, where the rail is not in flow. */
+  open = false,
+  onOpen,
+  onClose,
+}: {
+  role: AdminRole | undefined;
+  open?: boolean;
+  /** Called when the rail needs to be on screen — the Alt+N shortcut. */
+  onOpen?: () => void;
+  onClose?: () => void;
+}) {
   const pathname = usePathname();
 
   // Recomputed per render rather than memoised: the list is a dozen items and
@@ -49,7 +74,76 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
     ),
   })).filter((group) => group.items.length > 0);
 
+  /**
+   * Collapsed to icons.
+   *
+   * Starts expanded and is corrected after mount, never during render: the
+   * panel is statically prerendered, so reading `matchMedia` or storage while
+   * rendering produces markup that disagrees with the client and React
+   * discards the tree.
+   *
+   * A stored choice wins over the viewport. An operator who collapsed the rail
+   * on a wide screen meant it; re-expanding it because their window is large
+   * would be the panel arguing with them every morning.
+   */
   const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(COLLAPSED_KEY);
+      if (stored === "true" || stored === "false") {
+        setCollapsed(stored === "true");
+        return;
+      }
+    } catch {
+      // Storage disabled. The viewport still gets a say.
+    }
+    setCollapsed(window.matchMedia(NARROW_BELOW).matches);
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((wasCollapsed) => {
+      const next = !wasCollapsed;
+      try {
+        localStorage.setItem(COLLAPSED_KEY, String(next));
+      } catch {
+        // Not remembering is survivable.
+      }
+      return next;
+    });
+  };
+
+  /**
+   * Groups the operator has folded away, by label.
+   *
+   * Shut rather than open is stored, so a group added later appears rather
+   * than arriving folded — a new section nobody can see is indistinguishable
+   * from one that was never shipped.
+   */
+  const [shutGroups, setShutGroups] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SHUT_GROUPS_KEY);
+      if (stored) setShutGroups(JSON.parse(stored) as string[]);
+    } catch {
+      // Unparseable or unavailable: every group open is a working rail.
+    }
+  }, []);
+
+  const toggleGroup = (label: string) => {
+    setShutGroups((shut) => {
+      const next = shut.includes(label)
+        ? shut.filter((l) => l !== label)
+        : [...shut, label];
+      try {
+        localStorage.setItem(SHUT_GROUPS_KEY, JSON.stringify(next));
+      } catch {
+        // Not remembering is survivable.
+      }
+      return next;
+    });
+  };
 
   const navRef = useRef<HTMLElement>(null);
   const [indicator, setIndicator] = useState<{ y: number; h: number } | null>(
@@ -88,14 +182,88 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
     // offsetTop is relative to the nearest positioned ancestor, which is the
     // nav itself — so this stays correct with the items nested inside groups.
     setIndicator({ y: item.offsetTop, h: item.offsetHeight });
-  }, [activeHref, collapsed, groups.length]);
+  }, [activeHref, collapsed, groups.length, shutGroups]);
+
+  /**
+   * A group is folded unless it holds the page you are on.
+   *
+   * Collapsing the section containing the current page would hide the one item
+   * whose position the sliding indicator is measuring, and leave an operator
+   * looking at a rail that does not contain where they are.
+   */
+  const isShut = (group: { label: string; items: { href: string }[] }) =>
+    shutGroups.includes(group.label) &&
+    !group.items.some((item) => item.href === activeHref);
+
+  /**
+   * Alt+N puts focus on the rail.
+   *
+   * The skip link goes past navigation, which is right for reading a page and
+   * useless for reaching a different one — a keyboard user who wanted the nav
+   * had to tab through the top bar and the layer switch to get there. Alt is
+   * modified, so it cannot fire while somebody is typing a partner's name.
+   */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!event.altKey || event.key.toLowerCase() !== "n") return;
+      event.preventDefault();
+      onOpen?.();
+      // Focused straight away rather than after a frame. The rail is in the
+      // DOM at every width — below `md` it is merely translated off-screen —
+      // so there is nothing to wait for, and `requestAnimationFrame` does not
+      // run at all in a hidden document, which is precisely where a keyboard
+      // user's second monitor is.
+      navRef.current?.querySelector<HTMLAnchorElement>("a")?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onOpen]);
+
+  // Escape closes the drawer, and a navigation closes it too: on a phone the
+  // rail covers the page it just took you to.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose?.();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    // Deliberately keyed on the path alone. Including `onClose` would fire
+    // this whenever the parent re-rendered with a new closure, shutting a
+    // drawer the operator had just opened.
+    closeRef.current?.();
+  }, [pathname]);
 
   return (
+    <>
+      {/* Below `md` the rail is an overlay, so it needs something to close it
+          that is not a hunt for the toggle. Hidden from assistive technology —
+          Escape and the rail's own close control are the accessible paths, and
+          a focusable backdrop is a tab stop that does nothing legible. */}
+      {open && (
+        <button
+          type="button"
+          aria-hidden
+          tabIndex={-1}
+          onClick={onClose}
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+        />
+      )}
     <aside
       data-collapsed={collapsed}
-      className="group/rail relative z-20 flex h-dvh shrink-0 flex-col border-r border-line bg-surface
-                 transition-[width] duration-300 ease-[var(--ease-out-quint)]
-                 w-[248px] data-[collapsed=true]:w-[72px]"
+      data-open={open}
+      className="group/rail fixed inset-y-0 left-0 z-40 flex h-dvh shrink-0 flex-col border-r border-line bg-surface
+                 transition-[width,transform] duration-300 ease-[var(--ease-out-quint)]
+                 w-[248px] data-[collapsed=true]:w-[72px]
+                 -translate-x-full data-[open=true]:translate-x-0
+                 md:static md:z-20 md:translate-x-0"
     >
       {/* No brand block here.
 
@@ -111,6 +279,20 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
       {/* Labelled, so a screen reader announces it as the panel's navigation
           rather than as an unnamed region indistinguishable from any other. */}
       {/* Above the navigation it filters, so the cause sits over the effect. */}
+      {/* Only when the rail is an overlay. On a desktop it is furniture and
+          there is nothing to close. */}
+      <button
+        type="button"
+        onClick={onClose}
+        className="flex h-11 items-center gap-2 px-3 text-body text-fg-muted
+                   transition-colors hover:text-fg md:hidden"
+      >
+        <span aria-hidden className="font-mono">
+          ←
+        </span>
+        Close navigation
+      </button>
+
       <div className="border-b border-line pt-2">
         <LayerSwitch layer={layer} onChange={setLayer} collapsed={collapsed} />
       </div>
@@ -136,19 +318,38 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
         )}
 
         <div className="relative z-10 flex flex-col gap-4">
-          {groups.map((group) => (
+          {groups.map((group) => {
+            const shut = isShut(group);
+            return (
             <div key={group.label}>
-              {/* Hidden when collapsed: a 72px rail has no room for a word,
-                  and a truncated heading is worse than none. */}
-              <p
-                className="px-3 pb-1 font-mono text-micro uppercase text-fg-faint
-                           transition-opacity duration-200
-                           group-data-[collapsed=true]/rail:opacity-0"
+              {/* A button, not a heading, because it does something. Hidden
+                  when collapsed: a 72px rail has no room for a word, and a
+                  truncated heading is worse than none — folding is also
+                  meaningless there, since every group is already icons. */}
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.label)}
+                aria-expanded={!shut}
                 aria-hidden={collapsed}
+                tabIndex={collapsed ? -1 : undefined}
+                className="flex w-full items-center gap-1.5 px-3 pb-1 font-mono text-micro uppercase
+                           text-fg-faint transition-opacity duration-200 hover:text-fg-mid
+                           group-data-[collapsed=true]/rail:opacity-0"
               >
+                <svg
+                  width="8"
+                  height="8"
+                  viewBox="0 0 8 8"
+                  fill="none"
+                  aria-hidden
+                  className="shrink-0 transition-transform duration-200 motion-reduce:transition-none"
+                  style={{ transform: shut ? "rotate(-90deg)" : "none" }}
+                >
+                  <path d="M1 2.5L4 5.5l3-3" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
                 {group.label}
-              </p>
-              <ul className="flex flex-col gap-0.5">
+              </button>
+              <ul className="flex flex-col gap-0.5" hidden={shut}>
           {group.items.map((item) => {
             const active = isActive(item.href);
             return (
@@ -212,7 +413,8 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
           })}
               </ul>
             </div>
-          ))}
+            );
+          })}
         </div>
       </nav>
 
@@ -221,7 +423,7 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
 
         <button
           type="button"
-          onClick={() => setCollapsed((c) => !c)}
+          onClick={toggleCollapsed}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className="mt-1 flex h-9 w-full items-center gap-3 px-3 text-fg-faint
                      transition-colors duration-150 hover:text-fg-mid"
@@ -254,5 +456,6 @@ export function Sidebar({ role }: { role: AdminRole | undefined }) {
         </button>
       </div>
     </aside>
+    </>
   );
 }

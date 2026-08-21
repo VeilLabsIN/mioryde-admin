@@ -11,6 +11,7 @@ import {
   PageHeader,
 } from "@/components/ui";
 import { ApiError, type AuditEntry, type PageMeta, api } from "@/lib/api";
+import { ExportButton } from "@/components/ExportButton";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
 
 /** Turns `payout.settled` into `Payout settled`. */
@@ -111,10 +112,21 @@ export default function AuditPage() {
 
   return (
     <div className="space-y-6">
-      <header>
+      <header className="flex flex-wrap items-end justify-between gap-3">
         <PageHeader
           title="Audit log"
           subtitle="Every administrative action, newest first. Records are written in the same transaction as the change they describe, so this cannot disagree with what actually happened."
+        />
+        {/* The export this page exists to produce when somebody outside the
+            team asks what happened. Filtered the same way the screen is. */}
+        <ExportButton
+          fetcher={() =>
+            api.downloadAuditCsv({
+              action: action || undefined,
+              subjectId: subjectFilter,
+            })
+          }
+          label="Export log"
         />
       </header>
 

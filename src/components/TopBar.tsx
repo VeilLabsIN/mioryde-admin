@@ -20,7 +20,15 @@ import { type AdminIdentity, api, auth } from "@/lib/api";
  * search somewhere to live that is the same on every page, which is the point
  * of a command palette — a control that moves is a control you look for.
  */
-export function TopBar({ admin }: { admin: AdminIdentity }) {
+export function TopBar({
+  admin,
+  onOpenNav,
+}: {
+  admin: AdminIdentity;
+  /** Opens the navigation drawer. Only reachable below `md`, where the rail
+   *  is an overlay rather than a column. */
+  onOpenNav?: () => void;
+}) {
   const router = useRouter();
   const [helpOpen, setHelpOpen] = useState(false);
 
@@ -47,6 +55,23 @@ export function TopBar({ admin }: { admin: AdminIdentity }) {
       className="flex h-14 shrink-0 items-center gap-4 border-b border-line
                  bg-surface px-4"
     >
+      <button
+        type="button"
+        onClick={onOpenNav}
+        aria-label="Open navigation"
+        className="motion-change -ml-1 grid size-9 shrink-0 place-items-center text-fg-muted
+                   transition-colors hover:text-fg md:hidden"
+      >
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden>
+          <path
+            d="M2 4.5h14M2 9h14M2 13.5h14"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="square"
+          />
+        </svg>
+      </button>
+
       <Link
         href="/"
         className="motion-change flex shrink-0 items-center gap-2.5

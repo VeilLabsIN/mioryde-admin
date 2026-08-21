@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LiveValue } from "@/components/LiveValue";
 import { useNow } from "@/lib/useNow";
 import { RevealPhone } from "@/components/RevealPhone";
 import {
@@ -423,7 +424,10 @@ function StatusFilters({
         aria-pressed={selected === ""}
         className={selected === "" ? "border-accent text-accent" : undefined}
       >
-        All <span className="tabular-nums">{total}</span>
+        All{" "}
+        <span className="tabular-nums">
+          <LiveValue value={total} />
+        </span>
       </GhostButton>
 
       {/* Ordered by the lifecycle rather than by count, so the strip reads the
@@ -441,7 +445,12 @@ function StatusFilters({
             className={active ? "border-accent text-accent" : undefined}
           >
             {STATUS_FILTER_LABELS[status]}{" "}
-            <span className="tabular-nums">{count}</span>
+            {/* Flashed on change: a delivery moving from pending to accepted
+                changes two of these chips, and that is the event the strip
+                exists to make noticeable. */}
+            <span className="tabular-nums">
+              <LiveValue value={count} />
+            </span>
           </GhostButton>
         );
       })}
