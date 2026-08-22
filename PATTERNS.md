@@ -206,7 +206,7 @@ conditional to keep the component reachable.
 
 ### A8 · Two pages skip `PageHeader` — *overview now fixed*
 
-**Low, but it is the documented convention.** `context.md` §7 says "One
+**Low, but it is the documented convention.** `mioryde-api/context.md` §7 says "One
 `PageHeader` for every page. Twelve pages had grown three heading treatments;
 they now share one component." The overview (`page.tsx:43`) hand-rolls
 `<h1 className="mb-1 font-sans text-2xl font-semibold">` and the rider detail
@@ -372,7 +372,7 @@ list, and the fraction makes progress legible.
 most of them: `invoice.service.configured` is false without a GSTIN, the push
 provider is unconfigured, Razorpay is unconfigured, the agreement is still the
 seeded placeholder, S3 is unset. Today that knowledge is spread across
-`.env.example`, `context.md` and the monitoring page.
+`.env.example`, `mioryde-api/context.md` and the monitoring page.
 
 **Built.** `GET /admin/readiness` returns one row per requirement computed from
 live configuration and data, plus `/readiness` grouping them into blocking,
@@ -592,7 +592,7 @@ found before it ever ran.
 
 ### D5 · Wire up what already exists
 
-- `GET /admin/riders/:id/history` exists and, per `context.md` §5, has no UI.
+- `GET /admin/riders/:id/history` exists and, per `mioryde-api/context.md` §5, has no UI.
   It is verified server-side; it needs a tab on the partner detail page.
 - `CreditNoteService` (added this session) has no controller and no UI. Even
   before refunds are decided, `GET /admin/orders/:id/credit-notes` and a
@@ -627,7 +627,7 @@ and a button would make it look like a status change.
   and getting it wrong double-assigns a delivery. Needs designing, not typing.
 - **Adjust a fare.** Downward is a credit note, which now exists. Upward is a
   debit note, which does not. Half an operation is worse than none.
-- **Refund.** Still the three business decisions in `context.md`.
+- **Refund.** Still the three business decisions in `mioryde-api/context.md`.
 
 ### D7 · Notification settings
 
@@ -726,7 +726,7 @@ this is invisible to a typecheck, since the field is a string either way.
 
 ### D10 · Reconciliation
 
-Named as not-built in `context.md`: gateway ↔ ledger reconciliation. The
+Named as not-built in `mioryde-api/context.md`: gateway ↔ ledger reconciliation. The
 monitoring page now checks the ledger against itself, which is the internal
 half. The external half — does what Razorpay says it settled match what the
 ledger says it received — is the one that catches a real loss. Blocked on

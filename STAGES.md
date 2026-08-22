@@ -168,7 +168,7 @@ so `pagedByProbe` fetches one extra row instead and the readout says "50+".
 work.
 
 **Rider history** shares `auditLog()`, so it has paging already; it still has no
-UI (`context.md` §5). Do that with the partner detail tab.
+UI (`mioryde-api/context.md` §5). Do that with the partner detail tab.
 
 **Found while finishing this:** the audit log endpoint had never worked at all —
 a `text = uuid` cast that fails at plan time, so every call was a 500. See
