@@ -293,6 +293,146 @@
   --dot-color: light-dark(rgb(90 74 40 / 0.055), transparent);
 }
 
+
+/* ── Elevation and translucency ─────────────────────────────────────────────
+   Depth expressed as layering rather than as another hairline.
+
+   Every boundary in this panel is currently a 1px `--line`. That is honest and
+   it scans well in a table, but it gives a page exactly two planes: on the
+   ground, or in a box on the ground. A drawer sliding over a list, a sticky
+   bar over rows, a popover over a card — all three land on the same plane as
+   the thing they are covering, and the only cue that one is above the other is
+   that it happens to be painted later.
+
+   ## The rule, because translucency is a contrast hazard
+
+   A semi-transparent surface has no fixed background, so text on it has no
+   measurable contrast ratio — which would quietly undo the measuring that
+   produced `--fg-muted` and `--panel`.
+
+   So the split is by *purpose*, not by taste:
+
+     - **Overlay surfaces** — drawers, sticky action bars, popovers, the
+       command palette. These sit above known content, are transient, and are
+       where translucency earns its keep: you can still see the row you came
+       from, which is the whole reason the drawer beats a page navigation.
+       They use `--scrim` / `--overlay` and get a blur.
+     - **Content surfaces** — cards, tables, anything text lives in for a whole
+       shift. These stay **opaque**: `--surface`, `--raised`, `--panel`,
+       unchanged and still measured.
+
+   Nothing that carries body text for hours becomes translucent. That is the
+   line, and it is the one the reference designs get away with breaking because
+   they are pictures of dashboards rather than dashboards.
+
+   ## Why the blur is small
+
+   `backdrop-filter` is expensive on a large area and it is repainted on every
+   scroll frame underneath it. 12px reads as glass at the size these overlays
+   are; 40px looks better in a screenshot and costs frames on the live board,
+   which updates constantly. Behind `prefers-reduced-transparency` the blur is
+   dropped and the surface goes opaque — some people find it genuinely hard to
+   read, and Safari and Windows both expose the preference.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root,
+:root[data-theme="daylight"] {
+  /* Behind a modal or drawer. Warm rather than neutral black, for the same
+     reason `--shadow-panel` is: neutral black over cream reads as grey haze. */
+  --scrim: rgb(43 36 20 / 0.32);
+
+  /* The overlay surface itself. High alpha on purpose — this still has to be
+     readable, so it is a pane of frosted glass rather than a tint. */
+  --overlay: rgb(255 254 250 / 0.86);
+  --overlay-line: rgb(216 212 197 / 0.9);
+  --overlay-blur: 12px;
+
+  /* Three steps of lift. `--elev-1` replaces nothing; it is what a card gets
+     when it needs to read as raised without a heavier border. */
+  --elev-1: 0 1px 2px 0 rgb(90 74 40 / 0.06);
+  --elev-2: 0 4px 12px -2px rgb(90 74 40 / 0.10), 0 2px 4px -2px rgb(90 74 40 / 0.06);
+  --elev-3: 0 16px 40px -8px rgb(90 74 40 / 0.18), 0 4px 12px -4px rgb(90 74 40 / 0.10);
+
+  /* A soft accent bloom behind a hero figure. The Orbyte reference does this
+     with a gradient fill; on a warm ground a low-alpha radial reads cleaner
+     and does not fight the neutral ramp. */
+  --bloom: radial-gradient(
+    120% 100% at 0% 0%,
+    color-mix(in oklab, var(--accent-bright) 14%, transparent) 0%,
+    transparent 62%
+  );
+}
+
+:root[data-theme="tokyo"] {
+  --scrim: rgb(9 9 14 / 0.58);
+  --overlay: rgb(31 34 51 / 0.84);
+  --overlay-line: rgb(59 66 97 / 0.9);
+  --overlay-blur: 12px;
+
+  /* Shadows barely register on a dark ground, so lift is carried by a lighter
+     top edge instead — the same trick `--shadow-panel` already uses in tokyo. */
+  --elev-1: 0 1px 0 0 rgb(192 202 245 / 0.04) inset;
+  --elev-2: 0 1px 0 0 rgb(192 202 245 / 0.06) inset, 0 8px 24px -8px rgb(0 0 0 / 0.5);
+  --elev-3: 0 1px 0 0 rgb(192 202 245 / 0.08) inset, 0 24px 56px -12px rgb(0 0 0 / 0.7);
+
+  --bloom: radial-gradient(
+    120% 100% at 0% 0%,
+    color-mix(in oklab, var(--accent-bright) 12%, transparent) 0%,
+    transparent 62%
+  );
+}
+
+:root[data-theme="system"] {
+  --scrim: light-dark(rgb(43 36 20 / 0.32), rgb(9 9 14 / 0.58));
+  --overlay: light-dark(rgb(255 254 250 / 0.86), rgb(31 34 51 / 0.84));
+  --overlay-line: light-dark(rgb(216 212 197 / 0.9), rgb(59 66 97 / 0.9));
+  --overlay-blur: 12px;
+
+  --elev-1: light-dark(0 1px 2px 0 rgb(90 74 40 / 0.06),
+                       0 1px 0 0 rgb(192 202 245 / 0.04) inset);
+  --elev-2: light-dark(
+    0 4px 12px -2px rgb(90 74 40 / 0.10),
+    0 1px 0 0 rgb(192 202 245 / 0.06) inset);
+  --elev-3: light-dark(
+    0 16px 40px -8px rgb(90 74 40 / 0.18),
+    0 1px 0 0 rgb(192 202 245 / 0.08) inset);
+
+  --bloom: radial-gradient(
+    120% 100% at 0% 0%,
+    color-mix(in oklab, var(--accent-bright) 13%, transparent) 0%,
+    transparent 62%
+  );
+}
+
+/*
+ * The frosted pane, as one utility so no component hand-rolls it and drifts.
+ *
+ * `background-color` is set alongside the blur rather than relying on it: if
+ * `backdrop-filter` is unsupported — or switched off by the media query below
+ * — the alpha alone still produces a legible surface instead of text floating
+ * over a live table.
+ */
+@utility glass {
+  background-color: var(--overlay);
+  border-color: var(--overlay-line);
+  backdrop-filter: blur(var(--overlay-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--overlay-blur)) saturate(1.4);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    /* Opaque, not merely less blurred. The preference exists for people who
+       find layered translucency hard to parse, and a 4px blur helps them no
+       more than 12px does. */
+    --overlay-blur: 0px;
+    --overlay: var(--raised);
+    --overlay-line: var(--edge);
+  }
+}
+
+@utility bloom {
+  background-image: var(--bloom);
+}
+
 /* Expose the tokens to Tailwind so `bg-surface`, `text-fg-muted` etc. work. */
 @theme inline {
   --color-bg: var(--bg);
@@ -320,6 +460,14 @@
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-danger: var(--danger);
+
+  --color-scrim: var(--scrim);
+  --color-overlay: var(--overlay);
+  --color-overlay-line: var(--overlay-line);
+
+  --shadow-elev-1: var(--elev-1);
+  --shadow-elev-2: var(--elev-2);
+  --shadow-elev-3: var(--elev-3);
 }
 
 /* ── Brand shapes ───────────────────────────────────────────────────────────
@@ -529,6 +677,19 @@
   from { opacity: 0; transform: translate3d(-10px, 0, 0); }
   to   { opacity: 1; transform: none; }
 }
+/* The drawer and its scrim. Translating rather than animating `width` or
+   `right`: transform and opacity are the two properties the compositor can
+   animate without a layout pass, and this slides over a live table that may be
+   repainting underneath it. */
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translate3d(16px, 0, 0); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 @keyframes sweep {
   from { transform: translate3d(-100%, 0, 0); }
   to   { transform: translate3d(200%, 0, 0); }

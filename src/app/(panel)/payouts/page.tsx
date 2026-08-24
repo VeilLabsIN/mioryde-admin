@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import { ExportButton } from "@/components/ExportButton";
 import { RevealPhone } from "@/components/RevealPhone";
+import { RiderDrawer } from "@/components/RiderDrawer";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
 
 const FILTERS = [
@@ -57,6 +58,9 @@ export default function PayoutsPage() {
   // "requested" is the default and the fallback, so the opening view has a
   // clean URL and only a deliberate change puts ?status= in it.
   const [status, setStatus, statusReady] = useUrlParam("status", "requested");
+  // Which partner is open, if any. The payout being settled is already the
+  // row in front of the operator; what the drawer adds is who they are paying.
+  const [openRiderId, setOpenRiderId] = useState<string | null>(null);
   const [payouts, setPayouts] = useState<Payout[] | null>(null);
   const [pending, setPending] = useState<PayoutTotals | null>(null);
   const [meta, setMeta] = useState<PageMeta | null>(null);
@@ -157,11 +161,27 @@ export default function PayoutsPage() {
         ) : (
           <ul className="divide-y divide-line">
             {payouts.map((p) => (
-              <PayoutRow key={p.id} payout={p} onSettled={load} />
+              <PayoutRow
+                key={p.id}
+                payout={p}
+                onSettled={load}
+                onOpenRider={() => setOpenRiderId(p.rider.id)}
+              />
             ))}
           </ul>
         )}
       </Card>
+
+      {/*
+        Deliberately not whole-row activation. This row carries Settle and
+        Reject — releasing money and refusing it — so a stray click near either
+        must do nothing at all. Same rule as the partners list: whole-row
+        activation only where no control on the row is destructive.
+      */}
+      <RiderDrawer
+        riderId={openRiderId}
+        onClose={() => setOpenRiderId(null)}
+      />
 
       {meta && (
         <Pager
@@ -178,9 +198,25 @@ export default function PayoutsPage() {
 function PayoutRow({
   payout,
   onSettled,
+  onOpenRider,
 }: {
   payout: Payout;
   onSettled: () => void;
+  /**
+   * Opens the *partner*, not the payout.
+   *
+   * There is no payout detail endpoint, and this row already shows everything
+   * one would contain — amount, status, masked phone, lifetime earnings, both
+   * timestamps, reference and note. A drawer over it would move existing
+   * content behind a click and add nothing, which is applying a pattern for
+   * consistency rather than for benefit.
+   *
+   * What is genuinely missing when deciding whether to release money is *who
+   * this partner is*: have they actually delivered, are their bank details on
+   * file, is their account in good standing. That is the rider drawer, and it
+   * already exists.
+   */
+  onOpenRider: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [reference, setReference] = useState("");
@@ -231,7 +267,14 @@ function PayoutRow({
               {STATUS_LABEL[payout.status] ?? payout.status}
             </span>
           </div>
-          <p className="mt-1 truncate text-[13px]">{payout.rider.name}</p>
+          <button
+            type="button"
+            onClick={onOpenRider}
+            className="mt-1 block max-w-full truncate text-left text-[13px]
+                       underline-offset-2 transition-colors hover:text-accent hover:underline"
+          >
+            {payout.rider.name}
+          </button>
           <p className="mt-0.5 flex flex-wrap items-center gap-2 font-mono text-[11px] text-fg-faint">
             {/* Masked, with the same audited reveal every other partner
                 surface uses. This printed the number in full until the server

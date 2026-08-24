@@ -10,6 +10,7 @@ import {
   SkeletonRows,
   StatusPill,
 } from "@/components/ui";
+import { RefundPanel } from "@/components/RefundPanel";
 import {
   type OrderActions,
   type OrderDetail,
@@ -223,6 +224,21 @@ export default function OrderDetailPage() {
           }}
         />
       )}
+
+      {/*
+        Unconditional, unlike the rating above it.
+
+        "Has anything been refunded on this delivery?" is a question asked
+        about orders that have not been refunded, and a card that appears only
+        when the answer is yes cannot answer it. `RefundPanel` says so in
+        words, and hides only the *control* — from anyone who is not finance.
+      */}
+      <Card className="p-4">
+        <SectionLabel>Refunds</SectionLabel>
+        <div className="mt-3">
+          <RefundPanel orderId={order.id} />
+        </div>
+      </Card>
 
       {order.rating && (
         <Card className="p-4">

@@ -12,6 +12,16 @@ export interface Column<T> {
   align?: "left" | "right";
   /** Optional: a table using `renderRow` defines its cells there instead. */
   cell?: (row: T) => ReactNode;
+  /**
+   * Replaces the header text with a control — in practice a select-all
+   * checkbox.
+   *
+   * Kept separate from `header` rather than widening it to `ReactNode`,
+   * because `header` is also the accessible name of the column and a component
+   * is not a name. Both are used: this renders, `header` still describes the
+   * column for anything that needs words.
+   */
+  headerCell?: ReactNode;
 }
 
 /**
@@ -50,12 +60,27 @@ export function DataTable<T>({
   caption,
   renderRow,
   rowClassName,
+  onRowActivate,
 }: {
   columns: readonly Column<T>[];
   /** Null while loading. An empty array means genuinely nothing matched. */
   rows: T[] | null;
   rowKey: (row: T) => string;
   loading?: boolean;
+  /**
+   * Opens a row — in practice, a `DetailDrawer`.
+   *
+   * **Mouse convenience only, and deliberately not the keyboard path.** A
+   * `<tr>` given `tabIndex` and a keydown handler is not a button: it has no
+   * role a screen reader can announce, and giving it `role="button"` destroys
+   * the row/column semantics `DataTable` exists to provide.
+   *
+   * So the keyboard route is a real focusable control *inside* the row — on
+   * the deliveries table that is the order code, which was already the
+   * designated click target. Clicking anywhere else on the row does the same
+   * thing for a mouse user, and the two agree.
+   */
+  onRowActivate?: (row: T) => void;
   /**
    * Escape hatch for a row that owns state.
    *
@@ -129,7 +154,7 @@ export function DataTable<T>({
                   column.align === "right" ? "text-right" : "text-left"
                 }`}
               >
-                {column.header}
+                {column.headerCell ?? column.header}
               </th>
             ))}
           </tr>
@@ -139,9 +164,37 @@ export function DataTable<T>({
           {rows.map((row) => (
             <tr
               key={rowKey(row)}
+              onClick={
+                onRowActivate
+                  ? (event) => {
+                      // A click that ended a text selection is not a click on
+                      // the row. Without this, dragging across a drop address
+                      // to copy it opens the drawer and throws the selection
+                      // away — which is the reason this codebase already
+                      // refused to make the whole row a link.
+                      if (
+                        (window.getSelection()?.toString().length ?? 0) > 0
+                      ) {
+                        return;
+                      }
+                      // Anything with its own behaviour keeps it. A row-level
+                      // handler that swallowed the code link would break
+                      // middle-click and ctrl-click into a new tab, which is
+                      // how people queue work up.
+                      if (
+                        (event.target as HTMLElement).closest(
+                          "a, button, input, select, label",
+                        )
+                      ) {
+                        return;
+                      }
+                      onRowActivate(row);
+                    }
+                  : undefined
+              }
               className={`motion-change transition-colors hover:bg-panel ${
-                rowClassName?.(row) ?? ""
-              }`}
+                onRowActivate ? "cursor-pointer" : ""
+              } ${rowClassName?.(row) ?? ""}`}
             >
               {renderRow
                 ? renderRow(row)

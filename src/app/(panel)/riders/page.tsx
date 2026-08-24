@@ -1,9 +1,14 @@
 "use client";
-import Link from "next/link";
 import { RevealPhone } from "@/components/RevealPhone";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RiderCard } from "@/components/RiderCard";
+import { RiderDrawer } from "@/components/RiderDrawer";
+import {
+  RIDER_FILTERS,
+  riderStatusLabel,
+  riderStatusStyle,
+} from "@/lib/riderStatus";
 import { ViewToggle, useListView } from "@/components/ViewToggle";
 import {
   Card,
@@ -17,26 +22,12 @@ import {
 import { type AdminRider, type PageMeta, ApiError, api } from "@/lib/api";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
 
-const FILTERS = [
-  { value: "pending_kyc", label: "Awaiting review" },
-  { value: "", label: "All" },
-  { value: "active", label: "Active" },
-  { value: "suspended", label: "Suspended" },
-] as const;
-
-const STATUS_STYLE: Record<string, string> = {
-  active: "text-ok border-ok/40",
-  pending_kyc: "text-warn border-warn/40",
-  suspended: "text-danger border-danger/40",
-  rejected: "text-fg-faint border-edge",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  active: "Active",
-  pending_kyc: "Awaiting review",
-  suspended: "Suspended",
-  rejected: "Rejected",
-};
+// Labels, colours and the filter list all moved to `lib/riderStatus.ts`. Three
+// copies of the same map lived in this page, `RiderCard` and nowhere shared —
+// and all three were missing `doc_expired`, which the expiry sweep has been
+// writing since migration 0015. A partner in that state rendered as the raw
+// string and could not be filtered for at all.
+const FILTERS = RIDER_FILTERS;
 
 export default function RidersPage() {
   // Opens on pending applications — this screen exists to get people approved,
@@ -45,6 +36,16 @@ export default function RidersPage() {
   // clean URL and only a deliberate change puts ?status= in it.
   const [status, setStatus, statusReady] = useUrlParam("status", "pending_kyc");
   const [search, setSearch, searchReady] = useUrlParam("search");
+  /*
+   * The open partner's id is the drawer's state, as on deliveries.
+   *
+   * Not put in the URL, unlike the filter and the page. Those are a *view* and
+   * are worth sharing — "here is the queue I am looking at". Which record
+   * happened to be open is a moment in one person's triage, and putting it in
+   * the URL would mean a shared link reopens somebody else's drawer over a
+   * list they did not choose.
+   */
+  const [openRiderId, setOpenRiderId] = useState<string | null>(null);
   const [riders, setRiders] = useState<AdminRider[] | null>(null);
   const [meta, setMeta] = useState<PageMeta | null>(null);
   const [page, setPage, pageReady] = useUrlPage();
@@ -165,7 +166,11 @@ export default function RidersPage() {
       {view === "cards" && riders !== null && riders.length > 0 && (
         <div className="stagger grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {riders.map((rider) => (
-            <RiderCard key={rider.id} rider={rider} />
+            <RiderCard
+              key={rider.id}
+              rider={rider}
+              onOpen={() => setOpenRiderId(rider.id)}
+            />
           ))}
         </div>
       )}
@@ -196,13 +201,23 @@ export default function RidersPage() {
               >
                 <div className="min-w-[180px] flex-1">
                   <div className="flex items-center gap-2">
-                    <Link
-                      href={`/riders/${rider.id}`}
+                    {/*
+                      The name opens the drawer; the row does not.
+
+                      Deliveries makes the whole row clickable, and that is
+                      right there — nothing on a delivery row is destructive.
+                      This row carries Approve and Reject. A stray click a few
+                      pixels off one of those should do nothing at all, not
+                      open a panel over the button somebody was aiming for.
+                    */}
+                    <button
+                      type="button"
+                      onClick={() => setOpenRiderId(rider.id)}
                       className="text-[13px] font-medium underline-offset-2
                                  hover:text-accent hover:underline"
                     >
                       {rider.name}
-                    </Link>
+                    </button>
                     {rider.isOnline && (
                       <span
                         title="Online"
@@ -237,11 +252,10 @@ export default function RidersPage() {
                 <span
                   className={`min-w-[124px] border px-2 py-0.5 text-center font-mono
                               text-[10px] uppercase tracking-wide ${
-                                STATUS_STYLE[rider.status] ??
-                                "border-edge text-fg-muted"
+                                riderStatusStyle(rider.status)
                               }`}
                 >
-                  {STATUS_LABEL[rider.status] ?? rider.status}
+                  {riderStatusLabel(rider.status)}
                 </span>
 
                 <div className="flex gap-1.5">
@@ -293,6 +307,11 @@ export default function RidersPage() {
           </ul>
         )}
       </Card>
+
+      <RiderDrawer
+        riderId={openRiderId}
+        onClose={() => setOpenRiderId(null)}
+      />
 
       {meta && (
         <Pager

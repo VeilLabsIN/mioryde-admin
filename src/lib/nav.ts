@@ -98,6 +98,11 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "System",
     items: [
       { href: "/monitoring", label: "Monitoring", mark: "MO", needs: ["metrics.view"] },
+      // Its own capability, granted to ops and owner, matching the server.
+      // This used to say `orders.view` — which support also has, so support
+      // saw the link and hit a 403 behind it.
+      { href: "/notifications", label: "Notifications", mark: "NT", needs: ["notifications.manage"] },
+      { href: "/settings", label: "Settings", mark: "ST", needs: ["settings.view"] },
       { href: "/readiness", label: "Readiness", mark: "RD", needs: ["metrics.view"] },
       { href: "/access", label: "Access control", mark: "AC", needs: ["access.manage"] },
     ],

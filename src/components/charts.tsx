@@ -286,43 +286,94 @@ export function BarList({
  * The comparison is the point — a figure on its own is trivia. `inverse` marks
  * metrics where down is good, so a falling cancellation rate reads green.
  */
+/**
+ * A headline figure, its movement, and what it moved from.
+ *
+ * Three changes from the version this replaces, each answering something the
+ * old one made the reader work out for themselves:
+ *
+ * 1. **The previous value is shown, not just the delta.** It was already being
+ *    computed and then thrown away, so "▲12.4%" left an operator doing
+ *    arithmetic on a number the component had in its hand.
+ * 2. **`hero` promotes one figure per group.** Every card being the same weight
+ *    means a page of nine has no entry point; the eye has to read all of them
+ *    to find the one that matters. One raised, bloomed card and eight quiet
+ *    ones is a hierarchy rather than a grid.
+ * 3. **Direction and judgement are separated.** The arrow says which way it
+ *    moved; the colour says whether that is good. `inverse` marks the measures
+ *    where down is healthy, so a rising cancellation rate is not green for the
+ *    same reason rising revenue is.
+ */
 export function Stat({
   label,
   value,
   previous,
   current,
+  previousLabel,
   inverse = false,
   hint,
+  hero = false,
 }: {
   label: string;
   value: string;
   previous?: number;
   current?: number;
+  /** The previous period's value, already formatted the same way as `value`. */
+  previousLabel?: string;
   inverse?: boolean;
   hint?: string;
+  /** Raises and blooms this card. One per group, or the hierarchy is back to flat. */
+  hero?: boolean;
 }) {
+  // Zero is guarded as well as undefined: a previous period with no activity
+  // divides to Infinity, which renders "∞%" and reads as a bug rather than as
+  // the first week of trading it usually is.
   const comparable =
     previous !== undefined && current !== undefined && previous !== 0;
   const change = comparable ? (current! - previous!) / previous! : null;
   const good = change === null ? null : inverse ? change < 0 : change > 0;
 
   return (
-    <div className="border-edge bg-surface rounded border p-4">
+    <div
+      className={
+        hero
+          ? "border-edge bloom rounded-lg border p-4 [box-shadow:var(--elev-2)]"
+          : "border-edge bg-surface rounded border p-4 [box-shadow:var(--elev-1)]"
+      }
+    >
       <p className="text-fg-faint text-meta">{label}</p>
-      <p className="mt-1 font-mono text-2xl tabular-nums">{value}</p>
+      <p
+        className={`mt-1 font-mono tabular-nums ${
+          hero ? "text-figure text-fg" : "text-2xl"
+        }`}
+      >
+        {value}
+      </p>
+
       {change !== null ? (
-        <p
-          className={`mt-1 text-meta ${good ? "text-ok" : "text-warn"}`}
-          title="Against the previous period of the same length"
-        >
-          {change > 0 ? "▲" : "▼"} {Math.abs(change * 100).toFixed(1)}%
-          <span className="text-fg-faint ml-1">vs previous</span>
+        <p className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5 text-meta">
+          <span
+            className={good ? "text-ok" : "text-warn"}
+            title="Against the previous period of the same length"
+          >
+            {/*
+              The glyph is hidden from assistive tech and the direction spelled
+              out instead: "▲" is announced as "black up-pointing triangle",
+              which is noise once per card and unbearable down a column.
+            */}
+            <span aria-hidden>{change > 0 ? "▲" : "▼"}</span>
+            <span className="sr-only">{change > 0 ? "up" : "down"} </span>
+            {Math.abs(change * 100).toFixed(1)}%
+          </span>
+          <span className="text-fg-faint">
+            {previousLabel ? `from ${previousLabel}` : "vs previous"}
+          </span>
         </p>
       ) : (
         // Said out loud rather than left blank. A card with nothing where a
         // comparison should be reads as a bug, and the page has just promised
         // every figure is measured against the previous period.
-        <p className="text-fg-faint mt-1 text-meta">
+        <p className="text-fg-faint mt-1.5 text-meta">
           {hint ?? "No data for the previous period"}
         </p>
       )}

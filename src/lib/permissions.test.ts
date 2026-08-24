@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  ROUTE_CAPABILITIES,
   type AdminRole,
   type Capability,
   can,
   canOpen,
   landingPathFor,
 } from "./permissions";
+import { allNavItems } from "./nav";
 
 const ROLES: AdminRole[] = ["owner", "ops", "finance", "support"];
 
@@ -96,6 +98,51 @@ describe("admin permissions", () => {
 
       for (const capability of all) {
         expect(can("owner", capability), `owner lacks ${capability}`).toBe(true);
+      }
+    });
+  });
+
+  describe("the nav and the route map cannot disagree", () => {
+    /*
+     * The bug this pins.
+     *
+     * `/notifications` shipped with `needs: ["orders.view"]` on the nav item
+     * and **no entry** in ROUTE_CAPABILITIES. An unlisted path is open to
+     * every role, so `support` — who holds `orders.view` — saw the link,
+     * clicked it, and hit a 403 from a server route gated on `ops`.
+     *
+     * A nav entry leading somewhere the role cannot go reads as a broken
+     * panel rather than as a policy, and neither half is wrong on its own:
+     * they are only wrong together. That is what makes it worth a test.
+     */
+    it("gives every nav item a route capability that matches what it needs", () => {
+      for (const item of allNavItems()) {
+        const entry = ROUTE_CAPABILITIES.find(([path]) => path === item.href);
+        expect(
+          entry,
+          `${item.href} is in the sidebar but not in ROUTE_CAPABILITIES, so every role can open it`,
+        ).toBeDefined();
+
+        expect(
+          item.needs,
+          `${item.href} renders on a different capability from the one that guards it`,
+        ).toContain(entry![1]);
+      }
+    });
+
+    it("shows a nav item to exactly the roles that can open its page", () => {
+      // The end-to-end version of the same rule, stated in terms of roles
+      // rather than capability names — if these two ever diverge again, this
+      // is the one that says so in the language of the bug report.
+      const roles: AdminRole[] = ["owner", "ops", "finance", "support"];
+      for (const item of allNavItems()) {
+        for (const role of roles) {
+          const visible = item.needs.some((c) => can(role, c));
+          expect(
+            visible,
+            `${role}: ${item.href} is ${visible ? "visible" : "hidden"} but ${canOpen(role, item.href) ? "openable" : "not openable"}`,
+          ).toBe(canOpen(role, item.href));
+        }
       }
     });
   });

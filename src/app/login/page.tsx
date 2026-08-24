@@ -1,11 +1,23 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LoginScene } from "@/components/LoginScene";
 import { SignInGreeting } from "@/components/SignInGreeting";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 import { Button, Input } from "@/components/ui";
 import { ApiError, api, auth } from "@/lib/api";
+
+/**
+ * Cloudflare Turnstile site key. Public by design — it identifies the widget,
+ * and the secret that actually verifies a solution lives only on the API.
+ *
+ * Absent in local development, where the whole check is skipped on both sides.
+ * See `TurnstileService.assertHuman` for why that asymmetry is safe: the server
+ * refuses sign-in outright if the *secret* is missing in production, so a
+ * misconfigured deploy fails closed rather than silently unprotected.
+ */
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
 /**
  * Staff sign-in.
@@ -44,6 +56,21 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // null until Cloudflare hands one over, and null again the moment it stops
+  // being valid. The submit button reads this directly rather than a separate
+  // boolean, so there is no second piece of state to disagree with it.
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstile = useRef<TurnstileHandle | null>(null);
+
+  // Set only when the script itself could not load — an extension blocking
+  // challenges.cloudflare.com, or a network that does. The form is still
+  // submittable in that case: the server is the authority on whether a token
+  // is required, and locking the operator out of the button here would turn a
+  // blocked script into an outage the panel cannot explain.
+  const [turnstileDown, setTurnstileDown] = useState(false);
+
+  const challengeRequired = TURNSTILE_SITE_KEY.length > 0 && !turnstileDown;
+
   // Already signed in — skip the form.
   //
   // Asks the server rather than checking storage: the refresh cookie is
@@ -67,13 +94,20 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await api.login(email.trim(), password, remember);
+      await api.login(email.trim(), password, remember, turnstileToken);
       router.replace("/");
     } catch (e) {
       setError(
         e instanceof ApiError ? e.message : "Could not reach the server.",
       );
       setBusy(false);
+      // **A Turnstile token is single-use.** Cloudflare rejects one it has
+      // already seen, so without this reset the operator's second attempt
+      // fails with a security error rather than a password error — the form
+      // reads as broken, and the reason has nothing to do with what they
+      // typed. This is the single easiest thing to get wrong in a Turnstile
+      // integration and it only shows up on the *second* wrong password.
+      turnstile.current?.reset();
     }
   }
 
@@ -345,9 +379,34 @@ export default function LoginPage() {
               </span>
             </label>
 
-            <Button type="submit" loading={busy} className="mt-2 w-full">
+            {TURNSTILE_SITE_KEY ? (
+              <Turnstile
+                siteKey={TURNSTILE_SITE_KEY}
+                onToken={setTurnstileToken}
+                onUnavailable={() => setTurnstileDown(true)}
+                handleRef={turnstile}
+              />
+            ) : null}
+
+            <Button
+              type="submit"
+              loading={busy}
+              // Disabled only while a challenge is genuinely outstanding.
+              // `interaction-only` resolves without showing anything for a
+              // normal office browser, so in practice this is enabled by the
+              // time the password is typed — and when it is not, the hint
+              // below says why rather than leaving a dead button.
+              disabled={challengeRequired && !turnstileToken}
+              className="mt-2 w-full"
+            >
               Sign in
             </Button>
+
+            {challengeRequired && !turnstileToken ? (
+              <p className="text-meta text-fg-faint" aria-live="polite">
+                Completing the security check…
+              </p>
+            ) : null}
           </form>
 
           <p className="mt-6 text-meta leading-relaxed text-fg-faint">

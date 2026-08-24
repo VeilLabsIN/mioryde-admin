@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BarList, Stat, TrendChart } from "@/components/charts";
+import { MetricTable } from "@/components/MetricTable";
 import {
   Card,
   GhostButton,
@@ -210,18 +211,26 @@ export default function AnalyticsPage() {
               value={rupees(data.summary.revenue.now.minor)}
               current={data.summary.revenue.now.minor}
               previous={data.summary.revenue.previous.minor}
+              previousLabel={rupees(data.summary.revenue.previous.minor)}
+              // The one figure the business is actually run on, so it carries
+              // the weight. Nine cards of equal weight give a page no entry
+              // point — the eye has to read all of them to find the one that
+              // matters.
+              hero
             />
             <Stat
               label="Orders placed"
               value={String(data.summary.orders.now)}
               current={data.summary.orders.now}
               previous={data.summary.orders.previous}
+              previousLabel={String(data.summary.orders.previous)}
             />
             <Stat
               label="Cancellation rate"
               value={`${(data.summary.cancellationRate.now * 100).toFixed(1)}%`}
               current={data.summary.cancellationRate.now}
               previous={data.summary.cancellationRate.previous}
+              previousLabel={`${(data.summary.cancellationRate.previous * 100).toFixed(1)}%`}
               inverse
             />
             <Stat
@@ -309,40 +318,84 @@ export default function AnalyticsPage() {
             </Card>
           </div>
 
-          <Card>
-            <SectionLabel>Fleet</SectionLabel>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Stat
-                label="Active partners"
-                value={String(data.fleet.active)}
-                hint={`${data.fleet.online} online now`}
-              />
-              <Stat
-                label="Utilisation"
-                value={`${(data.fleet.utilisation * 100).toFixed(0)}%`}
-                hint={`${data.fleet.earning} delivered in period`}
-              />
-              <Stat
-                label="Cash outstanding"
-                value={rupees(data.fleet.cashOutstanding.minor)}
-                hint={`${data.fleet.holdingCash} partner${data.fleet.holdingCash === 1 ? "" : "s"} holding`}
-              />
-              <Stat
-                label="Waiting on us"
-                value={String(
-                  data.fleet.pendingKyc + data.fleet.bankChecksPending,
-                )}
-                hint={`${data.fleet.pendingKyc} KYC · ${data.fleet.bankChecksPending} bank checks`}
-              />
-            </div>
+          {/*
+            Fleet and retention, side by side and as tables.
 
-            {data.fleet.docExpired > 0 || data.fleet.suspended > 0 ? (
-              <p className="text-fg-faint mt-4 text-xs">
-                {data.fleet.docExpired} off duty with expired documents ·{" "}
-                {data.fleet.suspended} suspended
-              </p>
-            ) : null}
-          </Card>
+            These were two full-width cards holding eight `Stat` boxes between
+            them — roughly a screen and a half of vertical space for twelve
+            numbers, none of which is a headline. A table puts the same twelve
+            in a third of the height and lets the eye read down a column of
+            figures instead of hopping between boxes.
+
+            Neither set has a previous period: partners currently online and
+            cash currently outstanding are point-in-time, not periodic. So
+            `MetricTable` drops its comparison columns here rather than
+            printing a grid of dashes that reads as data which failed to load.
+          */}
+          <div className="grid gap-3 lg:grid-cols-2">
+            <MetricTable
+              label="Fleet"
+              metrics={[
+                {
+                  label: "Active partners",
+                  value: String(data.fleet.active),
+                  hint: `${data.fleet.online} online now`,
+                },
+                {
+                  label: "Utilisation",
+                  value: `${(data.fleet.utilisation * 100).toFixed(0)}%`,
+                  hint: `${data.fleet.earning} delivered in period`,
+                },
+                {
+                  label: "Cash outstanding",
+                  value: rupees(data.fleet.cashOutstanding.minor),
+                  hint: `${data.fleet.holdingCash} partner${data.fleet.holdingCash === 1 ? "" : "s"} holding`,
+                },
+                {
+                  label: "Waiting on us",
+                  value: String(
+                    data.fleet.pendingKyc + data.fleet.bankChecksPending,
+                  ),
+                  hint: `${data.fleet.pendingKyc} KYC · ${data.fleet.bankChecksPending} bank checks`,
+                },
+              ]}
+              note={
+                data.fleet.docExpired > 0 || data.fleet.suspended > 0 ? (
+                  <>
+                    {data.fleet.docExpired} off duty with expired documents ·{" "}
+                    {data.fleet.suspended} suspended
+                  </>
+                ) : null
+              }
+            />
+
+            <MetricTable
+              label="Returning customers"
+              metrics={[
+                {
+                  label: "Repeat rate",
+                  value: `${(data.retention.repeatRate * 100).toFixed(0)}%`,
+                  hint: "Share of active customers who have ordered more than once",
+                },
+                {
+                  label: "Active customers",
+                  value: String(data.retention.activeCustomers),
+                  hint: `${data.retention.repeatCustomers} have ordered before`,
+                },
+                {
+                  label: "First-time",
+                  value: String(data.retention.newCustomers),
+                  hint: "First ever order fell inside this period",
+                },
+                {
+                  label: "Orders per customer",
+                  value: data.retention.averageLifetimeOrders.toFixed(1),
+                  hint: "Lifetime average, not just this period",
+                },
+              ]}
+              note="Measured over each customer's whole history, not just this window — somebody who ordered in January and again this week is returning, not new."
+            />
+          </div>
 
           <Card>
             <SectionLabel>Demand by hour</SectionLabel>
@@ -363,37 +416,6 @@ export default function AnalyticsPage() {
               height={180}
             />
             <PeakHour hourly={data.hourly} />
-          </Card>
-
-          <Card>
-            <SectionLabel>Returning customers</SectionLabel>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Stat
-                label="Repeat rate"
-                value={`${(data.retention.repeatRate * 100).toFixed(0)}%`}
-                hint="Of customers active in this period, the share who have ordered more than once"
-              />
-              <Stat
-                label="Active customers"
-                value={String(data.retention.activeCustomers)}
-                hint={`${data.retention.repeatCustomers} have ordered before`}
-              />
-              <Stat
-                label="First-time"
-                value={String(data.retention.newCustomers)}
-                hint="First ever order fell inside this period"
-              />
-              <Stat
-                label="Orders per customer"
-                value={data.retention.averageLifetimeOrders.toFixed(1)}
-                hint="Lifetime average, not just this period"
-              />
-            </div>
-            <p className="text-fg-faint mt-4 text-xs">
-              Measured over each customer&apos;s whole history, not just this
-              window — somebody who ordered in January and again this week is
-              returning, not new.
-            </p>
           </Card>
 
           <Card>

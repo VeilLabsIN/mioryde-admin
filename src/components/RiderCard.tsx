@@ -30,17 +30,42 @@ const STATUS_TONE: Record<string, { dot: string; label: string; text: string }> 
   pending_kyc: { dot: "bg-warn", label: "Awaiting review", text: "text-warn" },
   suspended: { dot: "bg-danger", label: "Suspended", text: "text-danger" },
   rejected: { dot: "bg-danger", label: "Rejected", text: "text-danger" },
+  // Third copy of this map in the panel, and the one that had drifted
+  // furthest. `doc_expired` has been written by the expiry sweep since
+  // migration 0015 and appeared here as the raw string in fallback grey.
+  //
+  // Warn rather than danger, and named for the cause: this partner has done
+  // nothing wrong and is one approved upload away from working again, so
+  // colouring them like a suspension sends the operator down the wrong path.
+  doc_expired: {
+    dot: "bg-warn",
+    label: "Documents expired",
+    text: "text-warn",
+  },
 };
 
-export function RiderCard({ rider }: { rider: AdminRider }) {
+export function RiderCard({
+  rider,
+  onOpen,
+}: {
+  rider: AdminRider;
+  /**
+   * Opens the partner in a drawer instead of navigating.
+   *
+   * Optional so the card keeps working as a link wherever the drawer is not
+   * mounted — and because a `<button>` and an `<a>` are genuinely different
+   * things to a keyboard and to a middle click, so this picks one rather than
+   * faking either.
+   */
+  onOpen?: () => void;
+}) {
   const tone = STATUS_TONE[rider.status] ?? {
     dot: "bg-fg-faint",
     label: rider.status.replace(/_/g, " "),
     text: "text-fg-muted",
   };
 
-  return (
-    <Link href={`/riders/${rider.id}`} className="group block">
+  const body = (
       <div
         className="motion-change h-full rounded-md border border-line bg-surface p-4
                    [box-shadow:var(--shadow-panel)] transition-colors
@@ -113,6 +138,31 @@ export function RiderCard({ rider }: { rider: AdminRider }) {
           </p>
         )}
       </div>
+  );
+
+  /*
+   * A button or a link, never a button that pretends to be a link.
+   *
+   * `<Link>` gives middle-click, ctrl-click and "copy link address" for free;
+   * `<button>` gives none of those and should not claim to. So when the drawer
+   * is available this becomes a real button, and when it is not the card stays
+   * a real link. Wrapping a button in an anchor to get both would produce
+   * invalid markup and an element no assistive technology can describe.
+   *
+   * `text-left` because a button resets alignment to centre, which silently
+   * re-centres every line of the card.
+   */
+  if (onOpen) {
+    return (
+      <button type="button" onClick={onOpen} className="group block w-full text-left">
+        {body}
+      </button>
+    );
+  }
+
+  return (
+    <Link href={`/riders/${rider.id}`} className="group block">
+      {body}
     </Link>
   );
 }

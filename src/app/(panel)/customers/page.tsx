@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Card,
   EmptyState,
@@ -12,22 +11,37 @@ import {
 import { type AdminCustomer, type PageMeta, api } from "@/lib/api";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
 import { type Column, DataTable } from "@/components/DataTable";
+import { CustomerDrawer } from "@/components/CustomerDrawer";
 
 
 /** Declared once — the grid version wrote every width twice. */
-const CUSTOMER_COLUMNS: readonly Column<AdminCustomer>[] = [
+function customerColumns(
+  onOpen: (customer: AdminCustomer) => void,
+): readonly Column<AdminCustomer>[] {
+  return [
   {
     key: "name",
     header: "Name",
     cell: (c) => (
       <span className="block min-w-0">
-        <Link
-          href={`/customers/${c.id}`}
-          className="motion-change block truncate text-body underline-offset-2
-                     transition-colors hover:text-accent hover:underline"
+        {/*
+          The keyboard route into the drawer. `DataTable` opens a row on click
+          for a mouse, but a `<tr>` has no role to announce and cannot be the
+          announced path — so a real focusable control inside the row is, and
+          the name was already the designated target.
+
+          Whole-row activation is right on this table: unlike partners, a
+          customer row carries no destructive action for a stray click to land
+          near.
+        */}
+        <button
+          type="button"
+          onClick={() => onOpen(c)}
+          className="motion-change block max-w-full truncate text-left text-body
+                     underline-offset-2 transition-colors hover:text-accent hover:underline"
         >
           {c.name || "Unnamed"}
-        </Link>
+        </button>
         {c.email && (
           <span className="block truncate text-meta text-fg-faint">{c.email}</span>
         )}
@@ -66,11 +80,23 @@ const CUSTOMER_COLUMNS: readonly Column<AdminCustomer>[] = [
       </span>
     ),
   },
-];
+  ];
+}
 
 export default function CustomersPage() {
+  // The open customer's id is the drawer's state. Not in the URL: the filter
+  // and page are a view worth sharing, but which record somebody had open is a
+  // moment in one person's triage.
+  const [openCustomerId, setOpenCustomerId] = useState<string | null>(null);
   const [customers, setCustomers] = useState<AdminCustomer[] | null>(null);
   const [meta, setMeta] = useState<PageMeta | null>(null);
+
+  // Stable across renders — the setter is, so the definitions are not rebuilt
+  // on every keystroke in the search box.
+  const columns = useMemo(
+    () => customerColumns((customer) => setOpenCustomerId(customer.id)),
+    [],
+  );
   const [page, setPage, pageReady] = useUrlPage();
   const [search, setSearch, searchReady] = useUrlParam("search");
   const urlReady = pageReady && searchReady;
@@ -156,8 +182,9 @@ export default function CustomersPage() {
           />
         ) : (
           <DataTable
+            onRowActivate={(customer) => setOpenCustomerId(customer.id)}
             caption="Customers, newest first"
-            columns={CUSTOMER_COLUMNS}
+            columns={columns}
             rows={customers}
             rowKey={(c) => c.id}
             emptyTitle="No customers match"
@@ -165,6 +192,11 @@ export default function CustomersPage() {
           />
         )}
       </Card>
+
+      <CustomerDrawer
+        customerId={openCustomerId}
+        onClose={() => setOpenCustomerId(null)}
+      />
 
       {meta && (
         <Pager

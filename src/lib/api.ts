@@ -151,7 +151,12 @@ export const api = {
    * server decides both figures and defaults to the shorter one, so passing
    * nothing is the safe call rather than the long one.
    */
-  async login(email: string, password: string, rememberMe = false) {
+  async login(
+    email: string,
+    password: string,
+    rememberMe = false,
+    turnstileToken?: string | null,
+  ) {
     const body = await request<{
       accessToken: string;
       admin: AdminIdentity;
@@ -159,7 +164,16 @@ export const api = {
       "/admin/auth/login",
       {
         method: "POST",
-        body: JSON.stringify({ email, password, rememberMe }),
+        // The key is omitted rather than sent as null when there is no token.
+        // The API validates with `forbidNonWhitelisted`, and a null on an
+        // optional string field is a 400 listing the field name — which is
+        // both a worse error for the operator and a hint for anyone probing.
+        body: JSON.stringify({
+          email,
+          password,
+          rememberMe,
+          ...(turnstileToken ? { turnstileToken } : {}),
+        }),
         // The response sets the refresh cookie; without this the browser
         // discards it and the session dies at the first reload.
         credentials: "include",
@@ -244,6 +258,53 @@ export const api = {
    * the city would be worse than no board. See `truncated` on the response.
    */
   liveOrders: () => request<LiveOrdersResponse>("/admin/orders/live"),
+
+  settings: () => request<SettingsResponse>("/admin/settings"),
+
+  notificationTopics: () =>
+    request<{ topics: NotificationTopic[] }>("/admin/notifications"),
+
+  setNotificationTopic: (
+    topic: string,
+    body: { enabled: boolean; note?: string },
+  ) =>
+    request<{ topic: string; enabled: boolean }>(
+      `/admin/notifications/${topic}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    ),
+
+  refundContext: (orderId: string) =>
+    request<RefundContext>(`/admin/orders/${orderId}/refunds`),
+
+  issueRefund: (
+    orderId: string,
+    body: { amount: number; reasonCode: RefundReason; reason?: string },
+  ) =>
+    request<{
+      id: string;
+      amount: Money;
+      destination: string;
+      creditNoteNumber: string | null;
+      fullyRefunded: boolean;
+      note: string;
+    }>(`/admin/orders/${orderId}/refund`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  ordersSummary: (params: { status?: string; search?: string }) => {
+    const query = new URLSearchParams();
+    // Omitted rather than sent empty. The API treats a missing param as "no
+    // filter"; an empty string would be compared against `o.status = ''` and
+    // match nothing, so a cleared filter would summarise zero rows beside a
+    // table showing everything.
+    if (params.status) query.set("status", params.status);
+    if (params.search) query.set("search", params.search);
+    const qs = query.toString();
+    return request<OrdersSummary>(
+      `/admin/orders/summary${qs ? `?${qs}` : ""}`,
+    );
+  },
 
   customers: (params: { page?: number; search?: string } = {}) => {
     const query = new URLSearchParams();
@@ -995,6 +1056,93 @@ export interface AuditEntry {
   subjectId: string | null;
   admin: string;
   at: string;
+}
+
+/**
+ * Aggregates over the deliveries list's *current filter*, not the current page.
+ *
+ * Computed server-side for exactly that reason — the list is paginated at 25,
+ * so reducing over the rows in hand would give page-level figures that look
+ * like set-level ones. See `ordersSummary` in `admin.controller.ts`, whose
+ * `WHERE` is a verbatim copy of the list's.
+ */
+export interface OrdersSummary {
+  total: number;
+  delivered: number;
+  cancelled: number;
+  active: number;
+  /** Orders paid in cash. Every one adds to the float partners carry. */
+  cod: number;
+  /** Delivered only — money the business has actually earned. */
+  revenue: Money;
+  cancelledValue: Money;
+  /** Null when nothing under this filter has been delivered. */
+  averageDistanceMeters: number | null;
+}
+
+/**
+ * What a refund decision needs, and deliberately nothing more.
+ *
+ * Comes from `GET /admin/orders/:id/refunds`, which `finance` may reach —
+ * unlike the delivery itself. So there is no address, no customer name and no
+ * partner here: those live on `OrderDetail`, behind `ops`/`support`.
+ */
+export interface RefundContext {
+  order: {
+    code: string;
+    status: string;
+    total: Money;
+    paymentMethod: string;
+    paymentStatus: string;
+    deliveredAt: string | null;
+    refunded: Money;
+    /** Null when the customer never paid — different from nothing being left. */
+    refundable: Money | null;
+    /** Whether issuing one will also produce a GST credit note. */
+    issuesCreditNote: boolean;
+  };
+  refunds: {
+    id: string;
+    amount: Money;
+    destination: string;
+    reasonCode: string;
+    reason: string | null;
+    creditNoteNumber: string | null;
+    issuedBy: string | null;
+    createdAt: string;
+  }[];
+}
+
+export type RefundReason =
+  | "service_deficiency"
+  | "order_cancelled"
+  | "price_correction"
+  | "goodwill";
+
+export interface SettingRow {
+  label: string;
+  value: string;
+  detail: string;
+  source: string;
+  sourceKind: "env" | "panel" | "code";
+}
+
+export interface SettingsResponse {
+  environment: string;
+  groups: { key: string; label: string; detail: string; rows: SettingRow[] }[];
+}
+
+export interface NotificationTopic {
+  topic: string;
+  label: string;
+  audience: "customer" | "partner";
+  detail: string;
+  /** Present where switching it off has a consequence beyond silence. */
+  warning?: string;
+  enabled: boolean;
+  note: string | null;
+  updatedBy: string | null;
+  updatedAt: string | null;
 }
 
 export interface AdminOrder {

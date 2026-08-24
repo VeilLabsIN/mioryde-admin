@@ -1,6 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
+ * Turnstile's origin, named once.
+ *
+ * It appears in three CSP directives and getting one of them wrong produces a
+ * widget that renders nothing with no console error worth reading — so it is a
+ * constant rather than three string literals that can drift apart.
+ */
+const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
+
+
+/**
  * Content-Security-Policy, built per request so it can carry a nonce.
  *
  * ## Why this moved out of next.config
@@ -110,7 +120,12 @@ export function middleware(request: NextRequest) {
     // 'unsafe-eval' is development only: the dev server compiles and
     // hot-reloads through eval. A production build never needs it, and
     // shipping it would hand an injected string a way to execute.
-    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
+    // Cloudflare Turnstile is the one third-party script in the panel, and it
+    // is loaded on the login page only. It needs three directives, not one —
+    // the script itself, the iframe it renders the challenge in, and the
+    // endpoint it reports back to. Miss `frame-src` and the widget silently
+    // never appears, because `frame-src 'none'` below is otherwise absolute.
+    `script-src 'self' 'unsafe-inline' ${TURNSTILE_ORIGIN}${dev ? " 'unsafe-eval'" : ""}`,
     // Tailwind injects styles inline. Nonces do not help here — the framework
     // emits style attributes, not one script tag we can mark.
     "style-src 'self' 'unsafe-inline'",
@@ -130,9 +145,9 @@ export function middleware(request: NextRequest) {
     // valid image, so the status code is the only way to tell. `img-src`
     // alone would let the map draw the provider's "Invalid key" poster while
     // the code that could say so was blocked.
-    `connect-src 'self' ${apiOrigin}${tileOrigin ? ` ${tileOrigin}` : ""}${dev ? " ws: wss:" : ""}`,
+    `connect-src 'self' ${apiOrigin} ${TURNSTILE_ORIGIN}${tileOrigin ? ` ${tileOrigin}` : ""}${dev ? " ws: wss:" : ""}`,
     "frame-ancestors 'none'",
-    "frame-src 'none'",
+    `frame-src ${TURNSTILE_ORIGIN}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

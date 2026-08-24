@@ -241,6 +241,59 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     keywords: ["health", "queue", "outbox", "workers", "system"],
   },
   {
+    href: "/notifications",
+    title: "Notifications",
+    purpose:
+      "Which push notifications the product sends, and a way to switch one off when it is going out wrong.",
+    tasks: [
+      "Stop a message that is being sent in error.",
+      "Check whether something is off, and why.",
+      "Turn one back on after an incident.",
+    ],
+    notes: [
+      "A topic that is not listed here still sends. That is deliberate: a notification added in code and switched off by default would present as a broken push, and nobody would find it.",
+      "Sign-in codes are not here and cannot be switched off. They are how people log in, not a notification, and a stray click should not be able to lock everyone out.",
+      "Switching a notification off does not stop the thing it describes. A refund still refunds; the customer simply is not told.",
+      "There is no email here because the product sends no email at all — no provider is configured. Adding recipients for messages that cannot be sent would read as configured when it is not.",
+    ],
+    keywords: [
+      "notifications",
+      "push",
+      "alerts",
+      "fcm",
+      "messages",
+      "email",
+      "settings",
+    ],
+  },
+  {
+    href: "/settings",
+    title: "Settings",
+    purpose:
+      "What this platform is configured to do — the numbers the business runs on, and where each one is changed.",
+    tasks: [
+      "Find out why a partner is not being offered jobs.",
+      "Check a limit before promising a customer something.",
+      "See which setting to ask a developer to change, and what it is called.",
+    ],
+    notes: [
+      "This is not the readiness page. Readiness lists what is missing before launch; this lists what the platform currently does.",
+      "Most values are set on the server and take effect on the next deploy. Rows that can be changed here link to the page that changes them.",
+      "No secret appears here. Keys and passwords are never sent to the panel — only whether they are configured.",
+      "The search radius is the answer to most 'this partner gets no work' questions. A partner outside it is never offered the job at all.",
+    ],
+    keywords: [
+      "settings",
+      "configuration",
+      "limits",
+      "dispatch",
+      "radius",
+      "otp",
+      "cash",
+      "gstin",
+    ],
+  },
+  {
     href: "/readiness",
     title: "Readiness",
     purpose:

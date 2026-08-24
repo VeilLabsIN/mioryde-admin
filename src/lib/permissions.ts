@@ -26,6 +26,39 @@ export type { AdminRole };
  */
 export type Capability =
   | "orders.view"
+  /**
+   * Returning money on a delivery.
+   *
+   * Separate from `orders.view` because they are different kinds of act and
+   * belong to different roles: ops decides a delivery went wrong, finance
+   * decides what it costs. Mirrors `@Roles('finance')` on
+   * `POST /admin/orders/:id/refund` — the server is the authority, this only
+   * decides whether the control is drawn.
+   */
+  | "orders.refund"
+  /**
+   * Switching a notification on or off.
+   *
+   * Its own capability rather than riding on `orders.view`, and that was
+   * learned the hard way: the first version used `orders.view` for the nav
+   * item and left `/notifications` out of `PATH_CAPABILITY` entirely — so
+   * `support`, who has `orders.view`, saw the link, clicked it, and hit a 403
+   * from a server route gated on `ops`. A nav entry that leads somewhere the
+   * role cannot go reads as a broken panel rather than as a policy.
+   *
+   * Mirrors `@Roles('ops')` on `admin/notifications`. `owner` is a superset in
+   * the guard and is listed explicitly here for the same reason every other
+   * capability is.
+   */
+  | "notifications.manage"
+  /**
+   * Reading what the platform is configured to do.
+   *
+   * Mirrors `@Roles('ops', 'finance')` on `admin/settings`. Support is
+   * excluded — not because the values are sensitive, but because a page of
+   * numbers nobody in that role can act on is noise in their sidebar.
+   */
+  | "settings.view"
   | "customers.view"
   | "riders.view"
   | "riders.review"
@@ -44,6 +77,9 @@ const MATRIX: Record<AdminRole, readonly Capability[]> = {
   // is exactly the drift this comment warns about.
   owner: [
     "orders.view",
+    "orders.refund",
+    "notifications.manage",
+    "settings.view",
     "customers.view",
     "riders.view",
     "riders.review",
@@ -61,6 +97,8 @@ const MATRIX: Record<AdminRole, readonly Capability[]> = {
   ],
   ops: [
     "orders.view",
+    "notifications.manage",
+    "settings.view",
     "customers.view",
     "riders.view",
     "riders.review",
@@ -68,7 +106,32 @@ const MATRIX: Record<AdminRole, readonly Capability[]> = {
     "pricing.view",
     "metrics.view",
   ],
-  finance: ["payouts.view", "payouts.settle", "pricing.view", "pricing.edit", "metrics.view"],
+  finance: [
+    /*
+     * `orders.refund` **without** `orders.view`, and that asymmetry is
+     * deliberate.
+     *
+     * The obvious move when refunds shipped was to give finance read access to
+     * deliveries so they could open the order they were refunding.
+     * `admin-rbac.test.ts` refuses it, and its comment names this exact case:
+     * the delivery list is the same data as the dispatch board, "the widest
+     * PII surface in the panel", and finance acquiring it would hand them a
+     * live map of the city's customers for the sake of one button.
+     *
+     * So finance never reads the delivery. Everything a refund decision needs
+     * — what it cost, how it was paid, whether it was delivered, what has
+     * already been returned — comes from `GET /admin/orders/:id/refunds`,
+     * which is scoped to `ops, finance` and carries no addresses, no customer
+     * name and no partner.
+     */
+    "orders.refund",
+    "settings.view",
+    "payouts.view",
+    "payouts.settle",
+    "pricing.view",
+    "pricing.edit",
+    "metrics.view",
+  ],
   support: ["orders.view", "customers.view"],
 };
 
@@ -96,7 +159,7 @@ export function canAny(
  * the kind of bug that only shows up for one role and therefore only in
  * production.
  */
-const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
+export const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   ["/orders", "orders.view"],
   // Same right as reading deliveries, but listed *after* /orders on purpose:
   // this list decides where a role lands after signing in, and the live board
@@ -127,6 +190,11 @@ const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   ["/payouts", "payouts.view"],
   ["/pricing", "pricing.view"],
   ["/audit", "audit.view"],
+  // Matches the server, which gates this on ops. Its absence from this list
+  // was the bug: an unlisted path is open to every role, so support could
+  // navigate to a page whose every request answers 403.
+  ["/notifications", "notifications.manage"],
+  ["/settings", "settings.view"],
   ["/access", "access.manage"],
   // `/security` is deliberately absent, along with `/help`, `/legal`,
   // `/support`, `/about`, `/privacy`, `/faq` and `/wuda`. Unlisted paths are
