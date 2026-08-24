@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BarList, Stat, TrendChart } from "@/components/charts";
+import {
+  BarList,
+  type ChartMode,
+  ChartModeSwitch,
+  Stat,
+  TrendChart,
+} from "@/components/charts";
 import { MetricTable } from "@/components/MetricTable";
 import {
   Card,
@@ -89,6 +95,15 @@ export default function AnalyticsPage() {
     ? (seriesRaw as SeriesKey)
     : "revenue";
   const setSeries = (next: SeriesKey) => setSeriesRaw(next);
+  /*
+   * How the main chart is drawn.
+   *
+   * Local rather than in the URL, unlike the series and the date range. Those
+   * describe *what* is being looked at and are worth sharing; this describes
+   * how one person prefers to read it, and putting it in the URL would mean a
+   * shared link silently overrides the recipient's own choice.
+   */
+  const [chartMode, setChartMode] = useState<ChartMode>("line");
   const [data, setData] = useState<Analytics | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -250,7 +265,8 @@ export default function AnalyticsPage() {
                     : `${activeDays} of ${points.length} days had activity.`}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <ChartModeSwitch mode={chartMode} onChange={setChartMode} />
                 {SERIES.map((option) => (
                   <GhostButton
                     key={option.key}
@@ -269,7 +285,7 @@ export default function AnalyticsPage() {
 
             <TrendChart
               points={points}
-              mode={active.mode}
+              mode={chartMode}
               format={(value) =>
                 active.money ? rupees(value) : String(Math.round(value))
               }

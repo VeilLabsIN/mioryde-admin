@@ -91,8 +91,8 @@ export function LayerSwitch({
         title={`Showing: ${OPTIONS[index]?.label ?? "Everything"}`}
         aria-label={`Showing ${OPTIONS[index]?.label ?? "Everything"}. Click to change.`}
         className="motion-change mx-1 flex h-8 items-center justify-center rounded-md
-                   border border-line bg-panel font-mono text-micro uppercase
-                   text-fg-muted transition-colors hover:border-accent hover:text-accent"
+                   border border-rail-line bg-rail-raised font-mono text-micro uppercase
+                   text-rail-fg-muted transition-colors hover:border-rail-accent hover:text-rail-accent"
       >
         {OPTIONS[index]?.short ?? "ALL"}
       </button>
@@ -101,17 +101,17 @@ export function LayerSwitch({
 
   return (
     <div className="px-1 pb-2">
-      <p className="px-2 pb-1.5 font-mono text-micro uppercase text-fg-faint">
+      <p className="px-2 pb-1.5 font-mono text-micro uppercase text-rail-fg-faint">
         Showing
       </p>
       <div
         role="radiogroup"
         aria-label="Which side of the business to show"
-        className="relative grid grid-cols-3 rounded-md border border-line bg-panel p-0.5"
+        className="relative grid grid-cols-3 rounded-md border border-rail-line bg-rail-raised p-0.5"
       >
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-y-0.5 left-0.5 rounded-sm bg-surface
+          className="pointer-events-none absolute inset-y-0.5 left-0.5 rounded-sm bg-rail-active
                      ring-1 ring-edge transition-transform duration-250
                      ease-[var(--ease-out-quint)] motion-reduce:transition-none"
           style={{
@@ -132,8 +132,8 @@ export function LayerSwitch({
               className={`motion-change relative z-10 h-7 font-mono text-micro uppercase
                           transition-colors ${
                             selected
-                              ? "text-accent"
-                              : "text-fg-faint hover:text-fg-mid"
+                              ? "text-rail-accent"
+                              : "text-rail-fg-faint hover:text-rail-fg"
                           }`}
             >
               {option.short}

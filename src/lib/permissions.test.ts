@@ -115,9 +115,29 @@ describe("admin permissions", () => {
      * panel rather than as a policy, and neither half is wrong on its own:
      * they are only wrong together. That is what makes it worth a test.
      */
-    it("gives every nav item a route capability that matches what it needs", () => {
+    it("gives every gated nav item a route capability that matches what it needs", () => {
       for (const item of allNavItems()) {
         const entry = ROUTE_CAPABILITIES.find(([path]) => path === item.href);
+
+        /*
+         * An item with no requirements is deliberately open, and must be
+         * absent from ROUTE_CAPABILITIES rather than present with something
+         * weak. `/help` is the case: somebody being asked to use a tool is
+         * entitled to read about it, whatever their role.
+         *
+         * Asserting the absence rather than skipping it is the point — a page
+         * that is *meant* to be open and a page somebody forgot to gate look
+         * identical from here, so the only honest version of this test insists
+         * the intent is expressed in the nav entry.
+         */
+        if (item.needs.length === 0) {
+          expect(
+            entry,
+            `${item.href} needs no capability, so it must not be guarded by one`,
+          ).toBeUndefined();
+          continue;
+        }
+
         expect(
           entry,
           `${item.href} is in the sidebar but not in ROUTE_CAPABILITIES, so every role can open it`,
@@ -137,7 +157,10 @@ describe("admin permissions", () => {
       const roles: AdminRole[] = ["owner", "ops", "finance", "support"];
       for (const item of allNavItems()) {
         for (const role of roles) {
-          const visible = item.needs.some((c) => can(role, c));
+          // No requirements means visible to everyone — `some` over an empty
+          // list is false, which is the opposite of what an open page means.
+          const visible =
+            item.needs.length === 0 || item.needs.some((c) => can(role, c));
           expect(
             visible,
             `${role}: ${item.href} is ${visible ? "visible" : "hidden"} but ${canOpen(role, item.href) ? "openable" : "not openable"}`,

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type AdminRole, canAny } from "@/lib/permissions";
-import { NAV_GROUPS } from "@/lib/nav";
+import { NAV_GROUPS, RAIL_FOOTER } from "@/lib/nav";
+import { NavIcon } from "./NavIcon";
 import { LayerSwitch, useLayer } from "./LayerSwitch";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 
@@ -87,6 +88,61 @@ export function Sidebar({
    * would be the panel arguing with them every morning.
    */
   const [collapsed, setCollapsed] = useState(false);
+
+  /**
+   * Whether the pointer is over a collapsed rail.
+   *
+   * Peeking is not un-collapsing. The stored preference is untouched, so
+   * moving the mouse away puts the rail straight back — an operator who chose
+   * 72px keeps 72px, and gets to read a label without paying for it with a
+   * click and a second click to undo.
+   */
+  const [peeking, setPeeking] = useState(false);
+
+  /**
+   * Opening is delayed; closing is not.
+   *
+   * Without the delay, a pointer travelling diagonally across the screen to
+   * something else clips the rail and throws it open on the way past — the
+   * width animates, the page reflows, and the thing being aimed at moves.
+   * 220ms is longer than a pass-through and shorter than a deliberate arrival.
+   *
+   * Closing has no delay on purpose: once somebody has left, holding the rail
+   * open is the panel arguing with them.
+   */
+  const peekTimer = useRef<number | null>(null);
+
+  const beginPeek = () => {
+    if (peekTimer.current !== null) window.clearTimeout(peekTimer.current);
+    peekTimer.current = window.setTimeout(() => setPeeking(true), 220);
+  };
+
+  const endPeek = () => {
+    if (peekTimer.current !== null) {
+      window.clearTimeout(peekTimer.current);
+      peekTimer.current = null;
+    }
+    setPeeking(false);
+  };
+
+  // A pending timer must not fire into an unmounted component, and a rail left
+  // peeking because the route changed under the pointer is a rail stuck open.
+  useEffect(
+    () => () => {
+      if (peekTimer.current !== null) window.clearTimeout(peekTimer.current);
+    },
+    [],
+  );
+
+  /**
+   * What the rail actually renders as.
+   *
+   * Everything below reads this rather than `collapsed`, so a peeked rail is
+   * indistinguishable from an open one — labels, tooltips, focusability and
+   * the group chevrons all follow together instead of each needing to know
+   * about peeking separately.
+   */
+  const narrow = collapsed && !peeking;
 
   useEffect(() => {
     try {
@@ -182,7 +238,7 @@ export function Sidebar({
     // offsetTop is relative to the nearest positioned ancestor, which is the
     // nav itself — so this stays correct with the items nested inside groups.
     setIndicator({ y: item.offsetTop, h: item.offsetHeight });
-  }, [activeHref, collapsed, groups.length, shutGroups]);
+  }, [activeHref, narrow, groups.length, shutGroups]);
 
   /**
    * A group is folded unless it holds the page you are on.
@@ -257,13 +313,49 @@ export function Sidebar({
         />
       )}
     <aside
-      data-collapsed={collapsed}
+      onMouseEnter={collapsed ? beginPeek : undefined}
+      onMouseLeave={collapsed ? endPeek : undefined}
+      /*
+        Focus opens it too. A keyboard user tabbing into a collapsed rail would
+        otherwise move through a column of unlabelled icons — the peek is what
+        makes the labels available, so it has to be reachable without a mouse.
+      */
+      onFocusCapture={collapsed ? () => setPeeking(true) : undefined}
+      onBlurCapture={
+        collapsed
+          ? (event) => {
+              // Only when focus has genuinely left the rail, not while moving
+              // between two items inside it.
+              if (!event.currentTarget.contains(event.relatedTarget)) {
+                endPeek();
+              }
+            }
+          : undefined
+      }
+      data-collapsed={narrow}
+      data-peek={peeking ? "true" : undefined}
       data-open={open}
-      className="group/rail fixed inset-y-0 left-0 z-40 flex h-dvh shrink-0 flex-col border-r border-line bg-surface
+      /*
+        `data-peek` floats the rail over the page instead of pushing it.
+
+        This is the whole difference between a hover-expand that feels
+        considered and one that feels broken. If the rail grows in the layout,
+        every column to its right moves — on a table that is a 176px reflow of
+        the thing the operator is reading, triggered by the mouse merely
+        passing near the edge. Overlaying costs nothing and moves nothing.
+
+        The 72px track is held by the sibling spacer, so the page never learns
+        the rail widened. A deliberate collapse still reflows, once, because
+        that was asked for.
+      */
+      className="group/rail fixed inset-y-0 left-0 z-40 flex h-dvh shrink-0 flex-col border-r border-rail-line bg-rail-bg text-rail-fg
                  transition-[width,transform] duration-300 ease-[var(--ease-out-quint)]
                  w-[248px] data-[collapsed=true]:w-[72px]
                  -translate-x-full data-[open=true]:translate-x-0
-                 md:static md:z-20 md:translate-x-0"
+                 md:static md:z-20 md:translate-x-0
+                 data-[peek=true]:md:absolute data-[peek=true]:md:inset-y-0
+                 data-[peek=true]:md:left-0 data-[peek=true]:md:w-[248px]
+                 data-[peek=true]:md:[box-shadow:var(--elev-3)]"
     >
       {/* No brand block here.
 
@@ -284,8 +376,8 @@ export function Sidebar({
       <button
         type="button"
         onClick={onClose}
-        className="flex h-11 items-center gap-2 px-3 text-body text-fg-muted
-                   transition-colors hover:text-fg md:hidden"
+        className="flex h-11 items-center gap-2 px-3 text-body text-rail-fg-muted
+                   transition-colors hover:text-rail-fg md:hidden"
       >
         <span aria-hidden className="font-mono">
           ←
@@ -293,8 +385,47 @@ export function Sidebar({
         Close navigation
       </button>
 
-      <div className="border-b border-line pt-2">
-        <LayerSwitch layer={layer} onChange={setLayer} collapsed={collapsed} />
+      {/*
+        Icon only, and pinned right so it sits on the rail's edge — the edge
+        being the thing that moves. At 72px there is no room for a word anyway,
+        so a label would only have existed to disappear.
+      */}
+      <div className="flex h-11 shrink-0 items-center justify-end px-3.5">
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="grid size-7 place-items-center rounded-xs text-rail-fg-faint
+                     transition-colors duration-150 hover:bg-rail-hover hover:text-rail-fg
+                     focus-visible:ring-2 focus-visible:ring-rail-accent focus-visible:outline-none"
+        >
+          {/*
+            Two bars, not a chevron. A chevron says "there is more this way",
+            which is what the group headers below already say; this says "the
+            panel has an edge and I am moving it". The right-hand bar slides
+            toward the left one as it closes.
+          */}
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+            <rect x="1.5" y="2.5" width="4" height="11" rx="1" fill="currentColor" opacity="0.9" />
+            <rect
+              x="7.5"
+              y="2.5"
+              width="7"
+              height="11"
+              rx="1"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              className="origin-left transition-transform duration-300 ease-[var(--ease-out-quint)] motion-reduce:transition-none"
+              style={{ transform: collapsed ? "scaleX(0.35)" : "none" }}
+            />
+          </svg>
+        </button>
+      </div>
+
+      <div className="border-b border-rail-line">
+        <LayerSwitch layer={layer} onChange={setLayer} collapsed={narrow} />
       </div>
 
       <nav
@@ -307,7 +438,7 @@ export function Sidebar({
         {indicator && (
           <span
             aria-hidden
-            className="pointer-events-none absolute left-2 right-2 z-0 chamfer-sm bg-panel
+            className="pointer-events-none absolute left-2 right-2 z-0 chamfer-sm bg-rail-active
                        transition-transform duration-300 ease-[var(--ease-out-quint)]
                        motion-reduce:transition-none"
             style={{
@@ -330,10 +461,10 @@ export function Sidebar({
                 type="button"
                 onClick={() => toggleGroup(group.label)}
                 aria-expanded={!shut}
-                aria-hidden={collapsed}
-                tabIndex={collapsed ? -1 : undefined}
+                aria-hidden={narrow}
+                tabIndex={narrow ? -1 : undefined}
                 className="flex w-full items-center gap-1.5 px-3 pb-1 font-mono text-micro uppercase
-                           text-fg-faint transition-opacity duration-200 hover:text-fg-mid
+                           text-rail-fg-faint transition-opacity duration-200 hover:text-rail-fg-muted
                            group-data-[collapsed=true]/rail:opacity-0"
               >
                 <svg
@@ -357,7 +488,7 @@ export function Sidebar({
                 <Link
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  title={collapsed ? item.label : undefined}
+                  title={narrow ? item.label : undefined}
                   className="group/item relative flex h-11 items-center gap-3 rounded-none px-3
                              transition-colors duration-150"
                 >
@@ -366,24 +497,28 @@ export function Sidebar({
                   <span
                     aria-hidden
                     className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 origin-center
-                               bg-accent-bright transition-transform duration-300
+                               bg-rail-accent transition-transform duration-300
                                ease-[var(--ease-spring)]"
                     style={{ transform: `translateY(-50%) scaleY(${active ? 1 : 0})` }}
                   />
 
-                  {/* Off the scale on purpose: `text-micro` carries 2px of
-                      tracking, which pushes a two-letter mark off-centre in a
-                      fixed 28px box. This is a glyph, not a label. */}
+                  {/* An icon, not the two-letter mark this used to show.
+
+                      At 72px a column of initialisms is a column of things
+                      that must be *read*, and `PO` four rows from `PT` is a
+                      mistake waiting to happen. A silhouette is recognised
+                      without reading, which is the entire job of a collapsed
+                      rail. The mark survives for the command palette, where
+                      there is room for neither an icon nor a full label. */}
                   <span
-                    className={`grid size-7 shrink-0 place-items-center font-mono text-[10px]
-                                font-bold tracking-tight transition-colors duration-150
+                    className={`grid size-7 shrink-0 place-items-center transition-colors duration-150
                                 ${
                                   active
-                                    ? "text-accent"
-                                    : "text-fg-faint group-hover/item:text-fg-mid"
+                                    ? "text-rail-accent"
+                                    : "text-rail-fg-faint group-hover/item:text-rail-fg"
                                 }`}
                   >
-                    {item.mark}
+                    <NavIcon name={item.icon} />
                   </span>
 
                   <span
@@ -391,8 +526,8 @@ export function Sidebar({
                                 group-data-[collapsed=true]/rail:opacity-0
                                 ${
                                   active
-                                    ? "font-medium text-fg"
-                                    : "text-fg-muted group-hover/item:text-fg-soft"
+                                    ? "font-medium text-rail-fg"
+                                    : "text-rail-fg-muted group-hover/item:text-rail-fg"
                                 }`}
                   >
                     {item.label}
@@ -400,8 +535,8 @@ export function Sidebar({
 
                   {item.badge !== undefined && item.badge > 0 && (
                     <span
-                      className="chamfer-sm bg-accent-bright px-1.5 py-0.5 font-mono text-meta
-                                 font-bold text-on-accent-bright
+                      className="chamfer-sm bg-rail-accent px-1.5 py-0.5 font-mono text-meta
+                                 font-bold text-rail-bg
                                  group-data-[collapsed=true]/rail:opacity-0"
                     >
                       {item.badge > 99 ? "99+" : item.badge}
@@ -418,44 +553,82 @@ export function Sidebar({
         </div>
       </nav>
 
-      <div className="border-t border-line p-2">
-        <ThemeSwitcher collapsed={collapsed} />
+      {/*
+        The pinned foot.
 
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="mt-1 flex h-9 w-full items-center gap-3 px-3 text-fg-faint
-                     transition-colors duration-150 hover:text-fg-mid"
-        >
-          <span className="grid size-7 shrink-0 place-items-center">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              aria-hidden
-              className="transition-transform duration-300 ease-[var(--ease-out-quint)]"
-              style={{ transform: collapsed ? "rotate(180deg)" : "none" }}
-            >
-              <path
-                d="M9 3L5 7l4 4"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="square"
-              />
-            </svg>
-          </span>
-          <span
-            className="truncate font-mono text-micro uppercase
-                       transition-opacity duration-200
-                       group-data-[collapsed=true]/rail:opacity-0"
-          >
-            Collapse
-          </span>
-        </button>
+        Settings and help are not part of the job, so they are not in the list
+        of places the job happens. They live at a fixed address that does not
+        move when a group is folded, when a role hides half the rail, or when
+        the list grows — because both are reached rarely, and hunting for a
+        rarely-used destination is the whole of its cost.
+
+        Icon-first even when expanded: these are two items in a row rather than
+        a stack, so the foot stays one line tall and the navigation above keeps
+        the height.
+      */}
+      <div className="border-t border-rail-line p-2">
+        <div className="mb-1 flex items-center gap-1">
+          {RAIL_FOOTER.filter(
+            // An empty `needs` means open to everyone. `canAny` is `some` over
+            // the list, which is false for an empty one — the opposite of what
+            // an unrestricted page means.
+            (item) => item.needs.length === 0 || canAny(role, item.needs),
+          ).map((item) => {
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                title={item.label}
+                className={`group/foot flex h-8 items-center gap-2.5 rounded-xs px-1.5
+                            transition-colors duration-150
+                            ${narrow ? "" : "flex-1"}
+                            ${
+                              active
+                                ? "bg-rail-active text-rail-fg"
+                                : "text-rail-fg-faint hover:bg-rail-hover hover:text-rail-fg"
+                            }`}
+              >
+                <span className="grid size-5 shrink-0 place-items-center">
+                  <NavIcon name={item.icon} />
+                </span>
+                <span
+                  aria-hidden={narrow}
+                  className="min-w-0 truncate text-body transition-opacity duration-200
+                             group-data-[collapsed=true]/rail:opacity-0"
+                >
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+
+        <ThemeSwitcher collapsed={narrow} />
+
+        {/* The collapse control moved to the top of the rail.
+
+            It used to live down here under the theme switcher, which put the
+            one control that changes the shape of the navigation below all of
+            the navigation — so using it meant travelling the full height of
+            the thing you were about to shrink. It is now the first element in
+            the rail, where the effect is next to the cause. */}
       </div>
     </aside>
+
+    {/*
+      Holds the 72px track while the rail is floating over the page.
+
+      Only rendered during a peek, and only on desktop — at which point the
+      rail is `position: absolute` and has left the flex row, so without this
+      the entire page would slide 72px left the instant the pointer arrived.
+      That is the reflow the overlay exists to avoid, arriving by the back
+      door.
+    */}
+    {peeking ? (
+      <div aria-hidden className="hidden w-[72px] shrink-0 md:block" />
+    ) : null}
     </>
   );
 }

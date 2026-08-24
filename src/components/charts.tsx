@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Charts, hand-written as SVG.
@@ -35,6 +35,80 @@ function niceMax(value: number): number {
  * thirty separate facts is exactly what it is and a line pretends there were
  * values in between.
  */
+/**
+ * The largest number of axis divisions that produces distinct labels.
+ *
+ * Returns fractions of the maximum, not values, so the caller keeps control of
+ * formatting. Falls back to two ticks — a floor and a ceiling — which is the
+ * fewest that still lets somebody read a magnitude off the chart.
+ */
+function chooseTicks(max: number, format: (value: number) => string): number[] {
+  for (const divisions of [4, 3, 2]) {
+    const fractions = Array.from(
+      { length: divisions + 1 },
+      (_, i) => i / divisions,
+    );
+    const labels = fractions.map((f) => format(max * f));
+    if (new Set(labels).size === labels.length) return fractions;
+  }
+  return [0, 1];
+}
+
+export type ChartMode = "line" | "bar" | "area";
+
+/**
+ * Lets a reader change how a series is drawn without changing what it says.
+ *
+ * The three modes answer different questions about the same numbers, which is
+ * why one chart is not enough: a **line** shows shape and direction, **bars**
+ * show that each value is a separate countable fact, and an **area** shows
+ * accumulation and makes a run of low values legible where a line vanishes
+ * into the axis.
+ *
+ * Presented as a control rather than chosen per chart in code, because which
+ * question somebody is asking is not knowable when the page is written. A
+ * month of revenue is a shape until you are trying to see which single day
+ * went wrong.
+ */
+export function ChartModeSwitch({
+  mode,
+  onChange,
+}: {
+  mode: ChartMode;
+  onChange: (mode: ChartMode) => void;
+}) {
+  const options: { value: ChartMode; label: string; hint: string }[] = [
+    { value: "line", label: "Line", hint: "Shape and direction over time" },
+    { value: "area", label: "Area", hint: "Emphasises volume and low values" },
+    { value: "bar", label: "Bars", hint: "Each period as a separate figure" },
+  ];
+
+  return (
+    <div
+      role="group"
+      aria-label="Chart type"
+      className="border-edge flex overflow-hidden rounded-xs border"
+    >
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onChange(option.value)}
+          aria-pressed={mode === option.value}
+          title={option.hint}
+          className={`px-2 py-1 font-mono text-micro uppercase transition-colors duration-150 ${
+            mode === option.value
+              ? "bg-panel text-fg"
+              : "text-fg-faint hover:text-fg-mid"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function TrendChart({
   points,
   height = 200,
@@ -44,18 +118,50 @@ export function TrendChart({
   points: Point[];
   height?: number;
   format: (value: number) => string;
-  mode?: "line" | "bar";
+  mode?: ChartMode;
 }) {
   // Which point the pointer is nearest. An analytics chart you cannot
   // interrogate is a picture, not a tool — the whole question people bring to
   // one is "what happened on *that* day".
   const [hover, setHover] = useState<number | null>(null);
 
+  const box = useRef<HTMLDivElement>(null);
+  // 760 until measured — the width this chart was designed at, so the first
+  // paint is a sensible chart rather than a collapsed one.
+  const [measuredWidth, setMeasuredWidth] = useState(760);
+
+  useEffect(() => {
+    const element = box.current;
+    if (!element) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      const next = entry?.contentRect.width ?? 0;
+      // Floored so a chart in a hidden tab does not collapse to zero and
+      // divide by it.
+      if (next > 0) setMeasuredWidth(Math.max(320, Math.round(next)));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
   if (points.length === 0) {
     return <p className="text-fg-faint py-8 text-center text-body">No data yet.</p>;
   }
 
-  const width = 760;
+  /*
+   * The viewBox tracks the measured width, so one SVG unit is one CSS pixel.
+   *
+   * The chart used to be a fixed 760-unit viewBox drawn with `h-auto w-full`,
+   * which makes the *rendered height* proportional to the container: the same
+   * chart was 200px tall in a narrow column and 370px tall on a wide monitor,
+   * where a flat line at zero filled half the screen. That is the "everything
+   * is enormous" problem, and it is not fixable by choosing a better height —
+   * any fixed height is wrong at some width.
+   *
+   * `preserveAspectRatio="none"` would hold the height but stretch every glyph
+   * horizontally. Measuring costs one observer and distorts nothing.
+   */
+  const width = measuredWidth;
   // Left padding carries the axis labels; without it they render outside the
   // viewBox and are simply invisible.
   const pad = { top: 16, right: 12, bottom: 22, left: 56 };
@@ -73,7 +179,20 @@ export function TrendChart({
   // single false number.
   const y = (v: number) => pad.top + inner.h - (v / max) * inner.h;
 
-  const ticks = [0, 0.25, 0.5, 0.75, 1];
+  /*
+   * Tick count chosen so no two labels read the same.
+   *
+   * This was a fixed `[0, .25, .5, .75, 1]`, which on a chart whose maximum is
+   * 2 produced the axis **0, 1, 1, 2, 2** — two pairs of duplicates, because
+   * the count formatter rounds 0.5 to 1 and 1.5 to 2. It looked like the chart
+   * could not count.
+   *
+   * Rather than special-casing small integers, try progressively fewer
+   * divisions and take the first that yields distinct labels. That works for
+   * money and percentages too, and needs to know nothing about the formatter
+   * beyond what it returns.
+   */
+  const ticks = chooseTicks(max, format);
 
   // At most six date labels, evenly spaced. Thirty-one would overlap into a
   // smear; two leaves a reader unable to place the middle of the chart.
@@ -83,10 +202,12 @@ export function TrendChart({
   const barWidth = Math.max(inner.w / points.length - 2, 1);
 
   return (
-    <div className="overflow-x-auto">
+    <div ref={box} className="w-full">
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="text-accent h-auto w-full min-w-[34rem]"
+        width={width}
+        height={height}
+        className="text-accent block"
         role="img"
         aria-label={`${points[0]?.label} to ${points[points.length - 1]?.label}`}
         onPointerLeave={() => setHover(null)}
@@ -138,7 +259,11 @@ export function TrendChart({
                   <polygon
                     points={`${pad.left},${pad.top + inner.h} ${line} ${x(points.length - 1)},${pad.top + inner.h}`}
                     fill="currentColor"
-                    opacity="0.12"
+                    // Area is the same geometry with the fill carrying the
+                    // meaning instead of the stroke — so switching between the
+                    // two never moves a single data point, which is what makes
+                    // it a view control rather than a different chart.
+                    opacity={mode === "area" ? "0.3" : "0.12"}
                   />
                   <polyline
                     points={line}

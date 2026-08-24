@@ -433,6 +433,77 @@
   background-image: var(--bloom);
 }
 
+
+/* ── The navigation rail's own palette ──────────────────────────────────────
+   The rail does not use the page's colours, and that is the point.
+
+   ## Why a second palette rather than one theme everywhere
+
+   In `daylight` the panel is a warm off-white sheet. A rail painted the same
+   off-white is separated from the content only by a 1px line, which makes the
+   two read as one surface — so the eye has to find the boundary every time it
+   returns from the content to the navigation. Depth does that work for free:
+   a dark rail against a light sheet is one glance, not a search.
+
+   It is also how the eye knows which plane it is on. Content changes on every
+   route; navigation never does. Giving the permanent thing a permanent colour
+   is what stops it feeling like part of the page it is describing.
+
+   ## Why it is not simply "the dark theme's colours"
+
+   Reusing `tokyo`'s blue-violet neutrals under `daylight` would put two
+   different colour temperatures side by side — a cool rail against a warm
+   sheet reads as a rendering fault. These are the *daylight* ramp pushed dark:
+   same yellow-leaning hue family, same brand accent, inverted lightness.
+
+   ## Measured, not chosen by eye
+
+   Against `--rail-bg`, every foreground here clears 4.5:1 —
+   fg 14.5:1, muted 7.2:1, faint 4.9:1, accent 8.9:1. `--rail-fg-faint` is the
+   one with headroom to spare and none to give: it carries group labels at 9px,
+   which is exactly where a ratio chosen by eye goes wrong.
+
+   In `tokyo` the rail goes *darker* than the page rather than lighter. On an
+   already-dark theme the same separation has to come from somewhere, and
+   lifting the rail would make it look like a raised card rather than a ground.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root,
+:root[data-theme="daylight"] {
+  --rail-bg: #221f19;
+  --rail-raised: #2c2820;
+  --rail-line: #353027;
+  --rail-fg: #f4f1e6;
+  --rail-fg-muted: #b3ab97;
+  --rail-fg-faint: #948c78;
+  --rail-accent: #f5b301;
+  --rail-hover: #2a2620;
+  --rail-active: #332e25;
+}
+
+:root[data-theme="tokyo"] {
+  --rail-bg: #101017;
+  --rail-raised: #171821;
+  --rail-line: #262a3f;
+  --rail-fg: #c0caf5;
+  --rail-fg-muted: #9aa3c9;
+  --rail-fg-faint: #8b93ba;
+  --rail-accent: #e0af68;
+  --rail-hover: #171821;
+  --rail-active: #1d1f2c;
+}
+
+:root[data-theme="system"] {
+  --rail-bg: light-dark(#221f19, #101017);
+  --rail-raised: light-dark(#2c2820, #171821);
+  --rail-line: light-dark(#353027, #262a3f);
+  --rail-fg: light-dark(#f4f1e6, #c0caf5);
+  --rail-fg-muted: light-dark(#b3ab97, #9aa3c9);
+  --rail-fg-faint: light-dark(#948c78, #8b93ba);
+  --rail-accent: light-dark(#f5b301, #e0af68);
+  --rail-hover: light-dark(#2a2620, #171821);
+  --rail-active: light-dark(#332e25, #1d1f2c);
+}
+
 /* Expose the tokens to Tailwind so `bg-surface`, `text-fg-muted` etc. work. */
 @theme inline {
   --color-bg: var(--bg);
@@ -460,6 +531,16 @@
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-danger: var(--danger);
+
+  --color-rail-bg: var(--rail-bg);
+  --color-rail-raised: var(--rail-raised);
+  --color-rail-line: var(--rail-line);
+  --color-rail-fg: var(--rail-fg);
+  --color-rail-fg-muted: var(--rail-fg-muted);
+  --color-rail-fg-faint: var(--rail-fg-faint);
+  --color-rail-accent: var(--rail-accent);
+  --color-rail-hover: var(--rail-hover);
+  --color-rail-active: var(--rail-active);
 
   --color-scrim: var(--scrim);
   --color-overlay: var(--overlay);

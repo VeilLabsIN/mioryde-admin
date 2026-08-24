@@ -70,8 +70,8 @@ export function ThemeSwitcher({ collapsed }: { collapsed: boolean }) {
         onClick={() => setTheme(OPTIONS[(index + 1) % OPTIONS.length]!.value)}
         title={`Theme: ${OPTIONS[index]?.label ?? "Daylight"}`}
         aria-label={`Theme: ${OPTIONS[index]?.label ?? "Daylight"}. Click to change.`}
-        className="flex h-9 w-full items-center px-3 text-fg-faint transition-colors
-                   duration-150 hover:text-accent"
+        className="flex h-9 w-full items-center px-3 text-rail-fg-faint transition-colors
+                   duration-150 hover:text-rail-accent"
       >
         <span className="grid size-7 shrink-0 place-items-center">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
@@ -84,14 +84,14 @@ export function ThemeSwitcher({ collapsed }: { collapsed: boolean }) {
 
   return (
     <div className="px-1 py-1">
-      <p className="px-2 pb-1.5 font-mono text-micro uppercase text-fg-faint">
+      <p className="px-2 pb-1.5 font-mono text-micro uppercase text-rail-fg-faint">
         Theme
       </p>
 
       <div
         role="radiogroup"
         aria-label="Colour theme"
-        className="relative grid grid-cols-3 gap-0 border border-line bg-panel p-0.5"
+        className="relative grid grid-cols-3 gap-0 border border-rail-line bg-rail-raised p-0.5"
       >
         {/* Sliding selection marker. */}
         <span
@@ -118,8 +118,8 @@ export function ThemeSwitcher({ collapsed }: { collapsed: boolean }) {
               className={`relative z-10 flex h-8 items-center justify-center transition-colors
                           duration-150 ${
                             selected
-                              ? "text-accent"
-                              : "text-fg-faint hover:text-fg-mid"
+                              ? "text-rail-accent"
+                              : "text-rail-fg-faint hover:text-rail-fg"
                           }`}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
@@ -138,7 +138,7 @@ export function ThemeSwitcher({ collapsed }: { collapsed: boolean }) {
         wondering why their blue Windows accent did nothing.
       */}
       {theme === "system" && (
-        <p className="animate-slide-in px-2 pt-1.5 text-meta text-fg-faint">
+        <p className="animate-slide-in px-2 pt-1.5 text-meta text-rail-fg-faint">
           {usingSystemAccent
             ? "Using your system accent colour."
             : "Following system light/dark. This browser doesn't expose the OS accent colour."}
