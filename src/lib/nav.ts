@@ -113,6 +113,10 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       // This used to say `orders.view` — which support also has, so support
       // saw the link and hit a 403 behind it.
       { href: "/notifications", label: "Notifications", mark: "NT", icon: "notifications", needs: ["notifications.manage"] },
+      // Same capability as notifications: both are "say something to everybody",
+      // and splitting them would mean granting one team the ability to message
+      // the whole city and not the other.
+      { href: "/banners", label: "In-app banners", mark: "BN", icon: "notifications", needs: ["notifications.manage"] },
       { href: "/readiness", label: "Readiness", mark: "RD", icon: "readiness", needs: ["metrics.view"] },
       { href: "/access", label: "Access control", mark: "AC", icon: "access", needs: ["access.manage"] },
     ],

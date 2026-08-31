@@ -71,6 +71,17 @@ export default function KycPage() {
   const [page, setPage, pageReady] = useUrlPage();
   const urlReady = tabReady && pageReady;
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Things a decision turned up that outlive the card it happened on.
+   *
+   * Today that is only an expiry the partner declared differently from what
+   * the document says. It has to survive the reload — the card disappears the
+   * moment the decision lands, and a warning that vanishes with it is one
+   * nobody can act on. Kept until the operator dismisses it, because acting on
+   * it means opening that partner's other documents, which takes longer than a
+   * toast.
+   */
+  const [notices, setNotices] = useState<string[]>([]);
 
   // Guards against a slow response for an old tab landing after a newer one
   // and repainting the list with the wrong rows.
@@ -118,6 +129,14 @@ export default function KycPage() {
     }
   }, [tab, page, urlReady, setPage]);
 
+  const addNotice = useCallback((message: string) => {
+    // Deduplicated: re-deciding the same document should not stack two
+    // identical warnings the operator then has to dismiss twice.
+    setNotices((current) =>
+      current.includes(message) ? current : [...current, message],
+    );
+  }, []);
+
   useEffect(load, [load]);
 
   return (
@@ -154,10 +173,28 @@ export default function KycPage() {
         </Card>
       ) : null}
 
+      {notices.map((notice, index) => (
+        <Card key={notice}>
+          <p className="text-warn text-sm">{notice}</p>
+          <GhostButton
+            className="mt-3"
+            onClick={() =>
+              setNotices((current) => current.filter((_, at) => at !== index))
+            }
+          >
+            Dismiss
+          </GhostButton>
+        </Card>
+      ))}
+
       {tab === "review" ? (
-        <ReviewQueue items={queue} onDone={load} />
+        <ReviewQueue items={queue} onDone={load} onNotice={addNotice} />
       ) : tab === "countersign" ? (
-        <CountersignQueue items={countersign} onDone={load} />
+        <CountersignQueue
+          items={countersign}
+          onDone={load}
+          onNotice={addNotice}
+        />
       ) : (
         <VehicleQueue items={vehicles} onDone={load} />
       )}
@@ -182,9 +219,11 @@ export default function KycPage() {
 function ReviewQueue({
   items,
   onDone,
+  onNotice,
 }: {
   items: KycQueueItem[] | null;
   onDone: () => void;
+  onNotice: (message: string) => void;
 }) {
   if (items === null) return <SkeletonRows />;
   if (items.length === 0) {
@@ -205,7 +244,9 @@ function ReviewQueue({
           label={item.label}
           riderName={item.riderName}
           meta={`Uploaded ${formatWhen(item.uploadedAt)}`}
+          expiryRequired={item.expiryRequired}
           onDone={onDone}
+          onNotice={onNotice}
           mode="review"
         />
       ))}
@@ -216,9 +257,11 @@ function ReviewQueue({
 function CountersignQueue({
   items,
   onDone,
+  onNotice,
 }: {
   items: CountersignItem[] | null;
   onDone: () => void;
+  onNotice: (message: string) => void;
 }) {
   if (items === null) return <SkeletonRows />;
   if (items.length === 0) {
@@ -239,7 +282,9 @@ function CountersignQueue({
           label={item.label}
           riderName={item.riderName}
           meta={`First approved by ${item.firstReviewerName ?? "a colleague"} ${formatWhen(item.firstReviewedAt)}`}
+          expiryRequired={item.expiryRequired}
           onDone={onDone}
+          onNotice={onNotice}
           mode="countersign"
         />
       ))}
@@ -261,14 +306,18 @@ function DocumentCard({
   label,
   riderName,
   meta,
+  expiryRequired,
   onDone,
+  onNotice,
   mode,
 }: {
   documentId: string;
   label: string;
   riderName: string;
   meta: string;
+  expiryRequired: boolean;
   onDone: () => void;
+  onNotice: (message: string) => void;
   mode: "review" | "countersign";
 }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -278,6 +327,7 @@ function DocumentCard({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [expiry, setExpiry] = useState("");
 
   const open = async () => {
     setOpening(true);
@@ -299,11 +349,32 @@ function DocumentCard({
     setProblem(null);
     try {
       const options =
-        decision === "reject" ? { rejectCode: code, note: note || undefined } : {};
-      if (mode === "review") {
-        await api.reviewKycDocument(documentId, decision, options);
-      } else {
-        await api.countersignKycDocument(documentId, decision, options);
+        decision === "reject"
+          ? { rejectCode: code, note: note || undefined }
+          // Sent as the plain `YYYY-MM-DD` the input produces. Converting it to
+          // an instant here would apply the *browser's* timezone, so a reviewer
+          // on a laptop set to UTC would file a licence a day early. The server
+          // reads a bare date as the end of that day in India, which is the one
+          // place that decision belongs.
+          : { expiresAt: expiryRequired ? expiry : undefined };
+
+      const result =
+        mode === "review"
+          ? await api.reviewKycDocument(documentId, decision, options)
+          : await api.countersignKycDocument(documentId, decision, options);
+
+      // Raised to the page rather than shown on the card, because the card is
+      // about to disappear — this is the one thing about the decision that
+      // should outlive it. A partner whose claim differs from their own
+      // document is worth a second look at their other papers, and nobody
+      // would ever go and search the audit log for that.
+      if (result?.expiryMismatch) {
+        onNotice(
+          `${riderName}: ${label.toLowerCase()} recorded as ` +
+            `${result.verifiedExpiresAt?.slice(0, 10)}, but they declared ` +
+            `${result.declaredExpiresAt?.slice(0, 10)}. Your reading is the one ` +
+            "that counts — worth checking their other documents.",
+        );
       }
       onDone();
     } catch (caught) {
@@ -376,21 +447,57 @@ function DocumentCard({
           </div>
         </div>
       ) : (
-        <div className="mt-4 flex gap-2">
-          <Button onClick={() => decide("approve")} disabled={busy || !url}>
-            {mode === "countersign" ? "Countersign" : "Approve"}
-          </Button>
-          <GhostButton onClick={() => setRejecting(true)} disabled={busy}>
-            Reject
-          </GhostButton>
-          {!url ? (
-            // Approving something you have not looked at is the failure this
-            // whole screen exists to prevent, so the button stays disabled
-            // until the document has actually been opened.
-            <span className="text-fg-faint self-center text-xs">
-              Open the document before deciding
-            </span>
+        <div className="mt-4 space-y-3">
+          {expiryRequired && url ? (
+            <div>
+              <label
+                htmlFor={`expiry-${documentId}`}
+                className="text-fg-faint block text-xs"
+              >
+                Expiry date, as written on the document
+              </label>
+              <input
+                id={`expiry-${documentId}`}
+                type="date"
+                value={expiry}
+                onChange={(event) => setExpiry(event.target.value)}
+                className="border-edge bg-bg mt-1 rounded border px-3 py-2 text-sm"
+              />
+              <p className="text-fg-faint mt-1 text-xs">
+                {/* Says why it is empty, so nobody reports it as a bug or goes
+                    looking for the partner's answer to copy. */}
+                Not pre-filled on purpose — read it off the document rather than
+                from what the partner typed.
+                {mode === "countersign"
+                  ? " Your reading is compared with the first reviewer's; if they disagree, neither is recorded."
+                  : ""}
+              </p>
+            </div>
           ) : null}
+
+          <div className="flex gap-2">
+            <Button
+              onClick={() => decide("approve")}
+              disabled={busy || !url || (expiryRequired && !expiry)}
+            >
+              {mode === "countersign" ? "Countersign" : "Approve"}
+            </Button>
+            <GhostButton onClick={() => setRejecting(true)} disabled={busy}>
+              Reject
+            </GhostButton>
+            {!url ? (
+              // Approving something you have not looked at is the failure this
+              // whole screen exists to prevent, so the button stays disabled
+              // until the document has actually been opened.
+              <span className="text-fg-faint self-center text-xs">
+                Open the document before deciding
+              </span>
+            ) : expiryRequired && !expiry ? (
+              <span className="text-fg-faint self-center text-xs">
+                Enter the expiry date to approve
+              </span>
+            ) : null}
+          </div>
         </div>
       )}
     </Card>

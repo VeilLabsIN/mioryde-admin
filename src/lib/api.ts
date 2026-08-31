@@ -261,6 +261,31 @@ export const api = {
 
   settings: () => request<SettingsResponse>("/admin/settings"),
 
+  /**
+   * In-app banners, every one of them — live, scheduled and expired.
+   *
+   * The list is deliberately unfiltered: the question an operator has is
+   * usually "what did we say last Tuesday", and a page that shows only what is
+   * live cannot answer it.
+   */
+  banners: () => request<{ results: Banner[] }>("/admin/banners"),
+
+  createBanner: (body: BannerInput) =>
+    request<Banner>("/admin/banners", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateBanner: (id: string, body: Partial<BannerInput> & { clearAction?: boolean }) =>
+    request<Banner>(`/admin/banners/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  /** Ends it now. The row survives — the server keeps the record. */
+  retireBanner: (id: string) =>
+    request<void>(`/admin/banners/${id}`, { method: "DELETE" }),
+
   notificationTopics: () =>
     request<{ topics: NotificationTopic[] }>("/admin/notifications"),
 
@@ -444,22 +469,27 @@ export const api = {
       { method: "POST" },
     ),
 
+  /**
+   * `expiresAt` is the date **this reviewer read off the document**, sent as a
+   * plain `YYYY-MM-DD`. The server treats a bare date as the end of that day in
+   * India, so a licence valid to the 30th is not swept on the 29th.
+   */
   reviewKycDocument: (
     id: string,
     decision: "approve" | "reject",
-    options: { rejectCode?: string; note?: string } = {},
+    options: { rejectCode?: string; note?: string; expiresAt?: string } = {},
   ) =>
-    request<{ status: string; awaitingSecondSignature?: boolean }>(
-      `/admin/kyc/documents/${id}/review`,
-      { method: "POST", body: JSON.stringify({ decision, ...options }) },
-    ),
+    request<KycDecision>(`/admin/kyc/documents/${id}/review`, {
+      method: "POST",
+      body: JSON.stringify({ decision, ...options }),
+    }),
 
   countersignKycDocument: (
     id: string,
     decision: "approve" | "reject",
-    options: { rejectCode?: string; note?: string } = {},
+    options: { rejectCode?: string; note?: string; expiresAt?: string } = {},
   ) =>
-    request<{ status: string }>(`/admin/kyc/documents/${id}/countersign`, {
+    request<KycDecision>(`/admin/kyc/documents/${id}/countersign`, {
       method: "POST",
       body: JSON.stringify({ decision, ...options }),
     }),
@@ -734,7 +764,31 @@ export interface KycQueueItem {
   riderName: string;
   riderStage: string;
   uploadedAt: string;
-  expiresAt: string | null;
+  /**
+   * Whether this kind lapses, and therefore needs a date read off the document.
+   *
+   * The partner's declared date is deliberately **not** in this response. It
+   * used to be, and this screen rendered it into the field the reviewer then
+   * confirmed — which is how the expiry date every legal protection rests on
+   * came to be whatever the partner typed. A field with an answer already in it
+   * gets confirmed; an empty one gets read.
+   */
+  expiryRequired: boolean;
+}
+
+/**
+ * What a decision answers with.
+ *
+ * The two dates come back *after* the reading is committed, never before — the
+ * reviewer learns the partner overstated their licence by six months and could
+ * not have been nudged toward that answer while keying it.
+ */
+export interface KycDecision {
+  status: string;
+  awaitingSecondSignature?: boolean;
+  declaredExpiresAt?: string | null;
+  verifiedExpiresAt?: string | null;
+  expiryMismatch?: boolean;
 }
 
 export interface CountersignItem {
@@ -743,6 +797,7 @@ export interface CountersignItem {
   label: string;
   riderId: string;
   riderName: string;
+  expiryRequired: boolean;
   firstReviewerName: string | null;
   firstReviewedAt: string;
 }
@@ -1224,6 +1279,44 @@ export interface Monitoring {
 export type AdminRole = AdminIdentity["role"];
 
 /** The minimum length the server accepts for a password an admin chooses. */
+export type BannerAudience = "customer" | "partner";
+export type BannerTone = "neutral" | "reward" | "warning";
+
+export interface Banner {
+  id: string;
+  audience: BannerAudience;
+  title: string;
+  body: string;
+  tone: BannerTone;
+  actionLabel: string | null;
+  actionRoute: string | null;
+  dismissible: boolean;
+  priority: number;
+  startsAt: string;
+  endsAt: string | null;
+  createdAt: string;
+}
+
+export interface BannerInput {
+  audience: BannerAudience;
+  title: string;
+  body: string;
+  tone?: BannerTone;
+  actionLabel?: string;
+  actionRoute?: string;
+  dismissible?: boolean;
+  priority?: number;
+  startsAt?: string;
+  endsAt?: string;
+}
+
+/** Live now, starting later, or finished. Derived rather than stored. */
+export function bannerState(b: Banner, now = new Date()): "live" | "scheduled" | "ended" {
+  if (b.endsAt !== null && new Date(b.endsAt) <= now) return "ended";
+  if (new Date(b.startsAt) > now) return "scheduled";
+  return "live";
+}
+
 export const MIN_PASSWORD_LENGTH = 12;
 
 export interface AdminAccount {

@@ -194,6 +194,13 @@ export const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = 
   // was the bug: an unlisted path is open to every role, so support could
   // navigate to a page whose every request answers 403.
   ["/notifications", "notifications.manage"],
+  // Same capability as notifications, for the same reason: both put words in
+  // front of everybody, and a role trusted with one is trusted with the other.
+  //
+  // Missing from this list, the route defaulted to open — `canOpen` returns
+  // true for an unlisted path, so every role including finance could have
+  // published a banner to the whole city. permissions.test.ts caught it.
+  ["/banners", "notifications.manage"],
   ["/settings", "settings.view"],
   ["/access", "access.manage"],
   // `/security` is deliberately absent, along with `/help`, `/legal`,
