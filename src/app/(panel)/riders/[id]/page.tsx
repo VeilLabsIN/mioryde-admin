@@ -243,6 +243,69 @@ export default function RiderDetailPage() {
           </p>
         </Card>
 
+        {/* Its own card, above History.
+
+            Both addresses live together because the risk is confusing them,
+            and two rows side by side with different labels is the cheapest way
+            to make the difference unmissable. Putting the last-seen one on the
+            map page instead would separate it from the only other address in
+            the system. */}
+        <Card className="p-5">
+          <SectionLabel>Where they are</SectionLabel>
+          <dl className="mt-3 space-y-3 text-sm">
+            <div>
+              <dt className="font-mono text-micro uppercase text-fg-muted">
+                Home address — stated
+              </dt>
+              <dd className="mt-0.5 text-fg">
+                {rider.address ?? (
+                  <span className="text-fg-faint">
+                    Not given. Onboarding asks for it; an older account may
+                    predate that.
+                  </span>
+                )}
+              </dd>
+              {rider.address !== null && (
+                <dd className="mt-1">
+                  {rider.addressVerifiedAt === null ? (
+                    // Said plainly rather than left blank. An unverified
+                    // address that looks like a verified one is worse than no
+                    // address, because it will be acted on.
+                    <span className="text-xs text-warning">
+                      Not yet checked against a document.
+                    </span>
+                  ) : (
+                    <span className="text-xs text-fg-muted">
+                      Checked against a document on{" "}
+                      {formatWhen(rider.addressVerifiedAt)}.
+                    </span>
+                  )}
+                </dd>
+              )}
+            </div>
+
+            <div>
+              <dt className="font-mono text-micro uppercase text-fg-muted">
+                Last seen — observed
+              </dt>
+              <dd className="mt-0.5 text-fg">
+                {rider.lastSeenAddress ?? (
+                  <span className="text-fg-faint">
+                    No position has been reported yet.
+                  </span>
+                )}
+              </dd>
+              {rider.lastSeenAddressAt !== null && (
+                <dd className="mt-1 text-xs text-fg-muted">
+                  Resolved {formatWhen(rider.lastSeenAddressAt)}. Held even
+                  while they are offline or the app is gone.
+                </dd>
+              )}
+            </div>
+          </dl>
+        </Card>
+
+
         <Card className="p-5">
           <SectionLabel>History</SectionLabel>
           {history.length === 0 ? (

@@ -9,7 +9,13 @@ import {
 } from "./permissions";
 import { allNavItems } from "./nav";
 
-const ROLES: AdminRole[] = ["owner", "ops", "finance", "support"];
+const ROLES: AdminRole[] = [
+  "owner",
+  "ops",
+  "finance",
+  "support",
+  "dev_admin",
+];
 
 describe("admin permissions", () => {
   describe("least privilege", () => {
@@ -31,6 +37,27 @@ describe("admin permissions", () => {
       }
     });
 
+    it("lets finance read payments without reading customers", () => {
+      // The payments list exists so somebody can answer "did that charge go
+      // through, and if not why". Finance needs that and must not acquire the
+      // customer list to get it — the same line `orders.refund` without
+      // `orders.view` already draws.
+      //
+      // This is what keeps `AdminPayment` free of a name and a phone: the
+      // moment those appear in a row, granting finance this capability quietly
+      // hands them the thing this test says they must not have.
+      expect(can("finance", "payments.view")).toBe(true);
+      expect(can("finance", "customers.view")).toBe(false);
+
+      // And the people who talk to customers can see it too, or they guess.
+      expect(can("support", "payments.view")).toBe(true);
+      expect(can("ops", "payments.view")).toBe(true);
+
+      // Not the developer role: it is money, and technical administration is
+      // not a reason to read it.
+      expect(can("dev_admin", "payments.view")).toBe(false);
+    });
+
     it("keeps the audit log to owner alone", () => {
       for (const role of ROLES) {
         expect(can(role, "audit.view")).toBe(role === "owner");
@@ -45,6 +72,50 @@ describe("admin permissions", () => {
 
     it("does not show revenue to support", () => {
       expect(can("support", "metrics.view")).toBe(false);
+    });
+
+    it("keeps the developer role out of everything that is not technical", () => {
+      // The point of the role. A developer changing which model answers must
+      // not thereby acquire a live map of the city's customers, and the server
+      // agrees — `dev_admin` appears on no route but the runtime settings, so
+      // granting any of these here would only draw links that answer 403.
+      for (const capability of [
+        "orders.view",
+        "customers.view",
+        "riders.view",
+        "payouts.view",
+        "metrics.view",
+        "audit.view",
+        "access.manage",
+      ] as const) {
+        expect(can("dev_admin", capability)).toBe(false);
+      }
+      expect(can("dev_admin", "platform.manage")).toBe(true);
+    });
+
+    it("gives runtime configuration to operations and developers only", () => {
+      for (const role of ROLES) {
+        expect(can(role, "platform.manage")).toBe(
+          role === "owner" || role === "ops" || role === "dev_admin",
+        );
+      }
+      expect(canOpen("finance", "/platform")).toBe(false);
+      expect(canOpen("support", "/platform")).toBe(false);
+      expect(canOpen("dev_admin", "/platform")).toBe(true);
+    });
+
+    it("separates publishing a banner from switching a notification off", () => {
+      // They used to share `notifications.manage`. Splitting them is what lets
+      // a role be trusted with marketing copy without also holding an incident
+      // control — and the reverse. Both currently sit with ops, so this test
+      // guards the seam rather than a difference that exists today.
+      for (const role of ROLES) {
+        expect(can(role, "banners.manage")).toBe(
+          role === "owner" || role === "ops",
+        );
+      }
+      expect(canOpen("finance", "/banners")).toBe(false);
+      expect(canOpen("support", "/banners")).toBe(false);
     });
 
     it("keeps account administration to owner alone", () => {

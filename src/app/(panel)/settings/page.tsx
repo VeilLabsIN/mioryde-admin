@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { LanguagePreference } from "@/components/LanguagePreference";
 import {
   Card,
   EmptyState,
@@ -103,6 +104,21 @@ export default function SettingsPage() {
           </nav>
 
           <div className="mt-4 flex flex-col gap-4">
+            {/* First, and client-side.
+                Every other card on this page reflects server configuration;
+                this one is a per-operator preference held in this browser. It
+                is placed first because it is the only thing here somebody
+                changes for themselves. */}
+            <section id="language" className="scroll-mt-20">
+              <Card size="lg" className="p-4">
+                <SectionLabel>Language</SectionLabel>
+                <p className="text-fg-muted text-meta mt-1 mb-3">
+                  How this panel writes dates, times and amounts for you.
+                </p>
+                <LanguagePreference />
+              </Card>
+            </section>
+
             {data.groups.map((group) => (
               <section key={group.key} id={group.key} className="scroll-mt-20">
                 <Card size="lg" className="p-4">

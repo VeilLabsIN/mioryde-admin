@@ -42,7 +42,19 @@ const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
  * **Revisit when Next fixes nonce propagation.** The nonce implementation is
  * in this file's history and is a small revert away.
  */
-export function middleware(request: NextRequest) {
+/**
+ * Renamed from `middleware` in Next 16.
+ *
+ * Same function, same `config.matcher`, same policy — Next deprecated the
+ * `middleware` file convention and renamed it to `proxy`, and running on the
+ * deprecated name logs a warning on every `next dev` boot. The rename is the
+ * whole migration; there is no behavioural change to review.
+ */
+// Next's proxy signature. Nothing here needs the request: the CSP nonce is
+// random per call and the origin comes from the environment, so the parameter
+// is part of the contract rather than something to use.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function proxy(request: NextRequest) {
   const dev = process.env.NODE_ENV === "development";
 
   // Falls back to same-origin only. A malformed value must not silently widen

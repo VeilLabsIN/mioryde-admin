@@ -130,6 +130,12 @@ export default function AnalyticsPage() {
             : "Could not load analytics.",
         );
       });
+    // `custom` is a fresh object literal every render
+    // (`from && to ? { from, to } : null`), so listing it as the rule asks
+    // would change this callback's identity on every render and
+    // `useEffect(load, [load])` would refetch in a loop. Its two fields are
+    // what the request actually varies on, and both are here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days, custom?.from, custom?.to, urlReady]);
 
   useEffect(load, [load]);

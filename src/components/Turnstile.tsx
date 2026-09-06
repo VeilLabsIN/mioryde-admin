@@ -90,6 +90,7 @@ export function Turnstile({
   siteKey,
   onToken,
   onUnavailable,
+  onError,
   handleRef,
 }: {
   siteKey: string;
@@ -97,6 +98,15 @@ export function Turnstile({
   onToken: (token: string | null) => void;
   /** The script could not load at all. */
   onUnavailable: () => void;
+  /**
+   * The challenge itself failed or expired after the script loaded.
+   *
+   * Separate from {@link onUnavailable} because the two need different
+   * offers. A script that never loaded cannot be retried in place; a
+   * challenge that errored can, and the operator should be given the button
+   * rather than left watching a spinner that will not resolve.
+   */
+  onError?: () => void;
   handleRef?: React.MutableRefObject<TurnstileHandle | null>;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -115,6 +125,11 @@ export function Turnstile({
   useEffect(() => {
     onTokenRef.current = onToken;
   }, [onToken]);
+
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   const reset = useCallback(() => {
     onTokenRef.current(null);
@@ -146,7 +161,13 @@ export function Turnstile({
           // keeping it means the form disables itself and Turnstile re-runs,
           // instead of sending something the server will reject.
           "expired-callback": () => onTokenRef.current(null),
-          "error-callback": () => onTokenRef.current(null),
+          "error-callback": () => {
+            onTokenRef.current(null);
+            // Tells the form the challenge failed *after* loading, which is
+            // what turns the dead "Completing the security check…" line into
+            // a button somebody can press.
+            onErrorRef.current?.();
+          },
           theme: "dark",
           // Only shows a visible challenge when Cloudflare actually wants one.
           // For staff signing in from an office this is invisible in practice,

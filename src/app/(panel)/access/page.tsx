@@ -37,6 +37,8 @@ const ROLE_SUMMARY: Record<AdminRole, string> = {
   ops: "Deliveries, customers, partners and verification. No money, no admin accounts.",
   finance: "Payouts, bank checks, collections and rate cards. No customer or partner records.",
   support: "Deliveries and customers only — the narrowest useful account.",
+  dev_admin:
+    "Technical settings only — the assistant's model, maintenance notices. No customers, partners or money.",
 };
 
 /**

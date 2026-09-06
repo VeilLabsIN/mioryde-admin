@@ -51,6 +51,7 @@ export type IconName =
   | "access"
   | "notifications"
   | "settings"
+  | "platform"
   | "help";
 
 const PATHS: Record<IconName, React.ReactNode> = {
@@ -187,6 +188,18 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <circle cx="8" cy="8" r="2.4" />
       <path d="M8 1.6v1.8M8 12.6v1.8M14.4 8h-1.8M3.4 8H1.6M12.5 3.5l-1.3 1.3M4.8 11.2l-1.3 1.3M12.5 12.5l-1.3-1.3M4.8 4.8 3.5 3.5" />
+    </>
+  ),
+  // Three sliders at different positions. Deliberately not another cog: the
+  // Settings page reads the environment the process booted with, this one
+  // changes what the platform is doing right now, and two cogs in the same
+  // footer would say they are the same kind of thing.
+  platform: (
+    <>
+      <path d="M2 4.2h5M10 4.2h4M2 8h3M8 8h6M2 11.8h6M11 11.8h3" />
+      <circle cx="8.6" cy="4.2" r="1.4" />
+      <circle cx="6.6" cy="8" r="1.4" />
+      <circle cx="9.6" cy="11.8" r="1.4" />
     </>
   ),
   help: (

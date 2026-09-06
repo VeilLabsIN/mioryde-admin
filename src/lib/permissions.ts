@@ -63,12 +63,43 @@ export type Capability =
   | "riders.view"
   | "riders.review"
   | "riders.history"
+  /**
+   * The gateway charge list — order payments and wallet top-ups.
+   *
+   * Granted to finance *without* `customers.view`, which is why the rows carry
+   * no name or phone. See `AdminPayment`.
+   */
+  | "payments.view"
   | "payouts.view"
   | "payouts.settle"
   | "pricing.view"
   | "pricing.edit"
   | "audit.view"
   | "metrics.view"
+  /**
+   * Publishing a banner to every customer or partner in the state.
+   *
+   * Split out of `notifications.manage`, which it used to ride on. The two look
+   * alike — both put words in front of everybody — but they are granted to
+   * different people in practice: a banner is marketing copy with a schedule,
+   * a notification switch is an incident control. Sharing one capability meant
+   * a role could not be trusted with one without the other, and the first
+   * request after the split was exactly that.
+   *
+   * Mirrors `@Roles('ops')` on `admin/banners`.
+   */
+  | "banners.manage"
+  /**
+   * Changing what the platform does while it is running: the model WUDA asks,
+   * the maintenance window, the ordering kill switch.
+   *
+   * Mirrors `@Roles('ops', 'dev_admin')` on `admin/settings/runtime`. Which
+   * *individual* setting a role may write is narrower still and is decided by
+   * the server, which returns `editable` per row — see `RuntimeSetting`. The
+   * panel does not re-derive it, because two copies of that map is the drift
+   * this file exists to warn about.
+   */
+  | "platform.manage"
   | "access.manage";
 
 const MATRIX: Record<AdminRole, readonly Capability[]> = {
@@ -77,6 +108,7 @@ const MATRIX: Record<AdminRole, readonly Capability[]> = {
   // is exactly the drift this comment warns about.
   owner: [
     "orders.view",
+    "payments.view",
     "orders.refund",
     "notifications.manage",
     "settings.view",
@@ -90,6 +122,8 @@ const MATRIX: Record<AdminRole, readonly Capability[]> = {
     "pricing.edit",
     "audit.view",
     "metrics.view",
+    "banners.manage",
+    "platform.manage",
     // Owner and nothing else, on the server too. A role that can create
     // admins can create an owner, and a role that can change roles can grant
     // itself one — there is no such thing as partial access to this.
@@ -97,7 +131,13 @@ const MATRIX: Record<AdminRole, readonly Capability[]> = {
   ],
   ops: [
     "orders.view",
+    "payments.view",
     "notifications.manage",
+    "banners.manage",
+    // Operations owns the kill switch and shares the maintenance window with
+    // dev_admin. The server refuses them the AI settings, and the page draws
+    // those rows read-only rather than hiding them.
+    "platform.manage",
     "settings.view",
     "customers.view",
     "riders.view",
@@ -125,6 +165,7 @@ const MATRIX: Record<AdminRole, readonly Capability[]> = {
      * name and no partner.
      */
     "orders.refund",
+    "payments.view",
     "settings.view",
     "payouts.view",
     "payouts.settle",
@@ -132,7 +173,21 @@ const MATRIX: Record<AdminRole, readonly Capability[]> = {
     "pricing.edit",
     "metrics.view",
   ],
-  support: ["orders.view", "customers.view"],
+  support: ["orders.view", "customers.view", "payments.view"],
+  /*
+   * Technical administration, and nothing else.
+   *
+   * No `metrics.view`, and that is the whole point rather than an oversight:
+   * the overview carries revenue and the server gates it on ops and finance, so
+   * granting it here would draw a link that answers 403. A developer
+   * diagnosing a routing failure does not need a live map of the city's
+   * customers either — the migration that introduced this role says so, and
+   * `admin-rbac.test.ts` is what keeps it true.
+   *
+   * `/security` is unlisted in `ROUTE_CAPABILITIES` and therefore open, so this
+   * account can still change its own password.
+   */
+  dev_admin: ["platform.manage"],
 };
 
 export function can(
@@ -187,6 +242,10 @@ export const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = 
   // to happen and buys nothing.
   ["/monitoring", "metrics.view"],
   ["/readiness", "metrics.view"],
+  // Distinct from /payouts: that is money going out to partners, this is
+  // money coming in from customers. Listed because an unlisted path is open
+  // to every role, which is the bug the note below records.
+  ["/payments", "payments.view"],
   ["/payouts", "payouts.view"],
   ["/pricing", "pricing.view"],
   ["/audit", "audit.view"],
@@ -200,7 +259,11 @@ export const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = 
   // Missing from this list, the route defaulted to open — `canOpen` returns
   // true for an unlisted path, so every role including finance could have
   // published a banner to the whole city. permissions.test.ts caught it.
-  ["/banners", "notifications.manage"],
+  ["/banners", "banners.manage"],
+  // Runtime configuration: the model WUDA asks, the maintenance window, the
+  // ordering kill switch. Listed so `dev_admin` — whose only capability this is
+  // — has somewhere to land after signing in.
+  ["/platform", "platform.manage"],
   ["/settings", "settings.view"],
   ["/access", "access.manage"],
   // `/security` is deliberately absent, along with `/help`, `/legal`,
@@ -254,6 +317,7 @@ export const ROLE_LABEL: Record<AdminRole, string> = {
   ops: "Operations",
   finance: "Finance",
   support: "Support",
+  dev_admin: "Developer",
 };
 
 /**

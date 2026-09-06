@@ -22,6 +22,32 @@ import { ThemeSwitcher } from "./ThemeSwitcher";
  *    than unmount. Unmounting them would reflow the whole rail mid-animation.
  */
 const COLLAPSED_KEY = "mioryde-rail-collapsed";
+const WIDTH_KEY = "mioryde-rail-width";
+
+/**
+ * How wide the expanded rail may be dragged.
+ *
+ * The floor is not arbitrary: below roughly 200px the longest nav labels
+ * ("Verification", "Rate cards") start truncating, and a rail of ellipses is
+ * strictly worse than the 72px icon rail — which is one click away and was
+ * designed for exactly that. The ceiling is where the rail stops being
+ * navigation and starts competing with the table it sits beside.
+ */
+export const MIN_WIDTH = 200;
+export const MAX_WIDTH = 400;
+export const DEFAULT_WIDTH = 248;
+
+/** Collapsed is a fixed shape, not a narrow one. Never resized. */
+const COLLAPSED_WIDTH = 72;
+
+export function clampWidth(value: number): number {
+  // `Number.isFinite` first, because clamping does not filter NaN:
+  // `Math.max(200, NaN)` is NaN, and a rail rendered at NaN pixels collapses
+  // to nothing with no handle left to drag it back. The value comes from
+  // `localStorage`, so "abc" is a thing that can genuinely arrive here.
+  if (!Number.isFinite(value)) return DEFAULT_WIDTH;
+  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(value)));
+}
 const SHUT_GROUPS_KEY = "mioryde-rail-shut-groups";
 
 /**
@@ -156,6 +182,106 @@ export function Sidebar({
     }
     setCollapsed(window.matchMedia(NARROW_BELOW).matches);
   }, []);
+
+  /**
+   * The expanded rail's width, in pixels.
+   *
+   * Fifteen nav items across four groups is a lot of vertical list, and 248px
+   * was one guess at how much horizontal room that deserves. Different
+   * operators run this beside different things — a dispatch board wants the
+   * rail out of the way, the KYC queue does not care — so it is theirs to set.
+   *
+   * Starts at the default rather than reading storage during render: the
+   * server has no `localStorage`, and a width that differs between the HTML
+   * and the first client render is a hydration mismatch that React discards
+   * the tree over. The stored value is applied in an effect below, exactly as
+   * `collapsed` already does.
+   */
+  const [width, setWidth] = useState(DEFAULT_WIDTH);
+
+  /** True only while a drag is in progress, so the rail can stop animating. */
+  const [resizing, setResizing] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = Number(localStorage.getItem(WIDTH_KEY));
+      // `Number("")` is 0 and `Number(null)` is 0, so a falsy check covers
+      // "never set" and "set to nonsense" together.
+      if (stored) setWidth(clampWidth(stored));
+    } catch {
+      // Storage disabled. The default is a perfectly good width.
+    }
+  }, []);
+
+  const persistWidth = (next: number) => {
+    try {
+      localStorage.setItem(WIDTH_KEY, String(next));
+    } catch {
+      // Not remembering is survivable.
+    }
+  };
+
+  /**
+   * Drag from the rail's right edge.
+   *
+   * Pointer events rather than mouse events, and `setPointerCapture`, so the
+   * drag survives the pointer leaving the handle — which it immediately does,
+   * because the handle is 5px wide and the whole point is to move away from
+   * it. Without capture the rail stops following at the first fast movement
+   * and the operator has to grab it again.
+   */
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (collapsed) return;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    setResizing(true);
+
+    const startX = event.clientX;
+    const startWidth = width;
+
+    const onMove = (move: PointerEvent) => {
+      setWidth(clampWidth(startWidth + (move.clientX - startX)));
+    };
+
+    const onEnd = () => {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onEnd);
+      handle.removeEventListener("pointercancel", onEnd);
+      setResizing(false);
+      // Read from the setter rather than the closed-over `width`, which is
+      // the value from the render the drag started in.
+      setWidth((current) => {
+        persistWidth(current);
+        return current;
+      });
+    };
+
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onEnd);
+    handle.addEventListener("pointercancel", onEnd);
+  };
+
+  /**
+   * The keyboard route, which a drag handle without one does not have.
+   *
+   * A separator that can only be moved by dragging is a control a keyboard
+   * user cannot reach at all, and this one changes a persisted preference.
+   * Arrows nudge, Home and End jump to the limits.
+   */
+  const onHandleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = event.shiftKey ? 32 : 8;
+    let next: number | null = null;
+    if (event.key === "ArrowLeft") next = width - step;
+    if (event.key === "ArrowRight") next = width + step;
+    if (event.key === "Home") next = MIN_WIDTH;
+    if (event.key === "End") next = MAX_WIDTH;
+    if (next === null) return;
+    event.preventDefault();
+    const clamped = clampWidth(next);
+    setWidth(clamped);
+    persistWidth(clamped);
+  };
 
   const toggleCollapsed = () => {
     setCollapsed((wasCollapsed) => {
@@ -347,15 +473,30 @@ export function Sidebar({
         The 72px track is held by the sibling spacer, so the page never learns
         the rail widened. A deliberate collapse still reflows, once, because
         that was asked for.
+
+        `md:relative` rather than `md:static`: identical in the flex row, but it
+        establishes the positioning context the resize handle needs. Under
+        `static` the handle would position against the page instead of the rail.
       */
       className="group/rail fixed inset-y-0 left-0 z-40 flex h-dvh shrink-0 flex-col border-r border-rail-line bg-rail-bg text-rail-fg
                  transition-[width,transform] duration-300 ease-[var(--ease-out-quint)]
-                 w-[248px] data-[collapsed=true]:w-[72px]
+                 data-[resizing=true]:transition-none
                  -translate-x-full data-[open=true]:translate-x-0
-                 md:static md:z-20 md:translate-x-0
+                 md:relative md:z-20 md:translate-x-0
                  data-[peek=true]:md:absolute data-[peek=true]:md:inset-y-0
-                 data-[peek=true]:md:left-0 data-[peek=true]:md:w-[248px]
+                 data-[peek=true]:md:left-0
                  data-[peek=true]:md:[box-shadow:var(--elev-3)]"
+      data-resizing={resizing ? "true" : undefined}
+      /*
+        Width moved from a class to a style because it is a number now, not one
+        of two shapes. Tailwind cannot express an arbitrary runtime value, and
+        an inline style is what an operator-set dimension actually is.
+
+        A peeked rail opens to the chosen width, not the default: peeking is
+        "show me the labels", and showing them at a width the operator did not
+        pick would make the hover a different rail from the one they use.
+      */
+      style={{ width: narrow ? COLLAPSED_WIDTH : width }}
     >
       {/* No brand block here.
 
@@ -488,7 +629,6 @@ export function Sidebar({
                 <Link
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  title={narrow ? item.label : undefined}
                   className="group/item relative flex h-11 items-center gap-3 rounded-none px-3
                              transition-colors duration-150"
                 >
@@ -542,6 +682,39 @@ export function Sidebar({
                       {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   )}
+
+                  {/* The label for a collapsed rail, drawn by us.
+
+                      This was `title={narrow ? item.label : undefined}` — a
+                      **native** browser tooltip, and it got stuck on screen:
+                      the pointer enters the collapsed rail, the browser starts
+                      its own tooltip timer, the peek then expands the rail
+                      underneath it 220ms later, and the tooltip is left
+                      floating over a sidebar that no longer needs it. Removing
+                      the attribute does not dismiss one the browser has already
+                      decided to show — nothing in the page can. It also arrived
+                      in the operating system's colours rather than the panel's,
+                      which is why it read as a foreign grey box.
+
+                      Rendered in React it cannot outlive the state that asks
+                      for it: `narrow` goes false and the element is gone in the
+                      same commit as the rail widening.
+
+                      `pointer-events-none` so it can never sit between the
+                      pointer and the link it belongs to. */}
+                  {narrow && (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2
+                                 z-50 -translate-y-1/2 whitespace-nowrap rounded-xs
+                                 border border-rail-line bg-rail-bg px-2 py-1
+                                 text-meta text-rail-fg opacity-0 shadow-lg
+                                 transition-opacity duration-150
+                                 group-hover/item:opacity-100"
+                    >
+                      {item.label}
+                    </span>
+                  )}
                 </Link>
               </li>
             );
@@ -580,7 +753,6 @@ export function Sidebar({
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                title={item.label}
                 className={`group/foot flex h-8 items-center gap-2.5 rounded-xs px-1.5
                             transition-colors duration-150
                             ${narrow ? "" : "flex-1"}
@@ -615,6 +787,50 @@ export function Sidebar({
             the thing you were about to shrink. It is now the first element in
             the rail, where the effect is next to the cause. */}
       </div>
+
+      {/*
+        The resize handle.
+
+        `separator` with an orientation and a value, not a plain div: this
+        controls a persisted dimension, so a screen reader has to be able to
+        announce what it is and where it currently sits, and a keyboard user
+        has to be able to move it. `aria-valuenow` carries the width because
+        "resize sidebar" alone tells somebody nothing about whether their
+        press did anything.
+
+        Hidden below `md`, where the rail is a drawer over the page rather than
+        a column beside it — resizing an overlay that is about to be dismissed
+        is a control with no meaning.
+
+        Hidden while collapsed for the same reason: 72px is a fixed shape, and
+        dragging it would leave the rail in a state that is neither the icon
+        rail nor a usable label rail.
+      */}
+      {!collapsed && (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          aria-valuenow={width}
+          aria-valuemin={MIN_WIDTH}
+          aria-valuemax={MAX_WIDTH}
+          tabIndex={0}
+          onPointerDown={startResize}
+          onKeyDown={onHandleKeyDown}
+          onDoubleClick={() => {
+            // Back to the default. Somebody who has dragged the rail somewhere
+            // unhelpful should not have to find 248 by hand.
+            setWidth(DEFAULT_WIDTH);
+            persistWidth(DEFAULT_WIDTH);
+          }}
+          className="absolute inset-y-0 right-0 z-10 hidden w-[5px] translate-x-1/2
+                     cursor-col-resize touch-none md:block
+                     after:absolute after:inset-y-0 after:left-1/2 after:w-[2px]
+                     after:-translate-x-1/2 after:bg-transparent
+                     after:transition-colors hover:after:bg-accent/60
+                     focus-visible:outline-none focus-visible:after:bg-accent"
+        />
+      )}
     </aside>
 
     {/*
@@ -627,7 +843,11 @@ export function Sidebar({
       door.
     */}
     {peeking ? (
-      <div aria-hidden className="hidden w-[72px] shrink-0 md:block" />
+      <div
+        aria-hidden
+        className="hidden shrink-0 md:block"
+        style={{ width: COLLAPSED_WIDTH }}
+      />
     ) : null}
     </>
   );

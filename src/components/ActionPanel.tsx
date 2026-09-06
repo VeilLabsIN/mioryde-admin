@@ -101,6 +101,23 @@ export function ActionPanel({
         </div>
       ) : (
         <div className="mt-3 space-y-3">
+          {/*
+            Hazard tape, and the only place in the panel that has it.
+
+            It marks the moment a destructive action is armed — the operator has
+            clicked once and the next click does the thing. That is the one
+            state in the panel where "something here can hurt you" is literally
+            true, and reserving the pattern for it is what makes it legible;
+            it used to run along the top of the sign-in page, where nothing is
+            at stake.
+
+            Only for `destructive`: a confirmation step that is merely careful
+            (publishing a rate card, say) should not be dressed as a hazard.
+          */}
+          {destructive && (
+            <div aria-hidden className="hazard h-1 opacity-70" />
+          )}
+
           {consequence && (
             <p className="text-meta text-warn">{consequence}</p>
           )}

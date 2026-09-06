@@ -572,6 +572,54 @@
     0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%
   );
 }
+/*
+ * A faint grid, for a region that is empty on purpose.
+ *
+ * An empty state is a large blank area, and a large blank area is ambiguous:
+ * it reads the same as a panel that failed to paint. A grid says the space was
+ * drawn rather than left, which is the whole job — so it is deliberately at the
+ * edge of visible. Two 1px lines at 3% over 28px; any stronger and it competes
+ * with the sentence it exists to frame.
+ *
+ * `currentColor` is not used: this must not darken when it sits inside text
+ * that changes colour by tone.
+ */
+@utility grid-faint {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in oklab, var(--fg) 3%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--fg) 3%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 28px 28px;
+}
+
+/*
+ * Holds the eye on the centre column at very wide viewports.
+ *
+ * On a 2560px dispatch display the content is a band in the middle of a large
+ * flat field, and the flat field is as bright as the thing being read. A
+ * vignette that is barely perceptible on its own is enough to stop the edges
+ * pulling — it is 4% at the corners and nothing at all in the middle.
+ *
+ * Applied only above `2xl`, because on a laptop there are no spare edges to
+ * darken and the same gradient would just dim the page.
+ */
+@utility vignette-wide {
+  @media (min-width: 96rem) {
+    background-image: radial-gradient(
+      ellipse 90% 80% at 50% 45%,
+      transparent 55%,
+      color-mix(in oklab, var(--fg) 4%, transparent) 100%
+    );
+  }
+}
+
 @utility hazard {
   background: repeating-linear-gradient(
     -45deg,

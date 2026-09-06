@@ -9,26 +9,6 @@ import type { NextConfig } from "next";
  * another origin, so the headers that matter are the ones that stop a
  * successful injection from doing anything useful with it.
  */
-/**
- * The API's *origin*, which is what `connect-src` matches on.
- *
- * `NEXT_PUBLIC_API_URL` carries a path (`…/v1`) and CSP source expressions
- * match by path prefix, so passing it through unchanged would silently narrow
- * the rule and block any call that ever moves off `/v1`. Parsing to an origin
- * keeps the rule saying what it means.
- */
-const apiOrigin = (() => {
-  const raw = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3000/v1";
-  try {
-    return new URL(raw).origin;
-  } catch {
-    // A malformed value must not produce a header that silently allows
-    // everything. Fall back to same-origin only and let the panel fail
-    // loudly and locally instead.
-    return "'self'";
-  }
-})();
-
 const securityHeaders = [
   // The panel is XHR-only against one known API origin. `connect-src` is the
   // control that matters here — it means injected script cannot exfiltrate an
@@ -39,13 +19,13 @@ const securityHeaders = [
   // injection. Scripts do not get it.
   {
     key: "X-Content-Security-Policy-Note",
-    // The real CSP is built per request in src/middleware.ts, because it
+    // The real CSP is built per request in src/proxy.ts, because it
     // carries a nonce and a static file cannot generate one. Keeping a
     // hardcoded copy here as well would guarantee the two drift, and the
     // stricter of two policies wins — so the stale one would quietly break
     // the app. This marker exists only so somebody looking for the CSP here
     // finds a pointer instead of nothing.
-    value: "see src/middleware.ts",
+    value: "see src/proxy.ts",
   },
   // Redundant alongside frame-ancestors for modern browsers, kept for the
   // older ones that only understand this.

@@ -20,6 +20,7 @@ import {
 } from "@/lib/api";
 import { ActionPanel } from "@/components/ActionPanel";
 import { formatElapsed } from "@/lib/elapsed";
+import { noteOwnAction } from "@/lib/alertSound";
 
 /**
  * One delivery.
@@ -45,6 +46,22 @@ export default function OrderDetailPage() {
   const id = params.id;
 
   const [order, setOrder] = useState<OrderDetail | null>(null);
+
+  /**
+   * When this page was opened, captured once.
+   *
+   * `Date.now()` was called during render to decide whether a scheduled
+   * delivery is still in the future. React 19 refuses that, and is right to:
+   * a render has to be repeatable, and under concurrent rendering the same
+   * render can run twice and must produce the same tree. `Date.now()` does
+   * not.
+   *
+   * A lazy initialiser runs once per mount, which is the right granularity
+   * here anyway — "is this still scheduled" is a question about the moment the
+   * operator opened the order, and the page refetches when they act on it. A
+   * ticking clock would redraw a triage screen every second to move one word.
+   */
+  const [loadedAt] = useState(() => Date.now());
   const [actions, setActions] = useState<OrderActions | null>(null);
   const [error, setError] = useState<{ message: string; missing: boolean } | null>(
     null,
@@ -117,6 +134,25 @@ export default function OrderDetailPage() {
         subtitle={
           <>
             Placed {new Date(order.placedAt).toLocaleString("en-IN")}
+            {/*
+              A scheduled delivery reads as stuck otherwise.
+
+              An order sitting at `pending` with no partner is normally
+              something to chase. One booked for Friday is not, and nothing else
+              on this page distinguishes them — so the time is said in the
+              subtitle, next to when it was placed, rather than as a field
+              halfway down that an operator triaging a queue will not reach.
+
+              Only while it is still waiting: once it is due, it is an ordinary
+              delivery and the original request is history.
+            */}
+            {order.scheduledFor &&
+              new Date(order.scheduledFor).getTime() > loadedAt && (
+                <span className="text-warn">
+                  {" · scheduled for "}
+                  {new Date(order.scheduledFor).toLocaleString("en-IN")}
+                </span>
+              )}
             {order.deliveredAt && (
               <>
                 {" · delivered in "}
@@ -219,6 +255,11 @@ export default function OrderDetailPage() {
           destructive
           successMessage={`${order.code} cancelled.`}
           onConfirm={async (reason) => {
+            // Marks this as the operator's own doing, so the
+            // `order.cancelled` that comes straight back down the stream does
+            // not chime at them. Before the call, not after: the event can
+            // arrive while the request is still settling.
+            noteOwnAction();
             await api.cancelOrder(order.id, reason);
             load();
           }}

@@ -24,6 +24,7 @@ import {
 } from "@/lib/elapsed";
 import { type AdminEvent, useAdminEvents } from "@/lib/useAdminEvents";
 import { useUrlParam } from "@/lib/useUrlState";
+import { TOPIC_ALERTS, playAlert } from "@/lib/alertSound";
 
 /**
  * How each topic reads in the activity feed.
@@ -40,6 +41,11 @@ const TOPICS: Record<
   "order.delivered": { label: "Delivered", tone: "good" },
   "order.cancelled": { label: "Cancelled", tone: "attention" },
   "job.offered": { label: "Job offered", tone: "normal" },
+  // The only entry that is not a thing that happened. It is a notification
+  // that *failed* to happen, which is why it is worded as the consequence
+  // rather than the mechanism — "outbox event exhausted its retries" is true
+  // and tells a dispatcher nothing they can act on.
+  "outbox.dead_lettered": { label: "Notification not delivered", tone: "attention" },
 };
 
 /** Events that change which deliveries are in flight, or what state they are in. */
@@ -157,6 +163,33 @@ export default function LivePage() {
     const timer = setTimeout(() => void load(), REFETCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [latestBoardEvent, paused, load]);
+
+  /**
+   * Sound the newest event, once.
+   *
+   * Keyed on the event's `at` rather than a count, because the list is capped
+   * and a burst can push an older entry off the end without the length
+   * changing — a count would then miss the arrival that mattered.
+   *
+   * The very first batch is deliberately silent. The stream replays recent
+   * events on connect, and a board that plays six chimes the moment it opens
+   * has announced only that it loaded, which is the same mistake `LiveValue`
+   * avoids by not flashing on first paint.
+   */
+  const soundedUpTo = useRef<string | null>(null);
+  useEffect(() => {
+    const newest = events[0];
+    if (!newest) return;
+    if (soundedUpTo.current === null) {
+      soundedUpTo.current = newest.at;
+      return;
+    }
+    if (newest.at === soundedUpTo.current) return;
+    soundedUpTo.current = newest.at;
+    if (paused) return;
+    const kind = TOPIC_ALERTS[newest.topic];
+    if (kind) playAlert(kind);
+  }, [events, paused]);
 
   const orders = snapshot?.orders ?? null;
   const skew = snapshot?.skew ?? 0;

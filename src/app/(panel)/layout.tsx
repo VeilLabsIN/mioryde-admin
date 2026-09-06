@@ -145,9 +145,16 @@ export default function PanelLayout({
 
           {/* Tighter below `sm`: 24px of padding on each side of a 375px
               screen spends an eighth of the width on nothing. */}
+          {/*
+            `vignette-wide` does nothing below 1536px and is barely perceptible
+            above it. On a 2560px dispatch display the content is a band in the
+            middle of a large flat field that is exactly as bright as the thing
+            being read, and the edges pull. Four percent at the corners is
+            enough to stop that without anybody noticing a gradient.
+          */}
           <main
             id="panel-main"
-            className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6"
+            className="vignette-wide min-w-0 flex-1 overflow-y-auto p-4 sm:p-6"
           >
             {children}
           </main>

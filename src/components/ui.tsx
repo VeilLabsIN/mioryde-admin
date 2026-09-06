@@ -265,9 +265,20 @@ export function EmptyState({
   hint?: string;
 }) {
   return (
-    <div className="animate-rise grid place-items-center px-6 py-16 text-center">
-      <p className="font-sans text-label text-fg-mid">{title}</p>
-      {hint && <p className="mt-1 text-body text-fg-faint">{hint}</p>}
+    // The grid is what stops a large blank region reading as a panel that
+    // failed to paint. It is behind the words rather than around them, and
+    // faded out at the centre so it never competes with the sentence — see
+    // `grid-faint` and the mask below.
+    <div className="animate-rise relative grid place-items-center px-6 py-16 text-center">
+      <div
+        aria-hidden
+        className="grid-faint pointer-events-none absolute inset-0
+                   [mask-image:radial-gradient(ellipse_70%_70%_at_50%_50%,transparent_10%,black_85%)]"
+      />
+      <p className="relative font-sans text-label text-fg-mid">{title}</p>
+      {hint && (
+        <p className="relative mt-1 text-body text-fg-faint">{hint}</p>
+      )}
     </div>
   );
 }

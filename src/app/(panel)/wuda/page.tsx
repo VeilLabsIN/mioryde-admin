@@ -58,12 +58,46 @@ const MODE: Record<
   retrieval: {
     label: "From the knowledge base",
     tone: "border-warn/50 text-warn",
-    note: "The assistant could not be reached, so these are the closest matching entries shown exactly as written. They may not answer what you actually asked.",
+    // Generic fallback. The specific reason comes from `DEGRADED` below, which
+    // is what an operator actually needs: see the note there.
+    note: "These are the closest matching entries, shown exactly as written. They may not answer what you actually asked.",
   },
   unanswered: {
     label: "Nothing found",
     tone: "border-edge text-fg-muted",
     note: null,
+  },
+};
+
+/**
+ * Why the model did not answer.
+ *
+ * Every one of these produced the same sentence before — "the assistant could
+ * not be reached" — which was wrong in two directions at once. An operator who
+ * had just switched the model off was told there was an outage and went looking
+ * for one; and a genuinely missing API key on production hid behind the same
+ * words as a transient upstream failure.
+ *
+ * They call for different actions, so they say different things. `switched-off`
+ * is deliberately not styled as a fault: nothing is broken and the reader
+ * should not be alarmed by the consequence of their own setting.
+ */
+const DEGRADED: Record<string, { text: string; tone: string }> = {
+  "switched-off": {
+    text: "The assistant is switched off in Platform settings, so these are knowledge-base entries. Nothing is broken.",
+    tone: "border-edge text-fg-muted",
+  },
+  "no-key": {
+    text: "No AI key is configured on this server, so the assistant cannot run at all. This is a configuration fault, not an outage.",
+    tone: "border-danger text-danger",
+  },
+  "api-error": {
+    text: "The assistant could not be reached just now. This usually passes on its own; if every answer says this, the provider is down.",
+    tone: "border-warn text-warn",
+  },
+  empty: {
+    text: "The assistant was reached but returned nothing, so these are knowledge-base entries instead.",
+    tone: "border-warn text-warn",
   },
 };
 
@@ -238,6 +272,26 @@ export default function WudaPage() {
                       {MODE[turn.answer.mode].note}
                     </p>
                   )}
+
+                  {/*
+                    Why, not just what. An outage that looks identical to a
+                    setting is an outage nobody reports.
+                  */}
+                  {(() => {
+                    // Resolved once into a local so the compiler can see it is
+                    // defined; an unknown reason from a newer server renders
+                    // nothing rather than an empty box.
+                    const why = turn.answer.degraded
+                      ? DEGRADED[turn.answer.degraded]
+                      : undefined;
+                    return why ? (
+                      <p
+                        className={`mb-3 border-l-2 pl-3 text-meta ${why.tone}`}
+                      >
+                        {why.text}
+                      </p>
+                    ) : null;
+                  })()}
 
                   <AnswerText text={turn.answer.answer} />
 

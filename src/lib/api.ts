@@ -5,8 +5,15 @@ export interface AdminIdentity {
   id: string;
   email: string;
   name: string;
-  role: "owner" | "ops" | "finance" | "support";
+  /**
+   * `dev_admin` is technical administration — the AI model chain, maintenance
+   * windows — and deliberately carries no customer or partner records. Mirrors
+   * the union in the API's `admin-auth.service.ts`.
+   */
+  role: "owner" | "ops" | "finance" | "support" | "dev_admin";
 }
+
+import { readPanelLocale } from "@/components/LanguagePreference";
 
 export class ApiError extends Error {
   constructor(
@@ -298,6 +305,23 @@ export const api = {
       { method: "PATCH", body: JSON.stringify(body) },
     ),
 
+  /**
+   * Configuration an operator changes while the product is serving traffic.
+   *
+   * Separate from `settings()`, which reads the *environment* the process
+   * booted with and cannot change. These are database rows, and the difference
+   * matters to the reader: one page explains why something is the way it is,
+   * the other changes it.
+   */
+  runtimeSettings: () =>
+    request<{ settings: RuntimeSetting[] }>("/admin/settings/runtime"),
+
+  setRuntimeSetting: (key: string, body: { value: unknown; note?: string }) =>
+    request<{ key: string; value: unknown }>(
+      `/admin/settings/runtime/${encodeURIComponent(key)}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    ),
+
   refundContext: (orderId: string) =>
     request<RefundContext>(`/admin/orders/${orderId}/refunds`),
 
@@ -328,6 +352,25 @@ export const api = {
     const qs = query.toString();
     return request<OrdersSummary>(
       `/admin/orders/summary${qs ? `?${qs}` : ""}`,
+    );
+  },
+
+  payments: (
+    params: {
+      page?: number;
+      status?: string;
+      purpose?: string;
+      search?: string;
+    } = {},
+  ) => {
+    const query = new URLSearchParams();
+    if (params.page) query.set("page", String(params.page));
+    if (params.status) query.set("status", params.status);
+    if (params.purpose) query.set("purpose", params.purpose);
+    if (params.search) query.set("search", params.search);
+    const qs = query.toString();
+    return request<Paged<AdminPayment>>(
+      `/admin/payments${qs ? `?${qs}` : ""}`,
     );
   },
 
@@ -692,6 +735,16 @@ export const api = {
    * and nobody needs the intermediate frames, only where things are now.
    */
   liveMap: () => request<LiveMapSnapshot>("/admin/live/map"),
+
+  /** Deliveries, customers and partners in one query. Five of each. */
+  search: (q: string) =>
+    request<{ results: SearchHit[] }>(
+      `/admin/search?q=${encodeURIComponent(q)}`,
+    ),
+
+  /** One partner. Ops only — the server refuses the route to anybody else. */
+  riderDetail: (id: string) =>
+    request<RiderDetail>(`/admin/live/map/riders/${id}`),
 
   // ── Monitoring ─────────────────────────────────────────────────────────────
 
@@ -1102,6 +1155,23 @@ export interface RiderDetail {
   completed: number;
   cancelled: number;
   earnings: { minor: number; currency: string };
+
+  /**
+   * Two different addresses, and the distinction matters on the one screen
+   * where somebody is deciding who to ring.
+   *
+   * `address` is **stated**: given by the partner and checked against one of
+   * their own documents. `lastSeenAddress` is **observed**: resolved from their
+   * last GPS fix and kept so it survives them going dark. Reading one as the
+   * other is how an operator ends up at a street corner looking for somebody's
+   * house, or vice versa.
+   */
+  address: string | null;
+  addressVerifiedAt: string | null;
+  /** The document the address was checked against, when one was named. */
+  addressDocumentId: string | null;
+  lastSeenAddress: string | null;
+  lastSeenAddressAt: string | null;
 }
 
 export interface AuditEntry {
@@ -1185,6 +1255,30 @@ export interface SettingRow {
 export interface SettingsResponse {
   environment: string;
   groups: { key: string; label: string; detail: string; rows: SettingRow[] }[];
+}
+
+/**
+ * One runtime setting, as the server describes it.
+ *
+ * `editable` is computed server-side from the caller's role rather than
+ * re-derived here: the per-key owner map lives in the API beside the routes it
+ * guards, and a second copy in the panel is the drift `permissions.ts` warns
+ * about. The panel draws a row it cannot edit as read-only rather than hiding
+ * it — a maintenance window operations can see but not set is information they
+ * need during an incident.
+ */
+export interface RuntimeSetting {
+  key: string;
+  label: string;
+  description: string;
+  value: unknown;
+  /** True when no row exists and the server's coded default is in force. */
+  isDefault: boolean;
+  note: string | null;
+  updatedBy: string | null;
+  updatedAt: string | null;
+  editable: boolean;
+  roles: string[];
 }
 
 export interface NotificationTopic {
@@ -1351,6 +1445,13 @@ export interface OrderDetail {
   code: string;
   status: string;
   placedAt: string;
+  /**
+   * When the delivery becomes dispatchable. Null means it already is.
+   *
+   * The distinction an operator needs: a pending order that has not moved is
+   * either stuck or simply not due yet, and those look identical without this.
+   */
+  scheduledFor: string | null;
   deliveredAt: string | null;
   cancellationReason: string | null;
 
@@ -1494,6 +1595,32 @@ export interface LiveOrdersResponse {
   results: LiveOrder[];
 }
 
+/**
+ * One gateway charge — an order payment or a wallet top-up.
+ *
+ * `failureReason` is the field this type exists for. Until this list, a failed
+ * charge left no trace anybody in the panel could read.
+ */
+export interface AdminPayment {
+  id: string;
+  /**
+   * No name and no phone by design: `finance` can read this list and does not
+   * have `customers.view`. The id is enough for ops and support to open the
+   * customer; finance never needs to.
+   */
+  userId: string;
+  orderId: string | null;
+  orderCode: string | null;
+  purpose: "order" | "wallet_top_up";
+  amount: { minor: number; currency: string };
+  gateway: string;
+  gatewayOrderId: string | null;
+  gatewayPaymentId: string | null;
+  status: "created" | "paid" | "failed" | "refunded";
+  failureReason: string | null;
+  createdAt: string;
+}
+
 export interface AdminCustomer {
   id: string;
   name: string;
@@ -1516,7 +1643,10 @@ export function formatMoney(
   options: { alwaysShowDecimals?: boolean } = {},
 ): string {
   const whole = amount.minor % 100 === 0;
-  return new Intl.NumberFormat("en-IN", {
+  // Locale from the panel preference rather than hardcoded. `en-IN` and
+  // `hi-IN` both group in lakhs; the difference is the numerals and, for
+  // dates elsewhere, the month names.
+  return new Intl.NumberFormat(readPanelLocale(), {
     style: "currency",
     currency: amount.currency,
     minimumFractionDigits: whole && !options.alwaysShowDecimals ? 0 : 2,
@@ -1574,7 +1704,14 @@ export interface WudaAnswer {
 }
 
 /** A rider's derived state.  covers both off duty and gone quiet. */
-export type RiderMapStatus = "delivering" | "idle" | "offline";
+/**
+ * `dark` is not a worse `offline`, it is a different fact.
+ *
+ * Clocking off at the end of a shift needs no attention. Going silent while
+ * still on duty — or while carrying somebody's parcel — is an incident, and
+ * the two were previously the same word.
+ */
+export type RiderMapStatus = "delivering" | "idle" | "offline" | "dark";
 
 export interface MapRider {
   id: string;
@@ -1604,6 +1741,58 @@ export interface MapOrder {
   statusSince: string;
   distanceMeters: number;
   durationSeconds: number;
+}
+
+/** Where a partner was when they last reported, and how long ago that was. */
+export interface RiderLastSeen {
+  lat: number;
+  lng: number;
+  heading: number | null;
+  secondsAgo: number;
+  at: string;
+}
+
+/**
+ * One partner, in enough detail to ring them.
+ *
+ * Fetched on demand rather than carried on the polled map — see the endpoint's
+ * own note. `ops` only: the phone number here is real, which is the whole
+ * reason the screen is worth opening.
+ */
+export interface RiderDetail {
+  id: string;
+  name: string;
+  phone: string;
+  photoUrl: string | null;
+  status: string;
+  isOnline: boolean;
+  rating: number | null;
+  vehicleName: string | null;
+  vehicleNumber: string | null;
+  /** Null when a partner has never reported at all, which is not the same as
+   *  an old fix — the screen says which. */
+  lastSeen: RiderLastSeen | null;
+  activeOrder: { id: string; code: string; status: string } | null;
+  /** Written only during a delivery, so empty for an idle partner. */
+  trail: { lat: number; lng: number; at: string }[];
+}
+
+/**
+ * One thing the palette can jump to.
+ *
+ * Comes from `GET /admin/search`, which searches deliveries, customers and
+ * partners. **No phone number is ever returned** — a number is accepted as a
+ * query, and what comes back is a masked tail. Reading a real number still
+ * goes through the reveal route that records who read it.
+ */
+export interface SearchHit {
+  type: "delivery" | "customer" | "partner";
+  id: string;
+  label: string;
+  subtitle: string;
+  /** Status, or null where the type has none. */
+  meta: string | null;
+  href: string;
 }
 
 export interface LiveMapSnapshot {

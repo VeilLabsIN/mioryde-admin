@@ -6,7 +6,13 @@ import { LoginScene } from "@/components/LoginScene";
 import { SignInGreeting } from "@/components/SignInGreeting";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 import { Button, Input } from "@/components/ui";
-import { ApiError, api, auth } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
+import { LoginSplash } from "@/components/LoginSplash";
+import {
+  enterFullscreenIfPreferred,
+  prefersFullscreenOnLogin,
+  setFullscreenOnLogin,
+} from "@/lib/useFullscreen";
 
 /**
  * Cloudflare Turnstile site key. Public by design — it identifies the widget,
@@ -49,9 +55,28 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [reveal, setReveal] = useState(false);
   const [remember, setRemember] = useState(false);
-  // Tracked rather than styled with `:focus-visible` on a peer, for the
-  // same reason the tick is — see the note on the control below.
-  const [rememberFocus, setRememberFocus] = useState(false);
+
+  /**
+   * Whether to take the whole screen once signed in.
+   *
+   * Two pieces of state, deliberately: `fullscreenSupported` decides whether
+   * to offer the choice at all, because a tick that silently does nothing is
+   * worse than no tick. Both are read in an effect rather than at render —
+   * `document` does not exist on the server, and `localStorage` differing
+   * between the server HTML and the first client render is a hydration
+   * mismatch React discards the tree over.
+   */
+  const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreenSupported, setFullscreenSupported] = useState(false);
+
+  useEffect(() => {
+    setFullscreenSupported(Boolean(document.fullscreenEnabled));
+    setFullscreen(prefersFullscreenOnLogin());
+  }, []);
+
+  /** Held over the form while the panel loads. See `LoginSplash`. */
+  const [handingOver, setHandingOver] = useState(false);
+  const [operatorName, setOperatorName] = useState<string | null>(null);
   const [capsOn, setCapsOn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -69,7 +94,40 @@ export default function LoginPage() {
   // blocked script into an outage the panel cannot explain.
   const [turnstileDown, setTurnstileDown] = useState(false);
 
+  /**
+   * The check loaded but has not produced a token, and has had long enough.
+   *
+   * `turnstileDown` above only covers a script that never loaded. The failure
+   * an operator actually hits is narrower and worse: the script loads, the
+   * widget renders, and the token never arrives — a stalled challenge, a
+   * proxy holding the request, a clock far enough out that Cloudflare refuses
+   * it. The button then stays disabled under "Completing the security check…"
+   * for as long as they are willing to wait, and nothing on the page says
+   * what to do. That is a lockout with a polite caption.
+   */
+  const [checkStalled, setCheckStalled] = useState(false);
+
   const challengeRequired = TURNSTILE_SITE_KEY.length > 0 && !turnstileDown;
+
+  /**
+   * Gives the automatic check a fixed budget, then hands over to the operator.
+   *
+   * Eight seconds: an invisible `interaction-only` challenge resolves in well
+   * under one on any working network, so this only fires when something is
+   * genuinely wrong — it is not a race against a slow but healthy check.
+   */
+  useEffect(() => {
+    if (!challengeRequired || turnstileToken || checkStalled) return;
+    const timer = window.setTimeout(() => setCheckStalled(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [challengeRequired, turnstileToken, checkStalled]);
+
+  /** A fresh challenge, asked for by hand. */
+  function runCheckAgain() {
+    setCheckStalled(false);
+    setError(null);
+    turnstile.current?.reset();
+  }
 
   // Already signed in — skip the form.
   //
@@ -93,8 +151,25 @@ export default function LoginPage() {
 
     setBusy(true);
     setError(null);
+
+    // Requested here, inside the gesture, and not after the await.
+    //
+    // `requestFullscreen()` is refused outside a user gesture, and an `await`
+    // ends the one we are in — so asking after the login call, or from the
+    // dashboard once it mounts, is rejected every time. Asking now is the only
+    // moment it can work. It is not awaited: a display change must not delay
+    // signing in, and a refusal must not prevent it.
+    enterFullscreenIfPreferred();
+
     try {
-      await api.login(email.trim(), password, remember, turnstileToken);
+      const identity = await api.login(
+        email.trim(),
+        password,
+        remember,
+        turnstileToken,
+      );
+      setOperatorName(identity?.name ?? null);
+      setHandingOver(true);
       router.replace("/");
     } catch (e) {
       setError(
@@ -110,6 +185,14 @@ export default function LoginPage() {
       turnstile.current?.reset();
     }
   }
+
+  // Over everything, while the panel loads.
+  //
+  // Rendered instead of the form rather than beside it: the form is still
+  // mounted underneath and still holds the operator's password, and leaving it
+  // reachable behind a cover is how a stray Tab lands in a field nobody can
+  // see. Unmounted by the navigation, not by a timer.
+  if (handingOver) return <LoginSplash name={operatorName} />;
 
   return (
     /**
@@ -129,7 +212,20 @@ export default function LoginPage() {
     <main className="relative isolate min-h-dvh">
       <LoginScene />
 
-      <div aria-hidden className="hazard absolute inset-x-0 top-0 h-1 opacity-60" />
+      {/*
+        Was a `hazard` stripe. Removed: hazard tape means "something here can
+        hurt you", and a sign-in page is the least dangerous screen in the
+        panel — spending the one pattern that carries a warning on decoration
+        is how it stops meaning anything where it is needed. It now marks the
+        confirmation step of a destructive action and nothing else.
+
+        The edge is still drawn, in the accent, because the card wants a top
+        rule; it simply no longer claims to be a warning.
+      */}
+      <div
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-px bg-accent/50"
+      />
 
       {/*
         One centred composition rather than two full-height columns.
@@ -322,68 +418,55 @@ export default function LoginPage() {
               ring, which is why that is tracked here too rather than left to
               `peer-focus-visible`.
             */}
-            <label className="group mt-1 flex cursor-pointer items-start gap-2.5 select-none">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-                onFocus={() => setRememberFocus(true)}
-                onBlur={() => setRememberFocus(false)}
-                className="sr-only"
-              />
-              <span
-                aria-hidden
-                className={`chamfer-sm mt-0.5 grid size-4 shrink-0 place-items-center border
-                            transition-colors duration-150 ${
-                              remember
-                                ? "border-accent bg-accent"
-                                : "border-edge bg-surface group-hover:border-accent"
-                            } ${
-                              rememberFocus
-                                ? "ring-2 ring-accent ring-offset-2 ring-offset-bg"
-                                : ""
-                            }`}
-              >
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 10 10"
-                  fill="none"
-                  className="text-on-accent transition-transform duration-150
-                             ease-[var(--ease-spring)] motion-reduce:transition-none"
-                  style={{ transform: remember ? "scale(1)" : "scale(0)" }}
-                >
-                  <path
-                    d="M1.5 5.2L3.8 7.5L8.5 2.8"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
+            <SessionCheck
+              checked={remember}
+              onChange={setRemember}
+              label="Remember me"
+              hint={
+                remember
+                  ? "Stay signed in on this device for 7 days."
+                  : "Signed in for 1 day. Tick only on a device that is yours alone."
+              }
+            />
 
-              <span className="min-w-0">
-                <span className="block text-body text-fg-soft">Remember me</span>
-                {/*
-                  Says what it actually does, and changes as it is toggled.
-                  "Remember me" on its own means nothing specific, and on a tool
-                  holding customer phone numbers the length of the session is
-                  the whole decision being made.
-                */}
-                <span className="block text-meta text-fg-faint">
-                  {remember
-                    ? "Stay signed in on this device for 7 days."
-                    : "Signed in for 1 day. Tick only on a device that is yours alone."}
-                </span>
-              </span>
-            </label>
+            {/*
+              Opt-in, and remembered.
+              
+              Only offered where the browser will actually allow it, because a
+              tick that silently does nothing is worse than no tick. The request
+              itself is made from the submit handler — see `useFullscreen` for
+              why it cannot be made anywhere else.
+            */}
+            {fullscreenSupported && (
+              <SessionCheck
+                checked={fullscreen}
+                onChange={(next) => {
+                  setFullscreen(next);
+                  setFullscreenOnLogin(next);
+                }}
+                label="Open in fullscreen"
+                hint={
+                  fullscreen
+                    ? "The panel takes the whole screen. Press Esc to leave it."
+                    : "For a dispatch screen. You can also toggle it from the top bar."
+                }
+              />
+            )}
 
             {TURNSTILE_SITE_KEY ? (
               <Turnstile
                 siteKey={TURNSTILE_SITE_KEY}
-                onToken={setTurnstileToken}
+                onToken={(token) => {
+                  setTurnstileToken(token);
+                  // A token arriving retires the manual offer; a token being
+                  // cleared (expiry) starts the budget again rather than
+                  // leaving the retry button up next to a working check.
+                  if (token) setCheckStalled(false);
+                }}
                 onUnavailable={() => setTurnstileDown(true)}
+                // Straight to the manual offer. Waiting out the timer after
+                // Cloudflare has already said it failed is dead time.
+                onError={() => setCheckStalled(true)}
                 handleRef={turnstile}
               />
             ) : null}
@@ -396,16 +479,41 @@ export default function LoginPage() {
               // normal office browser, so in practice this is enabled by the
               // time the password is typed — and when it is not, the hint
               // below says why rather than leaving a dead button.
-              disabled={challengeRequired && !turnstileToken}
+              // Not disabled once the check has stalled. The server holds
+              // `TURNSTILE_SECRET_KEY` and is the authority on whether a token
+              // is required — so letting the request through produces either a
+              // sign-in or a specific server-side refusal, both of which beat a
+              // button that cannot be pressed and cannot explain itself.
+              disabled={challengeRequired && !turnstileToken && !checkStalled}
               className="mt-2 w-full"
             >
               Sign in
             </Button>
 
-            {challengeRequired && !turnstileToken ? (
+            {challengeRequired && !turnstileToken && !checkStalled ? (
               <p className="text-meta text-fg-faint" aria-live="polite">
                 Completing the security check…
               </p>
+            ) : null}
+
+            {challengeRequired && !turnstileToken && checkStalled ? (
+              <div className="flex flex-col gap-1" aria-live="polite">
+                <p className="text-meta text-fg-muted">
+                  The security check did not finish on its own.
+                </p>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <button
+                    type="button"
+                    onClick={runCheckAgain}
+                    className="text-meta font-semibold text-accent-bright underline underline-offset-2 hover:text-fg"
+                  >
+                    Run it again
+                  </button>
+                  <span className="text-meta text-fg-faint">
+                    or sign in anyway — we will verify on the server.
+                  </span>
+                </div>
+              </div>
             ) : null}
           </form>
 
@@ -427,5 +535,84 @@ function Stat({ value, label }: { value: string; label: string }) {
       <dt className="font-sans text-label font-semibold text-fg">{value}</dt>
       <dd className="font-mono text-micro uppercase text-fg-muted">{label}</dd>
     </div>
+  );
+}
+
+
+/**
+ * The sign-in page's checkbox.
+ *
+ * Extracted when a second one was needed, not before. Both the tick and the
+ * focus ring are driven by React state rather than `peer-*` classes, and the
+ * reasoning above the first use still applies: peer styling puts the on/off
+ * appearance in a sibling selector that only exists if the class scanner found
+ * the literal string, so "what does this look like when ticked" gets answered
+ * by the build rather than by the code.
+ */
+function SessionCheck({
+  checked,
+  onChange,
+  label,
+  hint,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+  hint: string;
+}) {
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <label className="group mt-1 flex cursor-pointer items-start gap-2.5 select-none">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        className="sr-only"
+      />
+      <span
+        aria-hidden
+        className={`chamfer-sm mt-0.5 grid size-4 shrink-0 place-items-center border
+                    transition-colors duration-150 ${
+                      checked
+                        ? "border-accent bg-accent"
+                        : "border-edge bg-surface group-hover:border-accent"
+                    } ${
+                      focused
+                        ? "ring-2 ring-accent ring-offset-2 ring-offset-bg"
+                        : ""
+                    }`}
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          className="text-on-accent transition-transform duration-150
+                     ease-[var(--ease-spring)] motion-reduce:transition-none"
+          style={{ transform: checked ? "scale(1)" : "scale(0)" }}
+        >
+          <path
+            d="M1.5 5.2L3.8 7.5L8.5 2.8"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+
+      <span className="min-w-0">
+        <span className="block text-body text-fg-soft">{label}</span>
+        {/*
+          Says what it actually does, and changes as it is toggled. A label on
+          its own means nothing specific, and on a tool holding customer phone
+          numbers the length of the session is the whole decision being made.
+        */}
+        <span className="block text-meta text-fg-faint">{hint}</span>
+      </span>
+    </label>
   );
 }

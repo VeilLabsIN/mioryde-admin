@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { RiderDetail } from "@/components/RiderDetail";
 import { Freshness } from "@/components/Freshness";
 import { LiveValue } from "@/components/LiveValue";
 import { Spinner } from "@/components/ui";
@@ -56,6 +57,8 @@ const STATUS_DOT: Record<RiderMapStatus, string> = {
   delivering: "bg-accent-alt",
   idle: "bg-accent-bright",
   offline: "bg-fg-faint",
+  // See LiveMapCanvas: `dark` is an incident, not a quieter kind of offline.
+  dark: "bg-danger",
 };
 
 export default function MapPage() {
@@ -63,6 +66,7 @@ export default function MapPage() {
   const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
+  const [openRiderId, setOpenRiderId] = useState<string | null>(null);
   const [tilesBroken, setTilesBroken] = useState(false);
   // When the last snapshot landed. A map whose polling has quietly stopped
   // looks exactly like a city where nothing is moving.
@@ -130,6 +134,10 @@ export default function MapPage() {
       delivering: riders.filter((r) => r.status === "delivering").length,
       idle: riders.filter((r) => r.status === "idle").length,
       offline: riders.filter((r) => r.status === "offline").length,
+      // Counted separately, and shown even at zero. A dark partner folded into
+      // the offline tally is a dark partner nobody looks at — which is the
+      // whole failure this status was added to surface.
+      dark: riders.filter((r) => r.status === "dark").length,
       unassigned: (snapshot?.orders ?? []).filter((o) => o.status === "pending").length,
     };
   }, [snapshot]);
@@ -180,6 +188,7 @@ export default function MapPage() {
           <Tally label="Delivering" value={counts.delivering} dot="bg-accent-alt" />
           <Tally label="Idle" value={counts.idle} dot="bg-accent-bright" />
           <Tally label="Offline" value={counts.offline} dot="bg-fg-faint" />
+          <Tally label="Dark" value={counts.dark} dot="bg-danger" />
           {counts.unassigned > 0 && (
             <Tally label="Unassigned" value={counts.unassigned} dot="bg-danger" alarm />
           )}
@@ -260,22 +269,56 @@ export default function MapPage() {
               <p className="font-mono text-micro uppercase text-fg-faint">
                 Fleet · {snapshot.riders.length} tracked
               </p>
+              {/* Sorted so anybody who has gone silent is first.
+                  A dark partner at the bottom of an alphabetical list is a
+                  partner nobody notices, and noticing is the entire job of
+                  this panel. */}
               <div className="mt-1.5 space-y-1">
-                {snapshot.riders.slice(0, 6).map((r) => (
-                  <div key={r.id} className="flex items-center gap-2">
-                    <span className={`size-1.5 shrink-0 rounded-full ${STATUS_DOT[r.status]}`} />
-                    <span className="min-w-0 flex-1 truncate text-meta text-fg-muted">
-                      {r.name}
-                    </span>
-                    <span className="font-mono text-micro text-fg-faint">
-                      {r.secondsAgo < 60 ? `${r.secondsAgo}s` : `${Math.floor(r.secondsAgo / 60)}m`}
-                    </span>
-                  </div>
-                ))}
+                {[...snapshot.riders]
+                  .sort((a, b) =>
+                    a.status === b.status
+                      ? a.name.localeCompare(b.name)
+                      : a.status === "dark"
+                        ? -1
+                        : b.status === "dark"
+                          ? 1
+                          : 0,
+                  )
+                  .map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setOpenRiderId(r.id)}
+                      className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-panel"
+                    >
+                      <span className={`size-1.5 shrink-0 rounded-full ${STATUS_DOT[r.status]}`} />
+                      <span className="min-w-0 flex-1 truncate text-meta text-fg-muted">
+                        {r.name}
+                      </span>
+                      <span
+                        className={
+                          r.status === "dark"
+                            ? "font-mono text-micro text-danger"
+                            : "font-mono text-micro text-fg-faint"
+                        }
+                      >
+                        {r.secondsAgo < 60
+                          ? `${r.secondsAgo}s`
+                          : `${Math.floor(r.secondsAgo / 60)}m`}
+                      </span>
+                    </button>
+                  ))}
               </div>
             </div>
           )}
         </aside>
+      )}
+
+      {openRiderId && (
+        <RiderDetail
+          riderId={openRiderId}
+          onClose={() => setOpenRiderId(null)}
+        />
       )}
     </div>
   );

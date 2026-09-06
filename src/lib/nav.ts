@@ -83,6 +83,10 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: "Money",
     items: [
+      // Customer-side money, above the rider-side rows: this is where "did
+      // that charge go through" is answered, including wallet top-ups, which
+      // had no representation in the panel at all.
+      { href: "/payments", label: "Payments", mark: "PY", icon: "payouts", needs: ["payments.view"], side: "customer" },
       { href: "/payouts", label: "Payouts", mark: "PO", icon: "payouts", needs: ["payouts.view"], side: "rider" },
       { href: "/banking", label: "Bank checks", mark: "BK", icon: "banking", needs: ["payouts.settle"], side: "rider" },
       { href: "/collections", label: "Collections", mark: "CO", icon: "collections", needs: ["payouts.settle"], side: "rider" },
@@ -116,7 +120,7 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       // Same capability as notifications: both are "say something to everybody",
       // and splitting them would mean granting one team the ability to message
       // the whole city and not the other.
-      { href: "/banners", label: "In-app banners", mark: "BN", icon: "notifications", needs: ["notifications.manage"] },
+      { href: "/banners", label: "In-app banners", mark: "BN", icon: "notifications", needs: ["banners.manage"] },
       { href: "/readiness", label: "Readiness", mark: "RD", icon: "readiness", needs: ["metrics.view"] },
       { href: "/access", label: "Access control", mark: "AC", icon: "access", needs: ["access.manage"] },
     ],
@@ -144,6 +148,18 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
  * alongside everything else. Only the rail treats them differently.
  */
 export const RAIL_FOOTER: NavItem[] = [
+  {
+    // Above Settings, and the pairing is deliberate: Settings explains what the
+    // process booted with and cannot change it, Platform changes what the
+    // product is doing right now. Somebody arriving to stop an incident wants
+    // the second one, and finding the read-only page first wastes the minute
+    // that matters.
+    href: "/platform",
+    label: "Platform",
+    mark: "PF",
+    icon: "platform",
+    needs: ["platform.manage"],
+  },
   {
     href: "/settings",
     label: "Settings",

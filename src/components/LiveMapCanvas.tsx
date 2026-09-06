@@ -100,7 +100,7 @@ function useIsDark(): boolean {
  * So the status code is the only honest signal, and only `fetch` can read it.
  * Both the accepted and the rejected response carry
  * `Access-Control-Allow-Origin: *`, so this works cross-origin; the tile host
- * is added to `connect-src` in the middleware for the same reason.
+ * is added to `connect-src` in the proxy for the same reason.
  *
  * One request per map load, for a tile the browser was about to fetch anyway.
  */
@@ -130,6 +130,10 @@ const STATUS_COLOR: Record<RiderMapStatus, string> = {
   delivering: "var(--accent-alt)",
   idle: "var(--accent-bright)",
   offline: "var(--fg-faint)",
+  // Danger, deliberately. A partner who has gone silent while on duty is the
+  // one pin on this map that wants somebody to do something about it, and the
+  // grey used for a clean sign-off would let it sit unnoticed among them.
+  dark: "var(--danger)",
 };
 
 export interface LiveMapCanvasProps {
@@ -207,12 +211,20 @@ export function LiveMapCanvas({
 
     map.current = instance;
 
+    // Captured now, not read in the cleanup. A cleanup that reaches for
+    // `ref.current` gets whatever the ref holds when it *runs*; these are the
+    // only handle on the Leaflet layers, so clearing a reassigned ref would
+    // leak every marker the old one held. Today the effect is mount-once and
+    // the two coincide — this makes that independent of it staying that way.
+    const riders = riderMarkers.current;
+    const orders = orderLayers.current;
+
     return () => {
       instance.remove();
       map.current = null;
       tiles.current = null;
-      riderMarkers.current.clear();
-      orderLayers.current.clear();
+      riders.clear();
+      orders.clear();
     };
     // Deliberately once: re-running would tear down the map on every parent
     // render and lose the user's pan and zoom.
