@@ -58,6 +58,11 @@ export default function PanelError({
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <Button onClick={reset}>Try again</Button>
+          {/* A full load, on purpose. This page only renders after the client
+              tree has thrown, and a soft `router.push` keeps the router cache
+              and client state that may be what threw. Starting clean is the
+              point of the button. */}
+          {/* eslint-disable-next-line @next/next/no-location-assign-relative-destination */}
           <GhostButton onClick={() => location.assign("/")}>
             Back to overview
           </GhostButton>

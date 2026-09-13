@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LiveValue } from "@/components/LiveValue";
 import { useNow } from "@/lib/useNow";
 import { RevealPhone } from "@/components/RevealPhone";
@@ -24,6 +24,8 @@ import {
 } from "@/lib/elapsed";
 import { type AdminEvent, useAdminEvents } from "@/lib/useAdminEvents";
 import { useUrlParam } from "@/lib/useUrlState";
+import { useAsync } from "@/lib/useAsync";
+import { useVisiblePoll } from "@/lib/useVisiblePoll";
 import { TOPIC_ALERTS, playAlert } from "@/lib/alertSound";
 
 /**
@@ -106,8 +108,6 @@ const BOARD_COLUMNS: readonly Column<LiveOrder>[] = [
 
 export default function LivePage() {
   const [paused, setPaused] = useState(false);
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
   // In the URL so a dispatcher can send "everything stuck at pickup" to a
   // colleague as a link. Pause stays local — it is a momentary act, not a view.
   const [statusFilter, setStatusFilter] = useUrlParam("status", "");
@@ -118,41 +118,42 @@ export default function LivePage() {
   // that reads it treats zero as "unknown" rather than as an instant.
   const now = useNow();
 
-  // Guards against out-of-order responses. Two refetches can overlap — a poll
-  // and an event-driven one — and the older reply must not overwrite the newer.
-  const requestId = useRef(0);
-
-  const load = useCallback(async () => {
-    const id = ++requestId.current;
-    try {
+  /*
+   * The board.
+   *
+   * `keepPrevious` holds the previous snapshot through a failure, deliberately:
+   * a dispatcher mid-call should not lose the board because one request timed
+   * out. The header says how old it is, which is the honest version of showing
+   * it anyway.
+   *
+   * Two refetches can overlap — a poll and an event-driven one — and the older
+   * reply must not overwrite the newer. That is the request token's job now.
+   */
+  const {
+    data: snapshot,
+    error,
+    reload: load,
+  } = useAsync<Snapshot>(
+    async () => {
       const res = await api.liveOrders();
       const receivedAt = Date.now();
-      if (id !== requestId.current) return;
-      setSnapshot({
+      return {
         orders: res.results,
         truncated: res.truncated,
         skew: clockSkewMs(res.asOf, receivedAt),
         receivedAt,
-      });
-      setError(null);
-    } catch (e: unknown) {
-      if (id !== requestId.current) return;
-      // The previous snapshot is deliberately kept. A dispatcher mid-call
-      // should not lose the board because one request timed out; the header
-      // says how old it is, which is the honest version of showing it anyway.
-      setError(e instanceof Error ? e.message : "Could not load deliveries.");
-    }
-  }, []);
+      };
+    },
+    [],
+    { keepPrevious: true, fallback: "Could not load deliveries." },
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    if (paused) return;
-    const timer = setInterval(() => void load(), POLL_MS);
-    return () => clearInterval(timer);
-  }, [paused, load]);
+  // Paused by the operator, or hidden by the browser: either way the board
+  // stops asking. It refreshes immediately when the tab comes back, so what
+  // they return to is current rather than a minute old.
+  useVisiblePoll(() => {
+    if (!paused) load();
+  }, POLL_MS);
 
   // Refetch when something happened that changes the board. The event payload
   // is not trusted to describe the new state — it says *that* something moved,
@@ -160,7 +161,7 @@ export default function LivePage() {
   const latestBoardEvent = events.find((e) => BOARD_CHANGING.has(e.topic))?.at;
   useEffect(() => {
     if (!latestBoardEvent || paused) return;
-    const timer = setTimeout(() => void load(), REFETCH_DEBOUNCE_MS);
+    const timer = setTimeout(load, REFETCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [latestBoardEvent, paused, load]);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   Button,
   Card,
@@ -13,11 +13,11 @@ import {
 } from "@/components/ui";
 import {
   ApiError,
-  type PageMeta,
   type PendingBankAccount,
   api,
 } from "@/lib/api";
 import { useUrlPage } from "@/lib/useUrlState";
+import { usePagedAsync } from "@/lib/useAsync";
 
 /**
  * Bank account verification.
@@ -38,44 +38,29 @@ import { useUrlPage } from "@/lib/useUrlState";
  * this screen has that a name check does not give.
  */
 export default function BankingPage() {
-  const [accounts, setAccounts] = useState<PendingBankAccount[] | null>(null);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
   const [page, setPage, urlReady] = useUrlPage();
-  const [error, setError] = useState<string | null>(null);
 
-  // Guards against a slow response landing after a newer one and repainting
-  // the list with stale rows.
-  const requestId = useRef(0);
-
-  const load = useCallback(() => {
-    if (!urlReady) return;
-
-    const id = ++requestId.current;
-    setError(null);
-    setAccounts(null);
-
-    api
-      .pendingBankAccounts(page)
-      .then((result) => {
-        if (id !== requestId.current) return;
-        if (result.page.beyondEnd) {
-          setPage(0);
-          return;
-        }
-        setAccounts(result?.results ?? []);
-        setMeta(result.page);
-      })
-      .catch((caught: unknown) => {
-        if (id !== requestId.current) return;
-        setError(
-          caught instanceof ApiError
-            ? caught.message
-            : "Could not load accounts waiting to be checked.",
-        );
-      });
-  }, [page, urlReady, setPage]);
-
-  useEffect(load, [load]);
+  const {
+    rows: accounts,
+    meta,
+    error,
+    reload: load,
+  } = usePagedAsync(
+    async () => {
+      const result = await api.pendingBankAccounts(page);
+      // Past the end. The page below is the answer, not an empty list.
+      if (result.page.beyondEnd) {
+        setPage(0);
+        return null;
+      }
+      return result;
+    },
+    [page],
+    {
+      enabled: urlReady,
+      fallback: "Could not load accounts waiting to be checked.",
+    },
+  );
 
   return (
     <div className="space-y-6">

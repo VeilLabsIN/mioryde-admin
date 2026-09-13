@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Card,
   EmptyState,
@@ -9,9 +9,10 @@ import {
   SkeletonRows,
   PageHeader,
 } from "@/components/ui";
-import { ApiError, type AuditEntry, type PageMeta, api } from "@/lib/api";
+import { api } from "@/lib/api";
 import { ExportButton } from "@/components/ExportButton";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
+import { usePagedAsync } from "@/lib/useAsync";
 
 /** Turns `payout.settled` into `Payout settled`. */
 function humanise(action: string): string {
@@ -59,8 +60,6 @@ function formatWhen(iso: string): string {
  * list is what you get when you have not asked anything yet.
  */
 export default function AuditPage() {
-  const [entries, setEntries] = useState<AuditEntry[] | null>(null);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
   const [actions, setActions] = useState<string[]>([]);
   // All three in the URL: "who touched this record" is the question this page
   // exists for, and the answer to it should be a link somebody can paste into
@@ -69,7 +68,6 @@ export default function AuditPage() {
   const [subjectId, setSubjectId, subjectReady] = useUrlParam("subject");
   const [page, setPage, pageReady] = useUrlPage();
   const urlReady = actionReady && subjectReady && pageReady;
-  const [error, setError] = useState<string | null>(null);
 
   // Only sent once it is a complete UUID. Filtering on a partial id would
   // return nothing and read as "no such record" while the operator is still
@@ -78,27 +76,27 @@ export default function AuditPage() {
     ? subjectId.trim()
     : undefined;
 
-  const load = useCallback(() => {
-    if (!urlReady) return;
-
-    setEntries(null);
-    setError(null);
-    api
-      .auditLog({ page, action: action || undefined, subjectId: subjectFilter })
-      .then((res) => {
-        if (res.page.beyondEnd) {
-          setPage(0);
-          return;
-        }
-        setEntries(res.results);
-        setMeta(res.page);
-      })
-      .catch((e: unknown) =>
-        setError(e instanceof ApiError ? e.message : "Could not load the log."),
-      );
-  }, [page, action, subjectFilter, urlReady, setPage]);
-
-  useEffect(load, [load]);
+  const {
+    rows: entries,
+    meta,
+    error,
+  } = usePagedAsync(
+    async () => {
+      const res = await api.auditLog({
+        page,
+        action: action || undefined,
+        subjectId: subjectFilter,
+      });
+      // Past the end. The page below is the answer, not an empty log.
+      if (res.page.beyondEnd) {
+        setPage(0);
+        return null;
+      }
+      return res;
+    },
+    [page, action, subjectFilter],
+    { enabled: urlReady, fallback: "Could not load the log." },
+  );
 
   useEffect(() => {
     // Failure here is not worth surfacing: the filter degrades to the free-text

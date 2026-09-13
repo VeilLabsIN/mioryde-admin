@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Card,
   EmptyState,
@@ -8,8 +8,9 @@ import {
   PageHeader,
   Pager,
 } from "@/components/ui";
-import { type AdminCustomer, type PageMeta, api } from "@/lib/api";
+import { type AdminCustomer, api } from "@/lib/api";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
+import { usePagedAsync } from "@/lib/useAsync";
 import { type Column, DataTable } from "@/components/DataTable";
 import { CustomerDrawer } from "@/components/CustomerDrawer";
 
@@ -88,8 +89,6 @@ export default function CustomersPage() {
   // and page are a view worth sharing, but which record somebody had open is a
   // moment in one person's triage.
   const [openCustomerId, setOpenCustomerId] = useState<string | null>(null);
-  const [customers, setCustomers] = useState<AdminCustomer[] | null>(null);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
 
   // Stable across renders — the setter is, so the definitions are not rebuilt
   // on every keystroke in the search box.
@@ -107,43 +106,32 @@ export default function CustomersPage() {
     setPage(0);
     setSearch(next);
   };
-  const [error, setError] = useState<string | null>(null);
-
   const [debounced, setDebounced] = useState("");
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 250);
     return () => clearTimeout(t);
   }, [search]);
 
-  const requestId = useRef(0);
-
-  useEffect(() => {
-    if (!urlReady) return;
-
-    const id = ++requestId.current;
-    setCustomers(null);
-    setError(null);
-    api
-      .customers({
+  const {
+    rows: customers,
+    meta,
+    error,
+  } = usePagedAsync(
+    async () => {
+      const res = await api.customers({
         ...(page ? { page } : {}),
         ...(debounced ? { search: debounced } : {}),
-      })
-      .then((res) => {
-        if (id !== requestId.current) return;
-        if (res.page.beyondEnd) {
-          setPage(0);
-          return;
-        }
-        setCustomers(res.results);
-        setMeta(res.page);
-      })
-      .catch((e: unknown) => {
-        if (id !== requestId.current) return;
-        setError(
-          e instanceof Error ? e.message : "Could not load customers.",
-        );
       });
-  }, [debounced, page, urlReady, setPage]);
+      // Past the end. The page below is the answer, not an empty list.
+      if (res.page.beyondEnd) {
+        setPage(0);
+        return null;
+      }
+      return res;
+    },
+    [debounced, page],
+    { enabled: urlReady, fallback: "Could not load customers." },
+  );
 
   return (
     <div className="mx-auto max-w-[1200px]">

@@ -6,6 +6,7 @@ import { AdminProvider } from "@/components/AdminProvider";
 import { AttentionProvider, BannerStrip } from "@/components/Banner";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PanelFooter } from "@/components/PanelFooter";
+import { PanelScene } from "@/components/PanelScene";
 import { TopBar } from "@/components/TopBar";
 import { Sidebar } from "@/components/Sidebar";
 import { ToastProvider } from "@/components/ToastProvider";
@@ -136,7 +137,15 @@ export default function PanelLayout({
           onClose={() => setNavOpen(false)}
         />
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        {/*
+          `relative isolate` so the scene below has something to be positioned
+          in and something to sit behind. The column, not `<main>`: `<main>` is
+          the scroll container, and a background inside it would slide up past
+          the header on every wheel tick.
+        */}
+        <div className="relative isolate flex min-w-0 flex-1 flex-col">
+          <PanelScene />
+
           {/* Above the scroll container, so a critical banner does not scroll
               away from an operator who is halfway down a long queue. */}
           <BannerStrip />

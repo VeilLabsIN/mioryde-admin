@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { api, type RiderDetail as Detail } from "@/lib/api";
+import { useAsync } from "@/lib/useAsync";
 
 /**
  * One partner, opened from the live map.
@@ -27,32 +28,15 @@ export function RiderDetail({
   riderId: string;
   onClose: () => void;
 }) {
-  const [detail, setDetail] = useState<Detail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setDetail(null);
-    setError(null);
-
-    api
-      .riderDetail(riderId)
-      .then((d) => {
-        if (!cancelled) setDetail(d);
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return;
-        // Named rather than swallowed. A blank drawer is indistinguishable
-        // from a partner with no data, and this route is `ops` only — so a
-        // support operator opening it gets a 403 they need to understand
-        // rather than an empty box they will report as a bug.
-        setError(e instanceof Error ? e.message : "Could not load this partner.");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [riderId]);
+  // The error is named rather than swallowed. A blank drawer is
+  // indistinguishable from a partner with no data, and this route is `ops`
+  // only — so a support operator opening it gets a 403 they need to
+  // understand rather than an empty box they will report as a bug.
+  const { data: detail, error } = useAsync<Detail>(
+    () => api.riderDetail(riderId),
+    [riderId],
+    { fallback: "Could not load this partner." },
+  );
 
   return (
     <aside className="flex h-full w-[340px] flex-col border-l border-line bg-surface">

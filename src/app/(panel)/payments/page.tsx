@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, EmptyState, Input, PageHeader, Pager } from "@/components/ui";
-import { type AdminPayment, type PageMeta, api, formatMoney } from "@/lib/api";
+import { type AdminPayment, api, formatMoney } from "@/lib/api";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
+import { usePagedAsync } from "@/lib/useAsync";
 import { type Column, DataTable } from "@/components/DataTable";
 
 /**
@@ -171,10 +172,6 @@ function paymentColumns(): readonly Column<AdminPayment>[] {
 }
 
 export default function PaymentsPage() {
-  const [payments, setPayments] = useState<AdminPayment[] | null>(null);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
   const columns = useMemo(() => paymentColumns(), []);
 
   const [page, setPage, pageReady] = useUrlPage();
@@ -204,38 +201,31 @@ export default function PaymentsPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const requestId = useRef(0);
-
-  useEffect(() => {
-    if (!urlReady) return;
-
-    const id = ++requestId.current;
-    setPayments(null);
-    setError(null);
-    api
-      .payments({
+  // A stale response must never overwrite a fresh one: typing in the search
+  // box starts several of these and they do not come back in order. The
+  // request token is what drops the ones that are no longer being asked for.
+  const {
+    rows: payments,
+    meta,
+    error,
+  } = usePagedAsync(
+    async () => {
+      const res = await api.payments({
         ...(page ? { page } : {}),
         ...(debounced ? { search: debounced } : {}),
         ...(status ? { status } : {}),
         ...(purpose ? { purpose } : {}),
-      })
-      .then((res) => {
-        // A stale response must never overwrite a fresh one: typing in the
-        // search box starts several of these and they do not come back in
-        // order.
-        if (id !== requestId.current) return;
-        if (res.page.beyondEnd) {
-          setPage(0);
-          return;
-        }
-        setPayments(res.results);
-        setMeta(res.page);
-      })
-      .catch((e: unknown) => {
-        if (id !== requestId.current) return;
-        setError(e instanceof Error ? e.message : "Could not load payments.");
       });
-  }, [debounced, page, status, purpose, urlReady, setPage]);
+      // Past the end. The page below is the answer, not an empty table.
+      if (res.page.beyondEnd) {
+        setPage(0);
+        return null;
+      }
+      return res;
+    },
+    [debounced, page, status, purpose],
+    { enabled: urlReady, fallback: "Could not load payments." },
+  );
 
   return (
     <div className="mx-auto max-w-[1200px]">

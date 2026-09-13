@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+
 import {
   Card,
   EmptyState,
@@ -10,6 +10,8 @@ import {
   SkeletonRows,
 } from "@/components/ui";
 import { type Monitoring, api } from "@/lib/api";
+import { useAsync } from "@/lib/useAsync";
+import { useVisiblePoll } from "@/lib/useVisiblePoll";
 import { formatElapsed } from "@/lib/elapsed";
 import { Freshness } from "@/components/Freshness";
 import { LiveValue } from "@/components/LiveValue";
@@ -39,34 +41,35 @@ const OUTBOX_STALL_SECONDS = 120;
  * always yellow is a page nobody reads.
  */
 export default function MonitoringPage() {
-  const [data, setData] = useState<Monitoring | null>(null);
-  // Only the local receipt time is kept. Unlike the dispatch board, nothing
-  // here is measured against a server instant — "how old is this page" is a
-  // purely local question, so there is no clock skew to correct for.
-  const [receivedAt, setReceivedAt] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  /*
+   * The snapshot and the moment it arrived are one value.
+   *
+   * They were two pieces of state written one after the other, which meant a
+   * freshness reading could in principle belong to a different load than the
+   * numbers beside it. Only the *local* receipt time is kept: unlike the
+   * dispatch board, nothing here is measured against a server instant — "how
+   * old is this page" is a purely local question, so there is no clock skew to
+   * correct for.
+   *
+   * `keepPrevious` holds the last snapshot through a failure. A monitoring
+   * page that blanks itself on one failed request is least useful exactly when
+   * things are failing.
+   */
+  const {
+    data: loaded,
+    error,
+    reload,
+  } = useAsync(
+    async () => ({ snapshot: await api.monitoring(), receivedAt: Date.now() }),
+    [],
+    { keepPrevious: true, fallback: "Could not load monitoring." },
+  );
+  const data: Monitoring | null = loaded?.snapshot ?? null;
+  const receivedAt = loaded?.receivedAt ?? null;
 
-  const load = useCallback(async () => {
-    try {
-      const res = await api.monitoring();
-      setData(res);
-      setReceivedAt(Date.now());
-      setError(null);
-    } catch (e: unknown) {
-      // The previous snapshot is kept. A monitoring page that blanks itself on
-      // one failed request is least useful exactly when things are failing.
-      setError(e instanceof Error ? e.message : "Could not load monitoring.");
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    const timer = setInterval(() => void load(), POLL_MS);
-    return () => clearInterval(timer);
-  }, [load]);
+  // Only while somebody is looking. A monitoring tab left open overnight was
+  // three requests a minute for numbers nobody read.
+  useVisiblePoll(reload, POLL_MS);
 
   return (
     <div className="mx-auto max-w-[1100px] space-y-6">
@@ -76,7 +79,7 @@ export default function MonitoringPage() {
         actions={
           <div className="flex items-center gap-2">
             <Freshness at={receivedAt} />
-            <GhostButton onClick={() => void load()}>Refresh</GhostButton>
+            <GhostButton onClick={reload}>Refresh</GhostButton>
           </div>
         }
       />

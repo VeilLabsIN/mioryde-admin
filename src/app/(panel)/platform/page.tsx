@@ -40,6 +40,16 @@ import { ApiError, type RuntimeSetting, api } from "@/lib/api";
  * beside the routes it guards, and a second copy here is exactly the drift
  * `permissions.ts` warns about.
  */
+/**
+ * A React key that changes exactly when the value being edited changes.
+ *
+ * `undefined` for a setting the role cannot see, which is also what the cards
+ * render nothing for.
+ */
+function settingKey(setting: RuntimeSetting | undefined): string {
+  return setting ? `${setting.key}:${JSON.stringify(setting.value)}` : "none";
+}
+
 export default function PlatformPage() {
   const [settings, setSettings] = useState<RuntimeSetting[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,14 +86,45 @@ export default function PlatformPage() {
         <>
           <section className="space-y-3">
             <SectionLabel>Assistant</SectionLabel>
-            <ModelChain setting={byKey("wuda.models")} onSaved={load} />
-            <BooleanSetting setting={byKey("wuda.enabled")} onSaved={load} />
+            {/*
+              Keyed on the value each card is editing.
+
+              These cards hold a draft, and a draft has to be thrown away when
+              the server value underneath it changes — otherwise a save by a
+              colleague leaves this operator editing a figure that is no longer
+              there. A key does that: React remounts the card and the draft is
+              gone with it. The four cards used to do the same thing with an
+              effect that set state during render, which cost a second render
+              of every card on every refetch.
+
+              The value rather than `updatedAt`, because a setting that has
+              never been written has no `updatedAt` and two different coded
+              defaults would share a key.
+            */}
+            <ModelChain
+              key={settingKey(byKey("wuda.models"))}
+              setting={byKey("wuda.models")}
+              onSaved={load}
+            />
+            <BooleanSetting
+              key={settingKey(byKey("wuda.enabled"))}
+              setting={byKey("wuda.enabled")}
+              onSaved={load}
+            />
           </section>
 
           <section className="space-y-3">
             <SectionLabel>Service status</SectionLabel>
-            <MaintenanceSetting setting={byKey("maintenance")} onSaved={load} />
-            <OrderingSetting setting={byKey("ordering.paused")} onSaved={load} />
+            <MaintenanceSetting
+              key={settingKey(byKey("maintenance"))}
+              setting={byKey("maintenance")}
+              onSaved={load}
+            />
+            <OrderingSetting
+              key={settingKey(byKey("ordering.paused"))}
+              setting={byKey("ordering.paused")}
+              onSaved={load}
+            />
           </section>
 
           {/*
@@ -94,7 +135,11 @@ export default function PlatformPage() {
           */}
           <section className="space-y-3">
             <SectionLabel>Notifications</SectionLabel>
-            <BooleanSetting setting={byKey("push.dataOnly")} onSaved={load} />
+            <BooleanSetting
+              key={settingKey(byKey("push.dataOnly"))}
+              setting={byKey("push.dataOnly")}
+              onSaved={load}
+            />
           </section>
         </>
       ) : null}
@@ -198,8 +243,10 @@ function ModelChain({
   const initial = Array.isArray(setting?.value)
     ? (setting.value as string[]).join("\n")
     : "";
+  // No effect resetting this when `initial` changes: the card is keyed on
+  // the value it edits, so a server-side change remounts it and the draft
+  // goes with it. See the comment beside the key.
   const [text, setText] = useState(initial);
-  useEffect(() => setText(initial), [initial]);
 
   if (!setting) return null;
 
@@ -239,7 +286,6 @@ function BooleanSetting({
 }) {
   const initial = setting?.value === true;
   const [on, setOn] = useState(initial);
-  useEffect(() => setOn(initial), [initial]);
 
   if (!setting) return null;
 
@@ -293,7 +339,6 @@ function MaintenanceSetting({
 }) {
   const initial = setting?.value as Maintenance | undefined;
   const [draft, setDraft] = useState<Maintenance | undefined>(initial);
-  useEffect(() => setDraft(initial), [initial]);
 
   if (!setting || !draft || !initial) return null;
 
@@ -405,7 +450,6 @@ function OrderingSetting({
 }) {
   const initial = setting?.value as Ordering | undefined;
   const [draft, setDraft] = useState<Ordering | undefined>(initial);
-  useEffect(() => setDraft(initial), [initial]);
 
   if (!setting || !draft || !initial) return null;
 

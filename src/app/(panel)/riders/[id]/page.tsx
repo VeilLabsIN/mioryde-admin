@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { StatusPill as TripStatus } from "@/components/ui";
 import { RevealPhone } from "@/components/RevealPhone";
 import {
@@ -14,13 +14,12 @@ import {
   StatusPill,
 } from "@/components/ui";
 import {
-  ApiError,
   type AuditEntry,
-  type RiderDetail,
   api,
   formatMoney,
   type RiderTrip,
 } from "@/lib/api";
+import { useAsync } from "@/lib/useAsync";
 
 function formatWhen(iso: string): string {
   const date = new Date(iso);
@@ -51,39 +50,42 @@ export default function RiderDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
 
-  const [rider, setRider] = useState<RiderDetail | null>(null);
-  const [history, setHistory] = useState<AuditEntry[]>([]);
-  const [trips, setTrips] = useState<RiderTrip[] | null>(null);
   const [tab, setTab] = useState<RiderTab>("overview");
-  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    setError(null);
-    api
-      .riderById(id)
-      .then(setRider)
-      .catch((e: unknown) =>
-        setError(
-          e instanceof ApiError ? e.message : "Could not load this partner.",
+  /*
+   * Three requests, one load.
+   *
+   * They were three independent chains before, which meant three renders as
+   * they landed and no single answer to "is this page ready". Only the partner
+   * itself can fail the page: the other two are best-effort and resolve to an
+   * empty list, because a partner with no audit history and no delivery yet is
+   * an ordinary new partner, not a broken screen.
+   *
+   * `Promise.all` rather than three awaits — they do not depend on each other,
+   * and sequencing them would make the page three round trips deep.
+   */
+  const { data, error, reload: load } = useAsync(
+    async () => {
+      const [rider, history, trips] = await Promise.all([
+        api.riderById(id),
+        api.auditLog({ subjectId: id }).then(
+          (res) => res.results,
+          () => [] as AuditEntry[],
         ),
-      );
+        api.riderOrders(id).then(
+          (res) => res.results,
+          () => [] as RiderTrip[],
+        ),
+      ]);
+      return { rider, history, trips };
+    },
+    [id],
+    { fallback: "Could not load this partner." },
+  );
 
-    // Best-effort. A partner with no audit history is the normal case, and a
-    // failure here should not stop the page rendering the partner.
-    api
-      .auditLog({ subjectId: id })
-      .then((res) => setHistory(res.results))
-      .catch(() => setHistory([]));
-
-    // Also best-effort, and also not allowed to blank the page: a partner who
-    // has never been assigned a delivery is an ordinary new partner.
-    api
-      .riderOrders(id)
-      .then((res) => setTrips(res.results))
-      .catch(() => setTrips([]));
-  }, [id]);
-
-  useEffect(load, [load]);
+  const rider = data?.rider ?? null;
+  const history = data?.history ?? [];
+  const trips = data?.trips ?? null;
 
   if (error) {
     return (
