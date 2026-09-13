@@ -21,14 +21,22 @@ function stubEnvironment({
   const store: Record<string, string> = enabled
     ? { "mioryde-alert-sound": "true" }
     : {};
-  vi.stubGlobal("localStorage", {
+  const localStorage = {
     getItem: (k: string) => (k in store ? store[k] : null),
     setItem: (k: string, v: string) => {
       store[k] = v;
     },
-  });
+  };
+  vi.stubGlobal("localStorage", localStorage);
+  // The same store on `window`, because the preference is written through
+  // `clientValue`, which reads `window.localStorage` — a browser has one
+  // store, and a stub with two is a stub that can pass while the code is
+  // wrong.
   vi.stubGlobal("window", {
+    localStorage,
     matchMedia: () => ({ matches: reducedMotion }),
+    addEventListener: () => {},
+    removeEventListener: () => {},
   });
 
   // A context that records rather than sounds. `createOscillator` returning

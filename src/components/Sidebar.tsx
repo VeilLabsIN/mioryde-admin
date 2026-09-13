@@ -2,7 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  useMediaQuery,
+  useStoredValue,
+} from "@/lib/clientValue";
 import { type AdminRole, canAny } from "@/lib/permissions";
 import { NAV_GROUPS, RAIL_FOOTER } from "@/lib/nav";
 import { NavIcon } from "./NavIcon";
@@ -49,6 +59,36 @@ export function clampWidth(value: number): number {
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(value)));
 }
 const SHUT_GROUPS_KEY = "mioryde-rail-shut-groups";
+
+/**
+ * Nothing folded away.
+ *
+ * A module constant rather than a fresh `[]` at the call site: the store
+ * compares snapshots by identity, and a new array each render would be a new
+ * snapshot each render.
+ */
+const EVERY_GROUP_OPEN: string[] = [];
+
+/** Which groups are folded. Anything unreadable means none of them. */
+function parseShutGroups(stored: string | null): string[] {
+  if (!stored) return EVERY_GROUP_OPEN;
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    // A hand-edited key, or one written by a build that stored something
+    // else. Every group open is a working rail; a crash is not.
+    return Array.isArray(parsed)
+      ? parsed.filter((x): x is string => typeof x === "string")
+      : EVERY_GROUP_OPEN;
+  } catch {
+    return EVERY_GROUP_OPEN;
+  }
+}
+
+/** The stored rail width, clamped. `Number(null)` and `Number("")` are 0. */
+function parseWidth(stored: string | null): number {
+  const value = Number(stored);
+  return value ? clampWidth(value) : DEFAULT_WIDTH;
+}
 
 /**
  * Wide enough for content but not for a 248px rail beside it — a tablet, or a
@@ -104,16 +144,40 @@ export function Sidebar({
   /**
    * Collapsed to icons.
    *
-   * Starts expanded and is corrected after mount, never during render: the
-   * panel is statically prerendered, so reading `matchMedia` or storage while
-   * rendering produces markup that disagrees with the client and React
-   * discards the tree.
+   * Expanded on the server, because the server has neither `matchMedia` nor
+   * storage and markup that disagrees with the client is a tree React
+   * discards. Said explicitly as a server snapshot rather than reached by
+   * rendering once with a default and then setting state.
    *
    * A stored choice wins over the viewport. An operator who collapsed the rail
    * on a wide screen meant it; re-expanding it because their window is large
    * would be the panel arguing with them every morning.
    */
-  const [collapsed, setCollapsed] = useState(false);
+  const narrowViewport = useMediaQuery(NARROW_BELOW, false);
+
+  /**
+   * `storeSnapshot` (in `clientValue.ts`) caches the parsed value per key,
+   * keyed on the raw stored string alone — by design, so every reader of a
+   * key shares one answer. A `parse` that also closes over `narrowViewport`
+   * broke that: resizing across `NARROW_BELOW` produces a new closure but,
+   * with the stored string unchanged, the cache returns the *previous*
+   * closure's answer, and the rail silently stops following the viewport.
+   * Keeping `parse` pure in `stored` alone and folding the viewport in here
+   * during render sidesteps the cache instead of fighting it.
+   */
+  const parseStoredOverride = useCallback(
+    (stored: string | null): boolean | null =>
+      stored === "true" || stored === "false" ? stored === "true" : null,
+    [],
+  );
+
+  const [storedOverride, writeCollapsed] = useStoredValue(
+    COLLAPSED_KEY,
+    parseStoredOverride,
+    null,
+  );
+
+  const collapsed = storedOverride ?? narrowViewport;
 
   /**
    * Whether the pointer is over a collapsed rail.
@@ -170,19 +234,6 @@ export function Sidebar({
    */
   const narrow = collapsed && !peeking;
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(COLLAPSED_KEY);
-      if (stored === "true" || stored === "false") {
-        setCollapsed(stored === "true");
-        return;
-      }
-    } catch {
-      // Storage disabled. The viewport still gets a say.
-    }
-    setCollapsed(window.matchMedia(NARROW_BELOW).matches);
-  }, []);
-
   /**
    * The expanded rail's width, in pixels.
    *
@@ -191,35 +242,29 @@ export function Sidebar({
    * operators run this beside different things — a dispatch board wants the
    * rail out of the way, the KYC queue does not care — so it is theirs to set.
    *
-   * Starts at the default rather than reading storage during render: the
-   * server has no `localStorage`, and a width that differs between the HTML
-   * and the first client render is a hydration mismatch that React discards
-   * the tree over. The stored value is applied in an effect below, exactly as
-   * `collapsed` already does.
+   * The default on the server, which has no `localStorage`; the stored
+   * width once the browser answers.
+   *
+   * Two values rather than one, unlike the others here. A drag moves the
+   * rail at pointer rate and only the *released* width is a preference, so
+   * `dragWidth` holds the in-flight pixels and the store holds what was
+   * chosen. The old version kept both in one `useState` and relied on the
+   * ordering of `persistWidth` to tell them apart.
    */
-  const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const [storedWidth, writeWidth] = useStoredValue(
+    WIDTH_KEY,
+    parseWidth,
+    DEFAULT_WIDTH,
+  );
+
+  /** Pixels under the pointer mid-drag; null when nothing is being dragged. */
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
+  const width = dragWidth ?? storedWidth;
 
   /** True only while a drag is in progress, so the rail can stop animating. */
   const [resizing, setResizing] = useState(false);
 
-  useEffect(() => {
-    try {
-      const stored = Number(localStorage.getItem(WIDTH_KEY));
-      // `Number("")` is 0 and `Number(null)` is 0, so a falsy check covers
-      // "never set" and "set to nonsense" together.
-      if (stored) setWidth(clampWidth(stored));
-    } catch {
-      // Storage disabled. The default is a perfectly good width.
-    }
-  }, []);
-
-  const persistWidth = (next: number) => {
-    try {
-      localStorage.setItem(WIDTH_KEY, String(next));
-    } catch {
-      // Not remembering is survivable.
-    }
-  };
+  const persistWidth = (next: number) => writeWidth(String(next));
 
   /**
    * Drag from the rail's right edge.
@@ -241,7 +286,7 @@ export function Sidebar({
     const startWidth = width;
 
     const onMove = (move: PointerEvent) => {
-      setWidth(clampWidth(startWidth + (move.clientX - startX)));
+      setDragWidth(clampWidth(startWidth + (move.clientX - startX)));
     };
 
     const onEnd = () => {
@@ -249,11 +294,13 @@ export function Sidebar({
       handle.removeEventListener("pointerup", onEnd);
       handle.removeEventListener("pointercancel", onEnd);
       setResizing(false);
-      // Read from the setter rather than the closed-over `width`, which is
-      // the value from the render the drag started in.
-      setWidth((current) => {
-        persistWidth(current);
-        return current;
+      // Read from the setter rather than the closed-over `dragWidth`, which
+      // is the value from the render the drag started in. Persisting it and
+      // clearing the override in one step means the rail never flicks back
+      // to the old stored width for a frame.
+      setDragWidth((current) => {
+        if (current !== null) persistWidth(current);
+        return null;
       });
     };
 
@@ -278,22 +325,14 @@ export function Sidebar({
     if (event.key === "End") next = MAX_WIDTH;
     if (next === null) return;
     event.preventDefault();
-    const clamped = clampWidth(next);
-    setWidth(clamped);
-    persistWidth(clamped);
+    // No drag override: a keyboard nudge is a choice the moment it is made.
+    persistWidth(clampWidth(next));
   };
 
-  const toggleCollapsed = () => {
-    setCollapsed((wasCollapsed) => {
-      const next = !wasCollapsed;
-      try {
-        localStorage.setItem(COLLAPSED_KEY, String(next));
-      } catch {
-        // Not remembering is survivable.
-      }
-      return next;
-    });
-  };
+  // One write. The store is what re-renders the rail, so there is no
+  // separate React state to keep in step with what was persisted — which
+  // is what the old updater-with-a-side-effect was doing by hand.
+  const toggleCollapsed = () => writeCollapsed(String(!collapsed));
 
   /**
    * Groups the operator has folded away, by label.
@@ -302,29 +341,17 @@ export function Sidebar({
    * than arriving folded — a new section nobody can see is indistinguishable
    * from one that was never shipped.
    */
-  const [shutGroups, setShutGroups] = useState<string[]>([]);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(SHUT_GROUPS_KEY);
-      if (stored) setShutGroups(JSON.parse(stored) as string[]);
-    } catch {
-      // Unparseable or unavailable: every group open is a working rail.
-    }
-  }, []);
+  const [shutGroups, writeShutGroups] = useStoredValue(
+    SHUT_GROUPS_KEY,
+    parseShutGroups,
+    EVERY_GROUP_OPEN,
+  );
 
   const toggleGroup = (label: string) => {
-    setShutGroups((shut) => {
-      const next = shut.includes(label)
-        ? shut.filter((l) => l !== label)
-        : [...shut, label];
-      try {
-        localStorage.setItem(SHUT_GROUPS_KEY, JSON.stringify(next));
-      } catch {
-        // Not remembering is survivable.
-      }
-      return next;
-    });
+    const next = shutGroups.includes(label)
+      ? shutGroups.filter((l) => l !== label)
+      : [...shutGroups, label];
+    writeShutGroups(JSON.stringify(next));
   };
 
   const navRef = useRef<HTMLElement>(null);
@@ -820,7 +847,6 @@ export function Sidebar({
           onDoubleClick={() => {
             // Back to the default. Somebody who has dragged the rail somewhere
             // unhelpful should not have to find 248 by hand.
-            setWidth(DEFAULT_WIDTH);
             persistWidth(DEFAULT_WIDTH);
           }}
           className="absolute inset-y-0 right-0 z-10 hidden w-[5px] translate-x-1/2

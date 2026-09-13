@@ -2,8 +2,9 @@
 
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useTheme } from "./ThemeProvider";
+import { useMediaQuery } from "@/lib/clientValue";
 import type { LiveMapSnapshot, MapOrder, RiderMapStatus } from "@/lib/api";
 
 /**
@@ -69,15 +70,10 @@ const DARK_TILES =
  */
 function useIsDark(): boolean {
   const { theme } = useTheme();
-  const [systemDark, setSystemDark] = useState(false);
-
-  useEffect(() => {
-    const query = window.matchMedia("(prefers-color-scheme: dark)");
-    setSystemDark(query.matches);
-    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-    query.addEventListener("change", onChange);
-    return () => query.removeEventListener("change", onChange);
-  }, []);
+  // `false` on the server, which is what the light basemap is rendered
+  // against; the client answers correctly on its first render rather than
+  // painting a light map and correcting it. See lib/clientValue.ts.
+  const systemDark = useMediaQuery("(prefers-color-scheme: dark)", false);
 
   if (theme === "tokyo") return true;
   if (theme === "daylight") return false;

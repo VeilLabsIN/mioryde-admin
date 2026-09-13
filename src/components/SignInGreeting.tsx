@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { useClientOnce } from "@/lib/clientValue";
+
 /**
  * The heading on the sign-in form.
  *
@@ -80,12 +82,16 @@ function Letters({ text, delay = 0 }: { text: string; delay?: number }) {
 }
 
 export function SignInGreeting({ email }: { email: string }) {
-  const [greeting, setGreeting] = useState<string | null>(null);
+  // Null on the server, said explicitly: the greeting depends on the viewer's
+  // own clock, so any value rendered there is markup the client immediately
+  // disagrees with. Read once per mount rather than on a timer — an operator
+  // sitting on the sign-in screen across 11:59 does not need the heading to
+  // change under them, and the letters would replay their animation.
+  const greeting = useClientOnce<string | null>(
+    () => greetingFor(new Date().getHours()),
+    null,
+  );
   const [name, setName] = useState<string | null>(null);
-
-  useEffect(() => {
-    setGreeting(greetingFor(new Date().getHours()));
-  }, []);
 
   // Settled, not per-keystroke. Re-running the letter animation on every
   // character typed into the email box would be a twitch, not a flourish.
@@ -102,7 +108,7 @@ export function SignInGreeting({ email }: { email: string }) {
       // otherwise announce one at a time. The label carries the real sentence.
       aria-label={full || undefined}
       aria-live="polite"
-      className="mb-1 mt-2 min-h-[1.25em] font-sans text-title"
+      className="mb-1 mt-2 min-h-[1.25em] font-sans text-title lg:text-[30px] lg:tracking-[-0.01em] 2xl:text-[34px]"
     >
       {greeting && (
         <>
