@@ -26,6 +26,13 @@ jobs:
 
       - run: npm ci
 
+      # The gate that was missing when two critical advisories sat in the
+      # panels unnoticed. `--omit=dev` deliberately: the dev toolchain throws
+      # up advisories that cannot reach a user, and a gate that cries wolf is a
+      # gate somebody deletes.
+      - name: Known vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
+
       # --max-warnings is deliberately not set to 0 here.
       #
       # The panel carries a known set of set-state-in-effect warnings whose fix
