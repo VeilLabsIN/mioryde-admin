@@ -8,11 +8,7 @@ import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 import { Button, Input } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { LoginSplash } from "@/components/LoginSplash";
-import {
-  enterFullscreenIfPreferred,
-  prefersFullscreenOnLogin,
-  setFullscreenOnLogin,
-} from "@/lib/useFullscreen";
+import { enterFullscreenOnSignIn } from "@/lib/useFullscreen";
 
 /**
  * Cloudflare Turnstile site key. Public by design — it identifies the widget,
@@ -56,24 +52,6 @@ export default function LoginPage() {
   const [reveal, setReveal] = useState(false);
   const [remember, setRemember] = useState(false);
 
-  /**
-   * Whether to take the whole screen once signed in.
-   *
-   * Two pieces of state, deliberately: `fullscreenSupported` decides whether
-   * to offer the choice at all, because a tick that silently does nothing is
-   * worse than no tick. Both are read in an effect rather than at render —
-   * `document` does not exist on the server, and `localStorage` differing
-   * between the server HTML and the first client render is a hydration
-   * mismatch React discards the tree over.
-   */
-  const [fullscreen, setFullscreen] = useState(false);
-  const [fullscreenSupported, setFullscreenSupported] = useState(false);
-
-  useEffect(() => {
-    setFullscreenSupported(Boolean(document.fullscreenEnabled));
-    setFullscreen(prefersFullscreenOnLogin());
-  }, []);
-
   /** Held over the form while the panel loads. See `LoginSplash`. */
   const [handingOver, setHandingOver] = useState(false);
   const [operatorName, setOperatorName] = useState<string | null>(null);
@@ -104,6 +82,19 @@ export default function LoginPage() {
    * it. The button then stays disabled under "Completing the security check…"
    * for as long as they are willing to wait, and nothing on the page says
    * what to do. That is a lockout with a polite caption.
+   *
+   * When this flips, the widget is re-rendered in `always` mode, which puts
+   * Cloudflare's own "Verify you are human" box on the page. Ticking it is
+   * the thing that produces a token, so the operator gets an action rather
+   * than a caption — and it is Cloudflare's box, not a lookalike of one, so
+   * solving it means something to the server.
+   *
+   * **It only ever goes one way.** Clearing it when the token arrives would
+   * flip `appearance` back and tear down the widget at the exact moment it
+   * succeeded — and if that token later expired, the operator would be back
+   * on the silent check that had already failed once. The visible box stays
+   * for the life of the page; what disappears on success is the instruction
+   * beside it, which is driven by the token instead.
    */
   const [checkStalled, setCheckStalled] = useState(false);
 
@@ -122,9 +113,14 @@ export default function LoginPage() {
     return () => window.clearTimeout(timer);
   }, [challengeRequired, turnstileToken, checkStalled]);
 
-  /** A fresh challenge, asked for by hand. */
+  /**
+   * A fresh challenge, asked for by hand.
+   *
+   * Stays in `always` mode rather than dropping back to the silent one: the
+   * silent mode is what just failed, and retrying it would put the operator
+   * back on the same eight-second wait with nothing to do.
+   */
   function runCheckAgain() {
-    setCheckStalled(false);
     setError(null);
     turnstile.current?.reset();
   }
@@ -157,9 +153,15 @@ export default function LoginPage() {
     // `requestFullscreen()` is refused outside a user gesture, and an `await`
     // ends the one we are in — so asking after the login call, or from the
     // dashboard once it mounts, is rejected every time. Asking now is the only
-    // moment it can work. It is not awaited: a display change must not delay
-    // signing in, and a refusal must not prevent it.
-    enterFullscreenIfPreferred();
+    // moment it can work, which is why the panel cannot simply ask for itself
+    // when it mounts and why this one line sits in the submit handler.
+    //
+    // Before the credentials are checked, deliberately. The display change and
+    // the sign-in are independent, and asking first means the screen is already
+    // taken by the time the splash appears rather than a beat behind it. A
+    // wrong password leaves a fullscreen sign-in page, which is what the
+    // dispatch machine wanted anyway.
+    enterFullscreenOnSignIn();
 
     try {
       const identity = await api.login(
@@ -237,21 +239,37 @@ export default function LoginPage() {
         1040px gives the page a middle again — and the scene behind it becomes
         a backdrop rather than the only thing filling the space.
       */}
+      {/*
+        Wider, and the type inside it steps up with it.
+
+        The panel's type scale is built for density — 24px headings, 13px body,
+        9px labels — because every other screen is a table somebody reads for
+        eight hours. This is the one page that is *not* that: a single
+        composition on an otherwise empty 1920px display, and at the panel's
+        scale it read as a small card marooned in a very large dark room.
+        Everything below steps up at `lg` and again at `2xl`, and nothing about
+        the panel's own scale is touched.
+      */}
       <div className="relative mx-auto flex min-h-dvh max-w-[1040px] flex-col
                       justify-center gap-10 px-6 py-14
-                      lg:grid lg:grid-cols-[1fr_380px] lg:items-center lg:gap-16 lg:px-10">
+                      lg:grid lg:max-w-[1180px] lg:grid-cols-[1fr_408px] lg:items-center lg:gap-16 lg:px-10
+                      2xl:max-w-[1280px] 2xl:grid-cols-[1fr_432px] 2xl:gap-20">
 
       {/* ── Left: what this is ─────────────────────────────────── */}
       <section className="relative flex flex-col gap-8">
 
         <div className="relative animate-rise">
           <div className="flex items-center gap-3">
-            <div className="grad-accent chamfer grid size-11 place-items-center">
-              <span className="font-mono text-lg font-bold text-on-accent-bright">M</span>
+            <div className="grad-accent chamfer grid size-11 place-items-center 2xl:size-12">
+              <span className="font-mono text-lg font-bold text-on-accent-bright 2xl:text-xl">
+                M
+              </span>
             </div>
             <div>
-              <p className="font-sans text-lg font-semibold leading-tight">Mioryde</p>
-              <p className="font-mono text-micro uppercase text-fg-muted">
+              <p className="font-sans text-lg font-semibold leading-tight 2xl:text-xl">
+                Mioryde
+              </p>
+              <p className="font-mono text-micro uppercase text-fg-muted 2xl:text-[10px]">
                 Operations
               </p>
             </div>
@@ -260,16 +278,22 @@ export default function LoginPage() {
 
         {/* The middle is deliberately mostly the scene. This is three lines of
             orientation, not a marketing page. */}
-        <div className="relative max-w-[440px]">
-          <h1 className="font-sans text-title">
+        <div className="relative max-w-[440px] lg:max-w-[520px]">
+          {/* `tracking-tight` only once it is large enough to need it — at 24px
+              the panel's default tracking is already right, and tightening a
+              small heading closes the counters rather than the gaps. */}
+          <h1 className="font-sans text-title lg:text-[34px] lg:leading-[1.14] lg:tracking-[-0.02em]
+                         2xl:text-[40px]">
             The panel the business runs on.
           </h1>
-          <p className="mt-2 text-body text-fg-muted">
+          <p className="mt-2 text-body text-fg-muted lg:mt-3 lg:text-[15px] lg:leading-relaxed
+                        2xl:text-[16px]">
             Dispatch, partners, payouts and the ledger for Mioryde&rsquo;s
             intra-city delivery network in Ludhiana.
           </p>
 
-          <dl className="stagger mt-6 grid grid-cols-3 gap-4 border-t border-line pt-5">
+          <dl className="stagger mt-6 grid grid-cols-3 gap-4 border-t border-line pt-5
+                         lg:mt-8 lg:pt-6">
             <Stat value="Live" label="Dispatch board" />
             <Stat value="Double-entry" label="Money ledger" />
             <Stat value="Audited" label="Every action" />
@@ -310,7 +334,8 @@ export default function LoginPage() {
             otherwise stretch to the full container — a 970px-wide sign-in form,
             which is a text field the width of a table. */}
         <section className="relative mx-auto w-full max-w-[420px] lg:mx-0 lg:max-w-none">
-        <div className="animate-rise w-full rounded-lg border border-line bg-surface p-6 [box-shadow:var(--shadow-panel)] sm:p-7">
+        <div className="animate-rise w-full rounded-lg border border-line bg-surface p-6
+                        [box-shadow:var(--shadow-panel)] sm:p-7 2xl:p-8">
           <p className="flex items-center gap-2 font-mono text-micro uppercase text-accent">
             {/* A live dot rather than a static bullet: this is the one element
                 on the page that says the panel is running and reachable. */}
@@ -323,7 +348,7 @@ export default function LoginPage() {
 
           <SignInGreeting email={email} />
 
-          <p className="mb-7 text-body text-fg-muted">
+          <p className="mb-7 text-body text-fg-muted lg:text-[14px]">
             Use the account your administrator created for you.
           </p>
 
@@ -331,12 +356,15 @@ export default function LoginPage() {
             <div>
               <label
                 htmlFor="email"
-                className="mb-1.5 block font-mono text-micro uppercase text-fg-muted"
+                className="mb-1.5 block font-mono text-micro uppercase text-fg-muted lg:text-[10px]"
               >
                 Email
               </label>
               <Input
                 id="email"
+                // A 40px field with 13px text is right in a dense table row and
+                // undersized as the thing a person is actually here to fill in.
+                className="lg:h-11 lg:text-[14px]"
                 type="email"
                 autoComplete="username"
                 required
@@ -351,7 +379,7 @@ export default function LoginPage() {
               <div className="mb-1.5 flex items-baseline justify-between gap-2">
                 <label
                   htmlFor="password"
-                  className="block font-mono text-micro uppercase text-fg-muted"
+                  className="block font-mono text-micro uppercase text-fg-muted lg:text-[10px]"
                 >
                   Password
                 </label>
@@ -364,13 +392,14 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setReveal((v) => !v)}
                   className="motion-change font-mono text-micro uppercase text-fg-faint
-                             transition-colors hover:text-accent"
+                             transition-colors hover:text-accent lg:text-[10px]"
                 >
                   {reveal ? "Hide" : "Show"}
                 </button>
               </div>
               <Input
                 id="password"
+                className="lg:h-11 lg:text-[14px]"
                 type={reveal ? "text" : "password"}
                 autoComplete="current-password"
                 required
@@ -430,44 +459,31 @@ export default function LoginPage() {
             />
 
             {/*
-              Opt-in, and remembered.
-              
-              Only offered where the browser will actually allow it, because a
-              tick that silently does nothing is worse than no tick. The request
-              itself is made from the submit handler — see `useFullscreen` for
-              why it cannot be made anywhere else.
+              There was a second tick here — "Open in fullscreen", off by
+              default. It asked somebody who has not seen the panel yet to
+              decide something they cannot have an opinion about, and the
+              answer given by not reading it was no. The panel now simply
+              opens fullscreen; the top bar has the toggle for anyone who
+              wants it windowed. See `useFullscreen`.
             */}
-            {fullscreenSupported && (
-              <SessionCheck
-                checked={fullscreen}
-                onChange={(next) => {
-                  setFullscreen(next);
-                  setFullscreenOnLogin(next);
-                }}
-                label="Open in fullscreen"
-                hint={
-                  fullscreen
-                    ? "The panel takes the whole screen. Press Esc to leave it."
-                    : "For a dispatch screen. You can also toggle it from the top bar."
-                }
-              />
-            )}
 
             {TURNSTILE_SITE_KEY ? (
               <Turnstile
                 siteKey={TURNSTILE_SITE_KEY}
-                onToken={(token) => {
-                  setTurnstileToken(token);
-                  // A token arriving retires the manual offer; a token being
-                  // cleared (expiry) starts the budget again rather than
-                  // leaving the retry button up next to a working check.
-                  if (token) setCheckStalled(false);
-                }}
+                // A token, or null the moment the current one stops being
+                // valid. Nothing else to keep in step: the instruction below
+                // and the submit button both read this directly.
+                onToken={setTurnstileToken}
                 onUnavailable={() => setTurnstileDown(true)}
-                // Straight to the manual offer. Waiting out the timer after
+                // Straight to the visible box. Waiting out the timer after
                 // Cloudflare has already said it failed is dead time.
                 onError={() => setCheckStalled(true)}
                 handleRef={turnstile}
+                // Invisible until the silent check has failed, then shown so
+                // there is something to click. Changing this re-renders the
+                // widget, which is why it is driven by a value that only ever
+                // moves once per attempt.
+                appearance={checkStalled ? "always" : "interaction-only"}
               />
             ) : null}
 
@@ -485,7 +501,7 @@ export default function LoginPage() {
               // sign-in or a specific server-side refusal, both of which beat a
               // button that cannot be pressed and cannot explain itself.
               disabled={challengeRequired && !turnstileToken && !checkStalled}
-              className="mt-2 w-full"
+              className="mt-2 w-full lg:h-11 lg:text-[14px]"
             >
               Sign in
             </Button>
@@ -496,10 +512,22 @@ export default function LoginPage() {
               </p>
             ) : null}
 
+            {/*
+              The silent check did not finish, so the box above is now
+              Cloudflare's visible one and this says what to do with it.
+
+              The offer is ordered by what is most likely to work: tick the
+              box, then ask for a new one, and only then sign in anyway. That
+              last one is not a bypass — the server holds the secret and is the
+              authority on whether a token is required — but it is the line
+              that stops a bad afternoon at Cloudflare from becoming an
+              afternoon nobody can reach the dispatch board.
+            */}
             {challengeRequired && !turnstileToken && checkStalled ? (
-              <div className="flex flex-col gap-1" aria-live="polite">
+              <div className="flex flex-col gap-1.5" aria-live="polite">
                 <p className="text-meta text-fg-muted">
-                  The security check did not finish on its own.
+                  The automatic security check did not finish. Confirm you are
+                  not a bot in the box above to continue.
                 </p>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <button
@@ -507,7 +535,7 @@ export default function LoginPage() {
                     onClick={runCheckAgain}
                     className="text-meta font-semibold text-accent-bright underline underline-offset-2 hover:text-fg"
                   >
-                    Run it again
+                    Give me a new one
                   </button>
                   <span className="text-meta text-fg-faint">
                     or sign in anyway — we will verify on the server.
@@ -532,8 +560,12 @@ export default function LoginPage() {
 function Stat({ value, label }: { value: string; label: string }) {
   return (
     <div>
-      <dt className="font-sans text-label font-semibold text-fg">{value}</dt>
-      <dd className="font-mono text-micro uppercase text-fg-muted">{label}</dd>
+      <dt className="font-sans text-label font-semibold text-fg lg:text-[17px] 2xl:text-[19px]">
+        {value}
+      </dt>
+      <dd className="font-mono text-micro uppercase text-fg-muted lg:text-[10px] 2xl:text-[11px]">
+        {label}
+      </dd>
     </div>
   );
 }
@@ -542,7 +574,10 @@ function Stat({ value, label }: { value: string; label: string }) {
 /**
  * The sign-in page's checkbox.
  *
- * Extracted when a second one was needed, not before. Both the tick and the
+ * One use again, since the fullscreen tick went. Left as a component rather
+ * than inlined: it is the only checkbox on the page an operator actually has
+ * a decision to make about, and the reasoning below is what stops the next
+ * one being rebuilt out of a div. Both the tick and the
  * focus ring are driven by React state rather than `peer-*` classes, and the
  * reasoning above the first use still applies: peer styling puts the on/off
  * appearance in a sibling selector that only exists if the class scanner found
@@ -605,7 +640,7 @@ function SessionCheck({
       </span>
 
       <span className="min-w-0">
-        <span className="block text-body text-fg-soft">{label}</span>
+        <span className="block text-body text-fg-soft lg:text-[14px]">{label}</span>
         {/*
           Says what it actually does, and changes as it is toggled. A label on
           its own means nothing specific, and on a tool holding customer phone
