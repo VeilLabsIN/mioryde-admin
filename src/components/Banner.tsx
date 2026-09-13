@@ -1,8 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { api } from "@/lib/api";
+import { useVisiblePoll } from "@/lib/useVisiblePoll";
 
 export type BannerTone = "critical" | "warning";
 
@@ -65,95 +73,120 @@ const AttentionContext = createContext<Attention>(EMPTY);
 export function AttentionProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<Attention>(EMPTY);
 
+  // Guards the one `setState` below against a provider that unmounted while
+  // the two requests were still in flight.
+  const alive = useRef(true);
   useEffect(() => {
-    let cancelled = false;
-
-    const check = async () => {
-      const next: BannerItem[] = [];
-      let sources = 0;
-
-      // Both are role-gated, and support can read neither. A 403 here is a
-      // policy outcome, not a failure — it means this operator has no action
-      // on any of it, so they get no banner rather than an error.
-      const [monitoring, readiness] = await Promise.allSettled([
-        api.monitoring(),
-        api.readiness(),
-      ]);
-
-      if (monitoring.status === "fulfilled") {
-        sources += 1;
-        const m = monitoring.value;
-
-        // First, and the only thing here that is about money being wrong
-        // rather than something being slow or unconfigured.
-        if (
-          m.ledger.unbalancedTransactions > 0 ||
-          m.ledger.driftingAccounts > 0 ||
-          m.ledger.netMinor !== 0
-        ) {
-          next.push({
-            id: "ledger",
-            tone: "critical",
-            title: "The ledger does not balance",
-            detail:
-              "Postings that do not sum to zero, or a stored balance that disagrees with its lines. Stop and investigate before settling anything.",
-            action: { label: "Open monitoring", href: "/monitoring" },
-          });
-        }
-
-        if (m.outbox.deadLettered > 0) {
-          next.push({
-            id: "outbox",
-            tone: "warning",
-            title: `${m.outbox.deadLettered} notification${m.outbox.deadLettered === 1 ? "" : "s"} abandoned`,
-            detail:
-              "These ran out of retries and the worker will never look at them again. Somebody was not told something.",
-            action: { label: "See why", href: "/monitoring" },
-          });
-        }
-      }
-
-      if (readiness.status === "fulfilled") {
-        sources += 1;
-        const outstanding = readiness.value.checks.filter(
-          (check) => check.blocking && !check.ready,
-        );
-
-        // One banner for all of them rather than one each. Six separate
-        // notices about a system that is not launched yet is not six pieces of
-        // information, it is one.
-        if (outstanding.length > 0) {
-          const gstin = outstanding.find((c) => c.key === "gstin");
-          next.push({
-            id: "readiness",
-            // Critical only when invoices are actively being issued against a
-            // placeholder registration — that produces invalid documents that
-            // cannot be edited afterwards, only credited.
-            tone: gstin ? "critical" : "warning",
-            title: gstin
-              ? "Invoices are being issued against a placeholder GSTIN"
-              : `${outstanding.length} launch blocker${outstanding.length === 1 ? "" : "s"} outstanding`,
-            detail: gstin
-              ? `${gstin.detail} ${outstanding.length - 1} other blocker${outstanding.length === 2 ? "" : "s"} outstanding.`
-              : outstanding.map((c) => c.label).join(", ") + ".",
-            action: { label: "Open readiness", href: "/readiness" },
-          });
-        }
-      }
-
-      if (!cancelled) setState({ items: next, sources, loaded: true });
-    };
-
-    void check();
-    const timer = setInterval(() => void check(), POLL_MS);
+    alive.current = true;
     return () => {
-      cancelled = true;
-      clearInterval(timer);
+      alive.current = false;
     };
   }, []);
 
+  const check = useCallback(async () => {
+    const next: BannerItem[] = [];
+    let sources = 0;
+
+    // Both are role-gated, and support can read neither. A 403 here is a
+    // policy outcome, not a failure — it means this operator has no action
+    // on any of it, so they get no banner rather than an error.
+    const [monitoring, readiness] = await Promise.allSettled([
+      api.monitoring(),
+      api.readiness(),
+    ]);
+
+    if (monitoring.status === "fulfilled") {
+      sources += 1;
+      const m = monitoring.value;
+
+      // First, and the only thing here that is about money being wrong
+      // rather than something being slow or unconfigured.
+      if (
+        m.ledger.unbalancedTransactions > 0 ||
+        m.ledger.driftingAccounts > 0 ||
+        m.ledger.netMinor !== 0
+      ) {
+        next.push({
+          id: "ledger",
+          tone: "critical",
+          title: "The ledger does not balance",
+          detail:
+            "Postings that do not sum to zero, or a stored balance that disagrees with its lines. Stop and investigate before settling anything.",
+          action: { label: "Open monitoring", href: "/monitoring" },
+        });
+      }
+
+      if (m.outbox.deadLettered > 0) {
+        next.push({
+          id: "outbox",
+          tone: "warning",
+          title: `${m.outbox.deadLettered} notification${m.outbox.deadLettered === 1 ? "" : "s"} abandoned`,
+          detail:
+            "These ran out of retries and the worker will never look at them again. Somebody was not told something.",
+          action: { label: "See why", href: "/monitoring" },
+        });
+      }
+    }
+
+    if (readiness.status === "fulfilled") {
+      sources += 1;
+      const outstanding = readiness.value.checks.filter(
+        (check) => check.blocking && !check.ready,
+      );
+
+      // One banner for all of them rather than one each. Six separate
+      // notices about a system that is not launched yet is not six pieces of
+      // information, it is one.
+      if (outstanding.length > 0) {
+        const gstin = outstanding.find((c) => c.key === "gstin");
+        next.push({
+          id: "readiness",
+          // Critical only when invoices are actively being issued against a
+          // placeholder registration — that produces invalid documents that
+          // cannot be edited afterwards, only credited.
+          tone: gstin ? "critical" : "warning",
+          title: gstin
+            ? "Invoices are being issued against a placeholder GSTIN"
+            : `${outstanding.length} launch blocker${outstanding.length === 1 ? "" : "s"} outstanding`,
+          detail: gstin
+            ? `${gstin.detail} ${outstanding.length - 1} other blocker${outstanding.length === 2 ? "" : "s"} outstanding.`
+            : outstanding.map((c) => c.label).join(", ") + ".",
+          action: { label: "Open readiness", href: "/readiness" },
+        });
+      }
+    }
+
+    if (alive.current) setState({ items: next, sources, loaded: true });
+  }, []);
+
+  /*
+   * Nothing while the tab is hidden.
+   *
+   * This banner rides on every page, so its poll was the one running in
+   * *every* background tab at once — six tabs left open overnight is thousands
+   * of readiness and monitoring calls against an API on half a CPU, for a
+   * warning nobody can see.
+   *
+   * An earlier version skipped the *work* and left the interval running, which
+   * cost nothing but also left the banner up to five minutes stale at the
+   * moment attention came back. `useVisiblePoll` stops the interval instead and
+   * re-checks the instant the tab is looked at again — the same hook the live
+   * and monitoring pages use, so there is one answer to this in the panel
+   * rather than three.
+   */
+  useEffect(() => {
+    // A page opened in a background tab should not spend a request either; the
+    // hook's visibility handler will make the first call when it is looked at.
+    if (typeof document !== "undefined" && document.hidden) return;
+    void check();
+  }, [check]);
+
+  useVisiblePoll(() => void check(), POLL_MS);
+
   return (
-    <AttentionContext.Provider value={state}>{children}</AttentionContext.Provider>
+    <AttentionContext.Provider value={state}>
+      {children}
+    </AttentionContext.Provider>
   );
 }
 

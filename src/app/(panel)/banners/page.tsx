@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Button,
   Card,
@@ -20,6 +20,7 @@ import {
   api,
   bannerState,
 } from "@/lib/api";
+import { useAsync } from "@/lib/useAsync";
 
 /**
  * In-app messages to customers and partners.
@@ -47,24 +48,14 @@ import {
  * first thing anybody asks after a message goes out wrong.
  */
 export default function BannersPage() {
-  const [banners, setBanners] = useState<Banner[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: banners,
+    error,
+    reload,
+  } = useAsync<Banner[]>(async () => (await api.banners()).results, [], {
+    fallback: "Could not load banners.",
+  });
   const [composing, setComposing] = useState<BannerAudience | null>(null);
-
-  async function reload() {
-    try {
-      const data = await api.banners();
-      setBanners(data.results);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not load banners.");
-    }
-  }
-
-  useEffect(() => {
-    void reload();
-  }, []);
-
   const grouped = useMemo(() => {
     const all = banners ?? [];
     return {
@@ -108,7 +99,7 @@ export default function BannersPage() {
             onCancel={() => setComposing(null)}
             onChanged={() => {
               setComposing(null);
-              void reload();
+              reload();
             }}
           />
 
@@ -122,7 +113,7 @@ export default function BannersPage() {
             onCancel={() => setComposing(null)}
             onChanged={() => {
               setComposing(null);
-              void reload();
+              reload();
             }}
           />
         </>
