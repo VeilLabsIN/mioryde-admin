@@ -1,46 +1,39 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { Stat } from "@/components/charts";
+import { ExportButton } from "@/components/ExportButton";
+import { Freshness } from "@/components/Freshness";
 import {
-  BarList,
-  type ChartMode,
-  ChartModeSwitch,
-  Stat,
-  TrendChart,
-} from "@/components/charts";
+  DemandHeatmap,
+  FunnelBar,
+  MultiSeriesChart,
+  SERIES_COLOURS,
+  StackedShareBar,
+  type Series,
+} from "@/components/InsightCharts";
 import { MetricTable } from "@/components/MetricTable";
 import {
   Card,
+  EmptyState,
   GhostButton,
   PageHeader,
   SectionLabel,
+  SkeletonCards,
+  SkeletonChart,
   SkeletonRows,
 } from "@/components/ui";
-import { ApiError, type Analytics, api, formatMoney } from "@/lib/api";
-import { ExportButton } from "@/components/ExportButton";
+import {
+  type Analytics,
+  api,
+  type DemandGrid,
+  formatMoney,
+  type MoneyBreakdown,
+  type OrderFunnel,
+} from "@/lib/api";
+import { useAsync } from "@/lib/useAsync";
 import { useUrlParam } from "@/lib/useUrlState";
-
-const RANGES = [7, 30, 90] as const;
-
-/**
- * The series a reader can put on the main chart.
- *
- * Four separate charts would take four screens of scrolling to compare two
- * numbers. One chart with a selector puts them in the same frame, which is
- * where a comparison actually happens.
- *
- * Revenue draws as a line — it is a continuous quantity and the shape is the
- * point. Counts draw as bars, because a day with two deliveries and a day with
- * none are two facts, and a line invents the values in between.
- */
-const SERIES = [
-  { key: "revenue", label: "Revenue", money: true, mode: "line" as const },
-  { key: "delivered", label: "Delivered", money: false, mode: "bar" as const },
-  { key: "placed", label: "Placed", money: false, mode: "bar" as const },
-  { key: "cancelled", label: "Cancelled", money: false, mode: "bar" as const },
-] as const;
-
-type SeriesKey = (typeof SERIES)[number]["key"];
 
 /**
  * How the business is doing.
@@ -49,6 +42,14 @@ type SeriesKey = (typeof SERIES)[number]["key"];
  *
  * Deciding things. Every figure is shown against the previous period of the
  * same length, because a number on its own cannot tell anybody whether to act.
+ *
+ * ## Why it is four requests rather than one
+ *
+ * The headline figures, the demand grid, the funnel and the ledger read are
+ * four questions with four different costs — the ledger scan is by far the
+ * slowest. Loaded together, the slowest one decides when anything appears.
+ * Loaded separately, each panel shows its own skeleton and a failure is
+ * contained to the panel that failed.
  *
  * ## The two figures that are not vanity
  *
@@ -59,426 +60,711 @@ type SeriesKey = (typeof SERIES)[number]["key"];
  * delivered. A large gap is acquisition spend with nothing behind it.
  */
 export default function AnalyticsPage() {
-  // The whole view is in the URL. "Revenue for last quarter" is a thing people
-  // paste into a message, and it was not a link before this.
-  //
-  // `days` is a string here because that is what a query parameter is; it is
-  // parsed once below rather than at each use.
   const [daysRaw, setDaysRaw, daysReady] = useUrlParam("days", "30");
   const [from, setFrom, fromReady] = useUrlParam("from");
   const [to, setTo, toReady] = useUrlParam("to");
-  const [seriesRaw, setSeriesRaw, seriesReady] = useUrlParam("series", "revenue");
+  const [mix, setMix, mixReady] = useUrlParam("mix", "zones");
 
-  const urlReady = daysReady && fromReady && toReady && seriesReady;
+  const urlReady = daysReady && fromReady && toReady && mixReady;
 
-  // An out-of-range or unparseable ?days= falls back to the default rather than
-  // sending the server something it will refuse — the DTO bounds it at 7..180.
   const parsedDays = Number.parseInt(daysRaw, 10);
   const days =
     Number.isFinite(parsedDays) && parsedDays >= 7 && parsedDays <= 180
       ? parsedDays
       : 30;
 
-  /** A custom range is in force only when both ends are present. */
-  const custom = from && to ? { from, to } : null;
+  // Memoised, not a fresh literal per render: it is a dependency of `range`,
+  // which is a dependency of four requests. An object rebuilt every render
+  // would refetch all four in a loop.
+  const custom = useMemo(() => (from && to ? { from, to } : null), [from, to]);
+  const range = useMemo(() => custom ?? { days }, [custom, days]);
 
-  const setCustom = (range: { from: string; to: string } | null) => {
-    setFrom(range?.from ?? "");
-    setTo(range?.to ?? "");
+  /*
+   * `keepPrevious` everywhere, and the reason is the failure this page had:
+   * on an error it rendered a red sentence *and* a full-page shimmer, forever,
+   * with no way to retry. Keeping the last good answer means a blip shows the
+   * previous numbers with a line saying they are stale — which is what an
+   * operator actually needs mid-shift.
+   */
+  /*
+   * The receive time is stamped inside the loader, not read during render.
+   *
+   * `Date.now()` in a render body is impure — React may run the same render
+   * twice under concurrent rendering and must get the same tree both times —
+   * and `react-hooks/purity` is right to refuse it. This is the same shape the
+   * monitoring page uses, and the same class of defect BUG-034 found in the
+   * order detail page.
+   */
+  const main = useAsync<{ analytics: Analytics; receivedAt: number }>(
+    async () => ({
+      analytics: await api.analytics(range),
+      receivedAt: Date.now(),
+    }),
+    [days, custom?.from, custom?.to],
+    {
+      enabled: urlReady,
+      keepPrevious: true,
+      fallback: "Could not load analytics.",
+    },
+  );
+  const demand = useAsync<DemandGrid>(
+    () => api.analyticsDemand(range),
+    [days, custom?.from, custom?.to],
+    {
+      enabled: urlReady,
+      keepPrevious: true,
+      fallback: "Could not load demand.",
+    },
+  );
+  const funnel = useAsync<OrderFunnel>(
+    () => api.analyticsFunnel(range),
+    [days, custom?.from, custom?.to],
+    {
+      enabled: urlReady,
+      keepPrevious: true,
+      fallback: "Could not load the funnel.",
+    },
+  );
+  const money = useAsync<MoneyBreakdown>(
+    () => api.analyticsMoney(range),
+    [days, custom?.from, custom?.to],
+    {
+      enabled: urlReady,
+      keepPrevious: true,
+      fallback: "Could not load the ledger.",
+    },
+  );
+
+  const data = main.data?.analytics ?? null;
+  const rupees = (minor: number) => formatMoney({ minor, currency: "INR" });
+
+  const reloadAll = () => {
+    main.reload();
+    demand.reload();
+    funnel.reload();
+    money.reload();
   };
 
-  const setDays = (next: number) => setDaysRaw(String(next));
-
-  // Same fail-safe direction as the KYC tab: an unrecognised series reads as
-  // the default rather than rendering an empty chart.
-  const series: SeriesKey = SERIES.some((o) => o.key === seriesRaw)
-    ? (seriesRaw as SeriesKey)
-    : "revenue";
-  const setSeries = (next: SeriesKey) => setSeriesRaw(next);
-  /*
-   * How the main chart is drawn.
-   *
-   * Local rather than in the URL, unlike the series and the date range. Those
-   * describe *what* is being looked at and are worth sharing; this describes
-   * how one person prefers to read it, and putting it in the URL would mean a
-   * shared link silently overrides the recipient's own choice.
-   */
-  const [chartMode, setChartMode] = useState<ChartMode>("line");
-  const [data, setData] = useState<Analytics | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // Guards against a slow response for an old range landing after a newer one.
-  const requestId = useRef(0);
-
-  const load = useCallback(() => {
-    if (!urlReady) return;
-
-    const id = ++requestId.current;
-    setError(null);
-    setData(null);
-
-    api
-      .analytics(custom ?? { days })
-      .then((result) => {
-        if (id === requestId.current) setData(result);
-      })
-      .catch((caught: unknown) => {
-        if (id !== requestId.current) return;
-        setError(
-          caught instanceof ApiError
-            ? caught.message
-            : "Could not load analytics.",
-        );
-      });
-    // `custom` is a fresh object literal every render
-    // (`from && to ? { from, to } : null`), so listing it as the rule asks
-    // would change this callback's identity on every render and
-    // `useEffect(load, [load])` would refetch in a loop. Its two fields are
-    // what the request actually varies on, and both are here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days, custom?.from, custom?.to, urlReady]);
-
-  useEffect(load, [load]);
-
-  const rupees = (minor: number) => formatMoney({ minor, currency: "INR" });
-  const active = SERIES.find((option) => option.key === series)!;
-
-  const points = useMemo(() => {
-    if (!data) return [];
-    return data.daily.map((day) => ({
-      label: day.date.slice(5),
-      value:
-        series === "revenue"
-          ? day.revenue.minor
-          : series === "delivered"
-            ? day.delivered
-            : series === "placed"
-              ? day.placed
-              : day.cancelled,
-    }));
-  }, [data, series]);
-
-  // Said out loud, because a chart of thirty mostly-empty days looks broken
-  // rather than quiet — a reader cannot otherwise tell "no trade" from "no
-  // data", and those need very different reactions.
-  const activeDays = points.filter((point) => point.value > 0).length;
-
   return (
-    <div className="space-y-6">
+    // Capped and centred. Without this the page stretched edge to edge on a
+    // 2560px dispatch display, which is why the chart needed a ResizeObserver
+    // to stay sane in the first place.
+    <div className="mx-auto max-w-[1400px] space-y-5">
       <PageHeader
         title="Analytics"
         subtitle={
-          data
-            ? `${data.range.from} to ${data.range.to} · against the previous ${data.days} days`
-            : "Every figure is against the previous period of the same length."
+          data ? (
+            <>
+              {data.range.from} to {data.range.to} · against the previous{" "}
+              {data.days} days
+            </>
+          ) : (
+            "Loading the period…"
+          )
         }
-        actions={[
-          ...RANGES.map((range) => (
-          <GhostButton
-            key={range}
-            onClick={() => {
-              // Choosing a preset clears any custom range, so the two controls
-              // cannot both look selected while only one is in effect.
-              setCustom(null);
-              setDays(range);
-            }}
-            className={
-              custom === null && days === range
-                ? "border-accent text-fg"
-                : "text-fg-faint"
-            }
-          >
-            {range} days
-          </GhostButton>
-          )),
-          <ExportButton
-            key="export"
-            label="Daily CSV"
-            fetcher={() => api.downloadDailyCsv(custom ?? { days })}
-            disabled={data === null ? "Still loading." : null}
-          />,
-          // Separate from the daily series because it answers a different
-          // question — the daily table is the business, this is the fleet —
-          // and because the screen shows only the top fifteen partners while
-          // the file carries everyone who delivered in the period.
-          <ExportButton
-            key="partners"
-            label="Partners CSV"
-            fetcher={() => api.downloadPartnersCsv(custom ?? { days })}
-            disabled={data === null ? "Still loading." : null}
-          />,
-        ]}
+        actions={
+          <>
+            <ExportButton
+              label="Daily CSV"
+              fetcher={() => api.downloadDailyCsv(range)}
+            />
+            <ExportButton
+              label="Partners CSV"
+              fetcher={() => api.downloadPartnersCsv(range)}
+            />
+          </>
+        }
       />
 
-      <RangePicker
-        value={custom}
-        onApply={(range) => setCustom(range)}
-        onClear={() => setCustom(null)}
+      <RangeBar
+        days={days}
+        custom={custom}
+        onDays={(next) => {
+          setFrom("");
+          setTo("");
+          setDaysRaw(String(next));
+        }}
+        onCustom={(next) => {
+          setFrom(next?.from ?? "");
+          setTo(next?.to ?? "");
+        }}
+        freshAt={main.data?.receivedAt ?? null}
+        stale={main.error !== null && main.data !== null}
+        onRetry={reloadAll}
+        error={main.error}
       />
 
-      {error ? (
-        <Card>
-          <p className="text-warn text-sm">{error}</p>
+      {/* ── The headline four ─────────────────────────────────────────── */}
+      {data ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat
+            label="Revenue (delivered)"
+            value={rupees(data.summary.revenue.now.minor)}
+            current={data.summary.revenue.now.minor}
+            previous={data.summary.revenue.previous.minor}
+            hero
+          />
+          <Stat
+            label="Orders placed"
+            value={String(data.summary.orders.now)}
+            current={data.summary.orders.now}
+            previous={data.summary.orders.previous}
+            hint={`${data.summary.delivered} delivered`}
+          />
+          <Stat
+            label="Cancellation rate"
+            value={`${(data.summary.cancellationRate.now * 100).toFixed(1)}%`}
+            current={data.summary.cancellationRate.now}
+            previous={data.summary.cancellationRate.previous}
+            inverse
+          />
+          <Stat
+            label="Average fare"
+            value={rupees(data.summary.averageFare.minor)}
+            hint={`${(data.summary.averageDistanceMeters / 1000).toFixed(1)} km average`}
+          />
+        </div>
+      ) : (
+        <SkeletonCards />
+      )}
+
+      {/* ── The chart, and the period before it ───────────────────────── */}
+      <Card tone="raised" size="lg" className="p-4">
+        <SectionLabel>Per day, against the previous period</SectionLabel>
+        {data ? (
+          data.daily.length === 0 ? (
+            <EmptyState
+              title="Nothing was ordered in this period"
+              hint="Try a wider range, or check that orders are reaching production."
+            />
+          ) : (
+            <div className="mt-3">
+              <MultiSeriesChart
+                labels={data.daily.map((day) => day.date.slice(5))}
+                series={buildSeries(data, rupees)}
+              />
+              <p className="text-fg-faint mt-3 text-meta">
+                {data.dailyPrevious
+                  ? `The dashed line is revenue over the ${data.days} days before this period.`
+                  : "No comparison period was requested."}
+              </p>
+            </div>
+          )
+        ) : (
+          <SkeletonChart height={260} />
+        )}
+      </Card>
+
+      {/* ── When the work arrives, and where it stops ─────────────────── */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="p-4 lg:col-span-2">
+          <SectionLabel>Demand by day and hour</SectionLabel>
+          <p className="text-fg-muted mt-1 text-meta">
+            Orders placed. This is the shape a duty roster has to match.
+          </p>
+          <div className="mt-3">
+            {demand.data ? (
+              <DemandHeatmap cells={demand.data.cells} />
+            ) : demand.error ? (
+              <PanelProblem message={demand.error} onRetry={demand.reload} />
+            ) : (
+              <SkeletonChart height={200} />
+            )}
+          </div>
         </Card>
+
+        <Card className="p-4">
+          <SectionLabel>Where orders stop</SectionLabel>
+          <div className="mt-3">
+            {funnel.data ? (
+              <>
+                <FunnelBar
+                  steps={[
+                    { label: "Placed", count: funnel.data.steps.placed },
+                    {
+                      label: "Assigned",
+                      count: funnel.data.steps.assigned,
+                      note: median(
+                        "to assign",
+                        funnel.data.medianSeconds.toAssign,
+                      ),
+                    },
+                    {
+                      label: "Picked up",
+                      count: funnel.data.steps.pickedUp,
+                      note: median(
+                        "to collect",
+                        funnel.data.medianSeconds.toPickup,
+                      ),
+                    },
+                    {
+                      label: "Delivered",
+                      count: funnel.data.steps.delivered,
+                      note: median(
+                        "to deliver",
+                        funnel.data.medianSeconds.toDeliver,
+                      ),
+                    },
+                  ]}
+                />
+                <Cancellations funnel={funnel.data} />
+              </>
+            ) : funnel.error ? (
+              <PanelProblem message={funnel.error} onRetry={funnel.reload} />
+            ) : (
+              <SkeletonRows rows={4} />
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Mix, and what the platform actually kept ──────────────────── */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <SectionLabel>Mix</SectionLabel>
+            <div className="flex gap-1">
+              {MIXES.map((option) => (
+                <GhostButton
+                  key={option.key}
+                  onClick={() => setMix(option.key)}
+                  // Pressed, not just bordered: a colour alone tells a screen
+                  // reader nothing about which of the three is showing.
+                  aria-pressed={mix === option.key}
+                  className={mix === option.key ? "border-accent" : ""}
+                >
+                  {option.label}
+                </GhostButton>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3">
+            {data ? (
+              <StackedShareBar
+                segments={segmentsFor(data, mix).map((segment, index) => ({
+                  ...segment,
+                  colour: SERIES_COLOURS[index % SERIES_COLOURS.length]!,
+                }))}
+                format={(value) =>
+                  mix === "payments" ? String(value) : rupees(value)
+                }
+              />
+            ) : (
+              <SkeletonRows rows={4} />
+            )}
+          </div>
+          <p className="text-fg-faint mt-3 text-meta">
+            {mix === "payments"
+              ? "Orders by how they were paid."
+              : "Revenue from delivered orders."}
+          </p>
+        </Card>
+
+        <Card className="p-4">
+          <SectionLabel>Ledger movement</SectionLabel>
+          <p className="text-fg-muted mt-1 text-meta">
+            What the books recorded in this period — not turnover.
+          </p>
+          <div className="mt-3">
+            {money.data ? (
+              <LedgerMovement breakdown={money.data} />
+            ) : money.error ? (
+              <PanelProblem message={money.error} onRetry={money.reload} />
+            ) : (
+              <SkeletonRows rows={5} />
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Fleet and customers ───────────────────────────────────────── */}
+      {data ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <MetricTable
+            label="Fleet"
+            metrics={[
+              { label: "Active partners", value: String(data.fleet.active) },
+              {
+                label: "Utilisation",
+                value: `${Math.round(data.fleet.utilisation * 100)}%`,
+              },
+              {
+                label: "Cash outstanding",
+                value: rupees(data.fleet.cashOutstanding.minor),
+              },
+              {
+                label: "Waiting on us",
+                value: String(
+                  data.fleet.pendingKyc + data.fleet.bankChecksPending,
+                ),
+              },
+            ]}
+            note={`${data.fleet.docExpired} with expired papers · ${data.fleet.suspended} suspended`}
+          />
+          <MetricTable
+            label="Customers"
+            metrics={[
+              {
+                label: "Repeat rate",
+                value: `${Math.round(
+                  (data.retention.activeCustomers === 0
+                    ? 0
+                    : data.retention.repeatCustomers /
+                      data.retention.activeCustomers) * 100,
+                )}%`,
+              },
+              {
+                label: "Active",
+                value: String(data.retention.activeCustomers),
+              },
+              {
+                label: "First-time",
+                value: String(data.retention.newCustomers),
+              },
+              {
+                label: "Orders per customer",
+                value: data.retention.averageLifetimeOrders.toFixed(1),
+              },
+            ]}
+          />
+        </div>
       ) : null}
 
-      {data === null ? (
-        <SkeletonRows rows={6} />
-      ) : (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat
-              label="Revenue (delivered)"
-              value={rupees(data.summary.revenue.now.minor)}
-              current={data.summary.revenue.now.minor}
-              previous={data.summary.revenue.previous.minor}
-              previousLabel={rupees(data.summary.revenue.previous.minor)}
-              // The one figure the business is actually run on, so it carries
-              // the weight. Nine cards of equal weight give a page no entry
-              // point — the eye has to read all of them to find the one that
-              // matters.
-              hero
-            />
-            <Stat
-              label="Orders placed"
-              value={String(data.summary.orders.now)}
-              current={data.summary.orders.now}
-              previous={data.summary.orders.previous}
-              previousLabel={String(data.summary.orders.previous)}
-            />
-            <Stat
-              label="Cancellation rate"
-              value={`${(data.summary.cancellationRate.now * 100).toFixed(1)}%`}
-              current={data.summary.cancellationRate.now}
-              previous={data.summary.cancellationRate.previous}
-              previousLabel={`${(data.summary.cancellationRate.previous * 100).toFixed(1)}%`}
-              inverse
-            />
-            <Stat
-              label="Average fare"
-              value={rupees(data.summary.averageFare.minor)}
-              hint={`${(data.summary.averageDistanceMeters / 1000).toFixed(1)} km average trip`}
-            />
-          </div>
+      {/* ── Partners ──────────────────────────────────────────────────── */}
+      <Card className="p-4">
+        <SectionLabel>Partners</SectionLabel>
+        <div className="mt-3">
+          {data ? (
+            data.partners.length === 0 ? (
+              <EmptyState title="Nobody delivered in this period" />
+            ) : (
+              <PartnerTable partners={data.partners} rupees={rupees} />
+            )
+          ) : (
+            <SkeletonRows rows={6} />
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
 
-          <Card>
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <SectionLabel>Per day</SectionLabel>
-                <p className="text-fg-faint mt-1 text-xs">
-                  {activeDays === 0
-                    ? "Nothing recorded in this period."
-                    : `${activeDays} of ${points.length} days had activity.`}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <ChartModeSwitch mode={chartMode} onChange={setChartMode} />
-                {SERIES.map((option) => (
-                  <GhostButton
-                    key={option.key}
-                    onClick={() => setSeries(option.key)}
-                    className={
-                      series === option.key
-                        ? "border-accent text-fg"
-                        : "text-fg-faint"
-                    }
-                  >
-                    {option.label}
-                  </GhostButton>
-                ))}
-              </div>
-            </div>
+const MIXES = [
+  { key: "zones", label: "Zone" },
+  { key: "vehicles", label: "Vehicle" },
+  { key: "goods", label: "Goods" },
+  { key: "payments", label: "Payment" },
+] as const;
 
-            <TrendChart
-              points={points}
-              mode={chartMode}
-              format={(value) =>
-                active.money ? rupees(value) : String(Math.round(value))
+function segmentsFor(data: Analytics, mix: string) {
+  if (mix === "vehicles") {
+    return data.breakdowns.vehicles.map((v) => ({
+      label: v.label,
+      value: v.revenue.minor,
+    }));
+  }
+  if (mix === "goods") {
+    return data.breakdowns.goods.map((g) => ({
+      label: g.label,
+      value: g.revenue.minor,
+    }));
+  }
+  if (mix === "payments") {
+    return data.breakdowns.payments.map((p) => ({
+      // The wire value is the column; the reader wants the word.
+      label: p.label === "cod" ? "Cash" : "Prepaid",
+      value: p.orders,
+    }));
+  }
+  return data.breakdowns.zones.map((z) => ({
+    label: z.label,
+    value: z.revenue.minor,
+  }));
+}
+
+function buildSeries(
+  data: Analytics,
+  rupees: (minor: number) => string,
+): Series[] {
+  const previous = data.dailyPrevious;
+  const count = (value: number) => String(value);
+
+  return [
+    {
+      key: "revenue",
+      label: "Revenue",
+      colour: SERIES_COLOURS[0],
+      line: true,
+      format: rupees,
+      values: data.daily.map((d) => d.revenue.minor),
+      comparison: previous?.map((d) => d.revenue.minor),
+    },
+    {
+      key: "delivered",
+      label: "Delivered",
+      colour: SERIES_COLOURS[1],
+      format: count,
+      values: data.daily.map((d) => d.delivered),
+    },
+    {
+      key: "cancelled",
+      label: "Cancelled",
+      colour: SERIES_COLOURS[3],
+      format: count,
+      values: data.daily.map((d) => d.cancelled),
+    },
+  ];
+}
+
+/** "median 7 min to assign", or nothing when there is nothing to say. */
+function median(what: string, seconds: number | null): string | undefined {
+  if (seconds === null) return undefined;
+  if (seconds < 90) return `median ${seconds}s ${what}`;
+  return `median ${Math.round(seconds / 60)} min ${what}`;
+}
+
+/**
+ * The one control for the period.
+ *
+ * It was two: preset buttons inside the page header and a separate date picker
+ * below it, neither indicating which was in force. One row, one answer.
+ */
+function RangeBar({
+  days,
+  custom,
+  onDays,
+  onCustom,
+  freshAt,
+  stale,
+  error,
+  onRetry,
+}: {
+  days: number;
+  custom: { from: string; to: string } | null;
+  onDays: (days: number) => void;
+  onCustom: (range: { from: string; to: string } | null) => void;
+  freshAt: number | null;
+  stale: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [start, setStart] = useState(custom?.from ?? "");
+  const [end, setEnd] = useState(custom?.to ?? "");
+
+  // 180 is the server's cap and the page's own parser already accepts it; it
+  // was previously reachable only by editing the URL by hand.
+  const presets = [7, 30, 90, 180];
+
+  const span =
+    start && end
+      ? Math.round(
+          (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) /
+            86_400_000,
+        )
+      : 0;
+  const tooWide = Math.abs(span) > 180;
+
+  return (
+    <Card tone="inset" className="p-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex flex-wrap gap-1">
+          {presets.map((preset) => (
+            <GhostButton
+              key={preset}
+              onClick={() => onDays(preset)}
+              aria-pressed={custom === null && days === preset}
+              className={
+                custom === null && days === preset ? "border-accent" : ""
               }
-            />
-          </Card>
+            >
+              {preset} days
+            </GhostButton>
+          ))}
+        </div>
 
-          <div className="grid gap-3 lg:grid-cols-3">
-            <Card>
-              <SectionLabel>Revenue by zone</SectionLabel>
-              <div className="mt-3">
-                <BarList
-                  points={data.breakdowns.zones.map((zone) => ({
-                    label: zone.label,
-                    value: zone.revenue.minor,
-                  }))}
-                  format={rupees}
-                />
-              </div>
-            </Card>
-            <Card>
-              <SectionLabel>Revenue by vehicle</SectionLabel>
-              <div className="mt-3">
-                <BarList
-                  points={data.breakdowns.vehicles.map((vehicle) => ({
-                    label: vehicle.label,
-                    value: vehicle.revenue.minor,
-                  }))}
-                  format={rupees}
-                />
-              </div>
-            </Card>
-            <Card>
-              <SectionLabel>Orders by payment</SectionLabel>
-              <div className="mt-3">
-                <BarList
-                  points={data.breakdowns.payments.map((payment) => ({
-                    label: payment.label === "cod" ? "Cash" : "Prepaid",
-                    value: payment.orders,
-                  }))}
-                  format={(value) => String(Math.round(value))}
-                />
-              </div>
-              <p className="text-fg-faint mt-3 text-xs">
-                Every cash order adds to the float partners carry.
-              </p>
-            </Card>
-          </div>
+        <div className="flex flex-wrap items-center gap-1">
+          <input
+            type="date"
+            value={start}
+            max={today}
+            onChange={(event) => setStart(event.target.value)}
+            className="border-line bg-surface text-body rounded border px-2 py-1"
+            aria-label="From date"
+          />
+          <span className="text-fg-faint text-meta">to</span>
+          <input
+            type="date"
+            value={end}
+            max={today}
+            onChange={(event) => setEnd(event.target.value)}
+            className="border-line bg-surface text-body rounded border px-2 py-1"
+            aria-label="To date"
+          />
+          <GhostButton
+            onClick={() => onCustom({ from: start, to: end })}
+            disabled={!start || !end || tooWide}
+            className={custom !== null ? "border-accent" : ""}
+          >
+            Apply
+          </GhostButton>
+          {custom && (
+            <GhostButton
+              onClick={() => {
+                setStart("");
+                setEnd("");
+                onCustom(null);
+              }}
+            >
+              Clear
+            </GhostButton>
+          )}
+        </div>
 
-          {/*
-            Fleet and retention, side by side and as tables.
+        <div className="ml-auto flex items-center gap-3">
+          {/* Said before the request is sent, rather than surfaced as a 400
+              from the server through the generic error card. */}
+          {tooWide && (
+            <span className="text-warn text-meta">
+              That is {Math.abs(span)} days. The most this page charts is 180.
+            </span>
+          )}
+          <span className="text-fg-faint text-meta">Business day, IST</span>
+          <Freshness at={freshAt} />
+        </div>
+      </div>
 
-            These were two full-width cards holding eight `Stat` boxes between
-            them — roughly a screen and a half of vertical space for twelve
-            numbers, none of which is a headline. A table puts the same twelve
-            in a third of the height and lets the eye read down a column of
-            figures instead of hopping between boxes.
-
-            Neither set has a previous period: partners currently online and
-            cash currently outstanding are point-in-time, not periodic. So
-            `MetricTable` drops its comparison columns here rather than
-            printing a grid of dashes that reads as data which failed to load.
-          */}
-          <div className="grid gap-3 lg:grid-cols-2">
-            <MetricTable
-              label="Fleet"
-              metrics={[
-                {
-                  label: "Active partners",
-                  value: String(data.fleet.active),
-                  hint: `${data.fleet.online} online now`,
-                },
-                {
-                  label: "Utilisation",
-                  value: `${(data.fleet.utilisation * 100).toFixed(0)}%`,
-                  hint: `${data.fleet.earning} delivered in period`,
-                },
-                {
-                  label: "Cash outstanding",
-                  value: rupees(data.fleet.cashOutstanding.minor),
-                  hint: `${data.fleet.holdingCash} partner${data.fleet.holdingCash === 1 ? "" : "s"} holding`,
-                },
-                {
-                  label: "Waiting on us",
-                  value: String(
-                    data.fleet.pendingKyc + data.fleet.bankChecksPending,
-                  ),
-                  hint: `${data.fleet.pendingKyc} KYC · ${data.fleet.bankChecksPending} bank checks`,
-                },
-              ]}
-              note={
-                data.fleet.docExpired > 0 || data.fleet.suspended > 0 ? (
-                  <>
-                    {data.fleet.docExpired} off duty with expired documents ·{" "}
-                    {data.fleet.suspended} suspended
-                  </>
-                ) : null
-              }
-            />
-
-            <MetricTable
-              label="Returning customers"
-              metrics={[
-                {
-                  label: "Repeat rate",
-                  value: `${(data.retention.repeatRate * 100).toFixed(0)}%`,
-                  hint: "Share of active customers who have ordered more than once",
-                },
-                {
-                  label: "Active customers",
-                  value: String(data.retention.activeCustomers),
-                  hint: `${data.retention.repeatCustomers} have ordered before`,
-                },
-                {
-                  label: "First-time",
-                  value: String(data.retention.newCustomers),
-                  hint: "First ever order fell inside this period",
-                },
-                {
-                  label: "Orders per customer",
-                  value: data.retention.averageLifetimeOrders.toFixed(1),
-                  hint: "Lifetime average, not just this period",
-                },
-              ]}
-              note="Measured over each customer's whole history, not just this window — somebody who ordered in January and again this week is returning, not new."
-            />
-          </div>
-
-          <Card>
-            <SectionLabel>Demand by hour</SectionLabel>
-            <p className="text-fg-faint mb-3 text-xs">
-              Orders placed, by hour of the business day, across the whole
-              period. This is the staffing question — when to get partners
-              online.
-            </p>
-            <TrendChart
-              points={data.hourly.map((bucket) => ({
-                // Two digits, so the axis reads as clock time rather than as
-                // an index. "9" beside "10" invites reading it as a count.
-                label: String(bucket.hour).padStart(2, "0"),
-                value: bucket.placed,
-              }))}
-              format={(value) => String(Math.round(value))}
-              mode="bar"
-              height={180}
-            />
-            <PeakHour hourly={data.hourly} />
-          </Card>
-
-          <Card>
-            <SectionLabel>Partners</SectionLabel>
-            <p className="text-fg-faint mb-3 text-xs">
-              Ranked by deliveries rather than revenue — revenue rewards
-              whoever drew the long jobs, and the question here is who is
-              turning up.
-            </p>
-            <PartnerTable partners={data.partners} rupees={rupees} />
-          </Card>
-        </>
+      {stale && error && (
+        // The monitoring page's pattern: the numbers on screen are the last
+        // good ones, said plainly, with a way to try again.
+        <p role="status" className="text-fg-muted mt-2 text-meta">
+          Showing the last successful load — {error}.{" "}
+          <button
+            type="button"
+            onClick={onRetry}
+            className="text-accent underline"
+          >
+            Try again
+          </button>
+        </p>
       )}
+    </Card>
+  );
+}
+
+/** A panel that could not load, without taking the page with it. */
+function PanelProblem({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div role="alert" className="py-6 text-center">
+      <p className="text-fg-mid text-body">{message}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="text-accent mt-1 text-meta underline"
+      >
+        Try again
+      </button>
     </div>
   );
 }
 
 /**
- * Names the busiest hour in words.
+ * Cancellations, counted and quoted.
  *
- * A reader can find the tallest bar themselves, but not without doing it every
- * time they look. Stating it once turns the chart from something to study into
- * something to glance at.
+ * `orders.cancellation_reason` is free text, so there is no honest pie chart
+ * to draw here: grouping it would invent categories out of whatever words
+ * people typed. The count is the fact; the reasons are quoted as written.
  */
-function PeakHour({ hourly }: { hourly: Analytics["hourly"] }) {
-  const busiest = hourly.reduce(
-    (best, bucket) => (bucket.placed > best.placed ? bucket : best),
-    hourly[0] ?? { hour: 0, placed: 0 },
-  );
-
-  const total = hourly.reduce((sum, bucket) => sum + bucket.placed, 0);
-  if (total === 0) return null;
-
-  const label = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
+function Cancellations({ funnel }: { funnel: OrderFunnel }) {
+  if (funnel.steps.cancelled === 0) return null;
 
   return (
-    <p className="text-fg-faint mt-3 text-xs">
-      Busiest hour {label(busiest.hour)}–{label((busiest.hour + 1) % 24)} with{" "}
-      <span className="text-fg-mid tabular-nums">{busiest.placed}</span> orders,{" "}
-      {((busiest.placed / total) * 100).toFixed(0)}% of the period.
-    </p>
+    <div className="border-line mt-4 border-t pt-3">
+      <p className="text-body">
+        <span className="font-mono tabular-nums">{funnel.steps.cancelled}</span>{" "}
+        cancelled
+      </p>
+      {funnel.cancellationReasons.length > 0 && (
+        <ul className="mt-1 space-y-0.5">
+          {funnel.cancellationReasons.slice(0, 5).map((reason) => (
+            <li
+              key={reason.reason}
+              className="text-fg-muted flex justify-between gap-2 text-meta"
+            >
+              <span className="truncate">{reason.reason}</span>
+              <span className="font-mono tabular-nums">{reason.count}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Ledger account purposes, in the words an operator uses. */
+const PURPOSES: Record<string, string> = {
+  commission: "Platform commission",
+  gst_payable: "GST payable",
+  earnings: "Partner earnings",
+  payouts_paid: "Payouts settled",
+  cash_in_hand: "Cash with partners",
+  wallet: "Customer wallets",
+  gateway_clearing: "In flight at the gateway",
+};
+
+function LedgerMovement({ breakdown }: { breakdown: MoneyBreakdown }) {
+  if (breakdown.accounts.length === 0) {
+    return <EmptyState title="No postings in this period" />;
+  }
+
+  return (
+    <>
+      <ul className="divide-line divide-y">
+        {breakdown.accounts.map((account) => (
+          <li
+            key={`${account.ownerType}-${account.purpose}`}
+            className="flex items-baseline justify-between gap-2 py-2"
+          >
+            <span className="text-body">
+              {PURPOSES[account.purpose] ?? account.purpose}
+              {/*
+                The same purpose can exist for more than one owner type, and
+                two rows with one label would read as a duplicate rather than
+                as two different accounts. Named only when it is ambiguous, so
+                the common case stays uncluttered.
+              */}
+              {breakdown.accounts.filter(
+                (other) => other.purpose === account.purpose,
+              ).length > 1 && (
+                <span className="text-fg-faint text-meta">
+                  {" "}
+                  · {account.ownerType}
+                </span>
+              )}
+            </span>
+            <span className="font-mono text-body tabular-nums">
+              {formatMoney(account.amount)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {/*
+        Said rather than assumed. These are net movements of double-entry
+        accounts over the window, which is not the same thing as profit, and
+        labelling them "revenue" would be the kind of small lie that ends up in
+        a board pack.
+      */}
+      <p className="text-fg-faint mt-3 text-meta">
+        Net movement of each account over the period, from the ledger. Not a
+        profit and loss statement.
+      </p>
+    </>
   );
 }
 
@@ -489,141 +775,51 @@ function PartnerTable({
   partners: Analytics["partners"];
   rupees: (minor: number) => string;
 }) {
-  if (partners.length === 0) {
-    return <p className="text-fg-faint py-4 text-sm">Nobody delivered in this period.</p>;
-  }
-
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] text-sm">
+      <table className="w-full min-w-[560px] text-body">
         <thead>
-          <tr className="border-line text-fg-muted border-b text-left font-mono text-[9px] uppercase tracking-[2px]">
-            <th className="py-2 pr-3 font-normal">Partner</th>
-            <th className="py-2 pr-3 text-right font-normal">Delivered</th>
-            <th className="py-2 pr-3 text-right font-normal">Cancelled</th>
-            <th className="py-2 pr-3 text-right font-normal">Earned</th>
-            <th className="py-2 text-right font-normal">Fares</th>
+          <tr className="text-fg-faint text-micro">
+            <th className="py-1 text-left font-normal">Partner</th>
+            <th className="py-1 text-right font-normal">Delivered</th>
+            <th className="py-1 text-right font-normal">Cancelled</th>
+            <th className="py-1 text-right font-normal">Earned</th>
+            <th className="py-1 text-right font-normal">Fares</th>
           </tr>
         </thead>
         <tbody className="divide-line divide-y">
           {partners.map((partner) => (
             <tr key={partner.riderId}>
-              <td className="max-w-[220px] truncate py-2 pr-3">
-                {partner.name}
-                {partner.rating !== null && (
-                  <span className="text-fg-faint ml-2 text-xs tabular-nums">
-                    {partner.rating.toFixed(1)}★
-                  </span>
-                )}
+              <td className="py-2">
+                {/* Every row leads somewhere. The overview page has done this
+                    since it was written; this page linked nowhere at all. */}
+                <Link
+                  href={`/riders/${partner.riderId}`}
+                  className="hover:text-accent underline-offset-2 hover:underline"
+                >
+                  {partner.name}
+                </Link>
               </td>
-              <td className="py-2 pr-3 text-right font-mono tabular-nums">
+              <td className="py-2 text-right font-mono tabular-nums">
                 {partner.delivered}
               </td>
-              {/* The rate, not just the count. Two cancellations out of three
-                  jobs and two out of ninety are different partners. */}
               <td
-                className={`py-2 pr-3 text-right font-mono tabular-nums ${
-                  partner.cancellationRate > 0.1 ? "text-warn" : "text-fg-faint"
+                className={`py-2 text-right font-mono tabular-nums ${
+                  partner.cancellationRate > 0.1 ? "text-warn" : ""
                 }`}
               >
                 {partner.cancelled}
-                {partner.cancelled > 0 && (
-                  <span className="ml-1 text-xs">
-                    ({(partner.cancellationRate * 100).toFixed(0)}%)
-                  </span>
-                )}
               </td>
-              {/* Earned before fares, because it is the partner's number and
-                  this is a table about partners. Both are shown because they
-                  are easy to confuse — see BUG-043. */}
-              <td className="py-2 pr-3 text-right font-mono tabular-nums">
+              <td className="py-2 text-right font-mono tabular-nums">
                 {rupees(partner.earned.minor)}
               </td>
-              <td className="text-fg-faint py-2 text-right font-mono tabular-nums">
+              <td className="py-2 text-right font-mono tabular-nums">
                 {rupees(partner.revenue.minor)}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-/**
- * An explicit date range.
- *
- * Kept in local state until Apply, so a half-typed date does not fire a
- * request on every keystroke — and the presets above stay authoritative until
- * somebody deliberately chooses otherwise.
- */
-function RangePicker({
-  value,
-  onApply,
-  onClear,
-}: {
-  value: { from: string; to: string } | null;
-  onApply: (range: { from: string; to: string }) => void;
-  onClear: () => void;
-}) {
-  const [from, setFrom] = useState(value?.from ?? "");
-  const [to, setTo] = useState(value?.to ?? "");
-
-  // Adopt the range once the URL has been read.
-  //
-  // The initial state above runs at mount, and the URL is read in an effect
-  // after it — so on a shared link carrying ?from=&to= the page would fetch the
-  // right data while these two boxes sat empty, which reads as the range having
-  // been ignored. Only follows the prop; local typing is untouched until the
-  // applied range actually changes.
-  useEffect(() => {
-    setFrom(value?.from ?? "");
-    setTo(value?.to ?? "");
-  }, [value?.from, value?.to]);
-
-  const complete = from !== "" && to !== "";
-
-  return (
-    <div className="flex flex-wrap items-end gap-2">
-      <label className="flex flex-col gap-1">
-        <span className="text-fg-muted font-mono text-[9px] uppercase tracking-[2px]">
-          From
-        </span>
-        <input
-          type="date"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          className="border-edge bg-panel text-fg focus:border-accent h-9 border px-2 font-sans text-[13px] focus:outline-none"
-        />
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-fg-muted font-mono text-[9px] uppercase tracking-[2px]">
-          To
-        </span>
-        <input
-          type="date"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          className="border-edge bg-panel text-fg focus:border-accent h-9 border px-2 font-sans text-[13px] focus:outline-none"
-        />
-      </label>
-
-      <GhostButton disabled={!complete} onClick={() => onApply({ from, to })}>
-        Apply range
-      </GhostButton>
-
-      {value && (
-        <GhostButton
-          onClick={() => {
-            setFrom("");
-            setTo("");
-            onClear();
-          }}
-        >
-          Clear
-        </GhostButton>
-      )}
     </div>
   );
 }

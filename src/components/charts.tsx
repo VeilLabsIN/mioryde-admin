@@ -19,7 +19,7 @@ export interface Point {
 }
 
 /** Rounds an axis maximum up to something a person would choose. */
-function niceMax(value: number): number {
+export function niceMax(value: number): number {
   if (value <= 0) return 1;
   const magnitude = 10 ** Math.floor(Math.log10(value));
   const normalised = value / magnitude;
@@ -42,7 +42,7 @@ function niceMax(value: number): number {
  * formatting. Falls back to two ticks — a floor and a ceiling — which is the
  * fewest that still lets somebody read a magnitude off the chart.
  */
-function chooseTicks(max: number, format: (value: number) => string): number[] {
+export function chooseTicks(max: number, format: (value: number) => string): number[] {
   for (const divisions of [4, 3, 2]) {
     const fractions = Array.from(
       { length: divisions + 1 },
