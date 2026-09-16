@@ -1,3 +1,9 @@
+import {
+  BRAND_MARK_PIN,
+  BRAND_MARK_ROAD,
+  BRAND_MARK_VIEWBOX,
+} from "@/components/brandMarkPaths";
+
 /**
  * The Mioryde mark, drawn rather than shipped as an image.
  *
@@ -18,9 +24,16 @@
  * ## The shape
  *
  * The delivery pin from the apps' notification icon, so the panel and the
- * phones carry the same mark. The leaf is an `evenOdd` cut-out rather than a
- * second filled path: at 20px an overlapping shape turns to mud, whereas a
- * hole stays a hole.
+ * phones carry the same mark. The counter is an `evenOdd` cut-out rather than a
+ * second filled path: at 20px an overlapping shape turns to mud, whereas a hole
+ * stays a hole.
+ *
+ * The geometry is **generated**, from `brand/mioryde-mark.svg` via
+ * `brand/tools/generate-icons.mjs`. It used to be a path typed in here, and
+ * that copy went stale the moment the mark was redrawn — the panel carried the
+ * previous logo, with a different counter and a road that was a small comma
+ * rather than a full sweep, while every other surface had moved on. The
+ * marketing site's icon had gone the same way for the same reason.
  */
 export function BrandMark({
   className = "",
@@ -34,7 +47,7 @@ export function BrandMark({
     <svg
       width={size}
       height={size}
-      viewBox="0 0 24 24"
+      viewBox={BRAND_MARK_VIEWBOX}
       fill="none"
       // Decorative: the link around it already carries the accessible name,
       // and a second announcement of "Mioryde" would just be noise.
@@ -46,8 +59,9 @@ export function BrandMark({
         fill="currentColor"
         fillRule="evenodd"
         clipRule="evenodd"
-        d="M12 1.75C7.86 1.75 4.5 5.11 4.5 9.25c0 5.69 6.56 12.35 6.84 12.63a.94.94 0 0 0 1.32 0c.28-.28 6.84-6.94 6.84-12.63 0-4.14-3.36-7.5-7.5-7.5Zm3.05 5.4c.3.05.5.3.48.6-.13 2.45-1.55 4.23-3.63 4.45a3.6 3.6 0 0 1-1.88-.3l-1.12 1.12a.6.6 0 1 1-.85-.85l1.12-1.12c-.44-.9-.4-2.03.2-2.88 1.05-1.5 3.4-1.55 5.68-1.02Z"
+        d={BRAND_MARK_PIN}
       />
+      <path fill="currentColor" d={BRAND_MARK_ROAD} />
     </svg>
   );
 }

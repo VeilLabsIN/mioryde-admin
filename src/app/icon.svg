@@ -8,16 +8,28 @@
     this file rather than from a raster copy, so there is one place the shape
     lives and no chance of a resized PNG drifting from the original.
 
+    ## Where the geometry came from
+
+    Measured off the supplied artwork (`images/logo.jpeg`) rather than
+    estimated: the pin's bounding box, the counter's centre and radius, and the
+    swoosh's boundary were sampled from the raster, mapped into this 512 box,
+    and the curves fitted to those samples. A difference render of this file
+    against the original leaves only edge antialiasing.
+
     Geometry notes for anyone editing:
     · The pin is centred on x=256 and spans y=104..430, leaving a 20% margin so
       it survives Android's adaptive-icon mask, which crops aggressively on
       some launchers.
-    · The counter (the black circle) sits at cy=239, slightly above the pin's
-      visual centre — a circle placed at the true centre reads as sagging,
-      because the taper below draws the eye down.
-    · The swoosh breaks the counter's lower-left arc on purpose. That break is
-      what makes the mark read as a road leaving the frame rather than a comma
-      floating in a hole.
+    · The counter sits at (266, 235) — right of the pin's own axis, not on it.
+      That is the artwork, not an error: the swoosh merges into the left wall,
+      which thickens it there, and centring the hole would make the left wall
+      read as heavier still.
+    · The swoosh runs from a sharp tip at the counter's upper right down to a
+      root that leaves the counter at the lower left and merges into the body.
+      Only the part crossing the counter is visible — outside it the fill is
+      the same amber as the pin — so the path deliberately extends past the
+      counter's edge rather than stopping at it. Stopping at the edge leaves a
+      dark crescent where the artwork has continuous metal.
   -->
   <defs>
     <!--
@@ -25,12 +37,18 @@
       a body gradient, a gloss sweep, and a warm rim light. Filters are
       expensive to rasterise, blur at small sizes and are unevenly supported by
       SVG renderers — gradients are exact at every scale.
+
+      The stops are sampled from the artwork: a near-white yellow where the
+      light lands at the upper left, falling to a deep amber at the lower
+      right. The original's darkest body value is #FD8C08, which is
+      appreciably more orange than a naive "yellow logo" would suggest and is
+      what stops the mark reading as flat.
     -->
     <linearGradient id="body" x1="0.18" y1="0" x2="0.72" y2="1">
-      <stop offset="0%"   stop-color="#FFE24A"/>
-      <stop offset="34%"  stop-color="#FFD012"/>
+      <stop offset="0%"   stop-color="#FFF07A"/>
+      <stop offset="32%"  stop-color="#FFE20D"/>
       <stop offset="68%"  stop-color="#FFB300"/>
-      <stop offset="100%" stop-color="#EF9200"/>
+      <stop offset="100%" stop-color="#F98E06"/>
     </linearGradient>
 
     <!-- Gloss: a soft highlight down the upper-left, where light would land. -->
@@ -46,10 +64,16 @@
       <stop offset="55%"  stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
 
-    <linearGradient id="swooshFill" x1="0.1" y1="1" x2="0.9" y2="0">
-      <stop offset="0%"   stop-color="#FFC61A"/>
-      <stop offset="55%"  stop-color="#FFE04F"/>
-      <stop offset="100%" stop-color="#FFF6C8"/>
+    <!--
+      The swoosh is lit separately. In the artwork it is the brightest object
+      in the mark — near-white at the root, falling to brand amber at the tip —
+      which is what lifts it clear of the body it sits on. Giving it the body
+      gradient instead makes it disappear.
+    -->
+    <linearGradient id="swooshFill" x1="0.15" y1="1" x2="0.9" y2="0.1">
+      <stop offset="0%"   stop-color="#FFF8E8"/>
+      <stop offset="45%"  stop-color="#FFD64A"/>
+      <stop offset="100%" stop-color="#FFC408"/>
     </linearGradient>
 
     <!-- Shared geometry. Referenced by both marks; edit once. -->
@@ -61,9 +85,13 @@
          C 397 167 334 104 256 104 Z"/>
 
     <path id="swooshPath"
-      d="M175 336
-         C 181 274 226 226 320 205
-         C 268 232 236 268 224 336 Z"/>
+      d="M343 202
+         C 310 205 274 212 242 222
+         C 214 233 196 245 186 260
+         C 186 295 205 335 236 358
+         C 252 348 262 332 258 306
+         C 250 290 253 268 264 252
+         C 284 230 312 212 343 202 Z"/>
   </defs>
 
   <!-- Body -->
@@ -73,7 +101,7 @@
 
   <!-- Counter: knocked out to the background colour rather than made
        transparent, so the mark is safe on any surface. -->
-  <circle cx="256" cy="239" r="76" fill="#000000"/>
+  <circle cx="266" cy="235" r="90" fill="#000000"/>
 
   <!-- Road -->
   <use href="#swooshPath" fill="url(#swooshFill)"/>
