@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { RiderZones } from "@/components/RiderZones";
 import { useEffect, useState } from "react";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { RevealPhone } from "@/components/RevealPhone";
@@ -205,6 +206,13 @@ function PartnerTab({ detail }: { detail: RiderDetail }) {
           />
         </dl>
       </Card>
+
+      {/* Here as well as on the full record, because this is the drawer that
+          opens from the Partners list — the same screen as the Approve button,
+          and the screen where "This partner has no service zone assigned"
+          appears. The full record is a footer link away, which is one click too
+          many when the refusal you are acting on is on the row behind this. */}
+      <RiderZones riderId={detail.id} riderStatus={detail.status} inset />
 
       <Card tone="inset" className="p-3">
         <SectionLabel>Payouts</SectionLabel>

@@ -366,6 +366,26 @@ function DocumentCard({
       // should outlive it. A partner whose claim differs from their own
       // document is worth a second look at their other papers, and nobody
       // would ever go and search the audit log for that.
+      // Approving an identity document does not approve it.
+      //
+      // Aadhaar, PAN and driving licence need two signatures from two different
+      // people (§4.10), so this decision moved the document to
+      // `awaiting_second` — and the partner's app shows all three as still in
+      // review, correctly, because from their side nothing has finished.
+      //
+      // The server has always returned this flag and nothing ever read it, so
+      // the card simply vanished and the queue got shorter. An operator who has
+      // just approved the last of a partner's documents, and then cannot
+      // approve the partner, has no way to discover why. Saying it here is the
+      // difference between a system that looks broken and one that is waiting.
+      if (result?.awaitingSecondSignature) {
+        onNotice(
+          `${riderName}: ${label.toLowerCase()} approved, and now needs a ` +
+            "second signature from a different admin before it counts. It is " +
+            "in the Second signature tab — for them, not for you.",
+        );
+      }
+
       if (result?.expiryMismatch) {
         onNotice(
           `${riderName}: ${label.toLowerCase()} recorded as ` +

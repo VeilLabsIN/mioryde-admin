@@ -297,4 +297,58 @@ describe("admin API client", () => {
       expect(auth.hasAccessToken()).toBe(false);
     });
   });
+
+  /**
+   * The call that makes a partner approvable.
+   *
+   * `POST /admin/riders/:id/zones` existed on the server from the beginning and
+   * nothing in this panel ever called it, so an operator who was told "This
+   * partner has no service zone assigned" had no way to act on it and **no
+   * partner could be approved at all**.
+   *
+   * Pinned at the client rather than in a component test because the wiring is
+   * what was missing: the method, the path and the body shape are the whole of
+   * it, and this repo has no DOM testing setup to exercise the checkbox with.
+   */
+  describe("service zones", () => {
+    it("reads a partner's zones from their own route", async () => {
+      auth.set("access-1");
+      const { calls } = scriptFetch([{ status: 200, body: { results: [] } }]);
+
+      await api.riderZones("rider-1");
+
+      expect(calls[0]?.url).toContain("/admin/riders/rider-1/zones");
+      // A read. A GET here is what lets the editor refresh after a save
+      // without reloading the page around it.
+      expect(calls[0]?.init?.method ?? "GET").toBe("GET");
+    });
+
+    it("sends every zone that should remain, because the server replaces", async () => {
+      auth.set("access-1");
+      const { calls } = scriptFetch([{ status: 200, body: { results: [] } }]);
+
+      await api.setRiderZones("rider-1", ["zone-a", "zone-b"]);
+
+      expect(calls[0]?.url).toContain("/admin/riders/rider-1/zones");
+      // POST, not PUT: the panel's client has no PUT helper and every other
+      // mutation here is a POST. It is a replace either way.
+      expect(calls[0]?.init?.method).toBe("POST");
+      expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
+        zoneIds: ["zone-a", "zone-b"],
+      });
+    });
+
+    it("can clear the list, which is a real operation and not a no-op", async () => {
+      // An empty array removes every zone. The server refuses this for an
+      // active partner and accepts it for a pending one, so the client must be
+      // able to express it — sending nothing at all would silently become "no
+      // change" and the refusal would never be reached.
+      auth.set("access-1");
+      const { calls } = scriptFetch([{ status: 200, body: { results: [] } }]);
+
+      await api.setRiderZones("rider-1", []);
+
+      expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ zoneIds: [] });
+    });
+  });
 });

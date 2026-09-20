@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { StatusPill as TripStatus } from "@/components/ui";
 import { RevealPhone } from "@/components/RevealPhone";
+import { RiderZones } from "@/components/RiderZones";
 import {
   Card,
   EmptyState,
@@ -244,6 +245,15 @@ export default function RiderDetailPage() {
             Account numbers are encrypted and never shown here.
           </p>
         </Card>
+
+        {/* Next to Account rather than under History, because it is the one
+            thing on this page an operator comes here to *change* — and until
+            now the only way to change it was a database client. */}
+        <RiderZones
+          riderId={rider.id}
+          riderStatus={rider.status}
+          onSaved={load}
+        />
 
         {/* Its own card, above History.
 

@@ -400,6 +400,35 @@ export const api = {
       body: JSON.stringify({ action, ...(note ? { note } : {}) }),
     }),
 
+  /**
+   * The zones one partner is approved to work.
+   *
+   * Separate from the partner detail response, which carries the same list, so
+   * the editor can refresh after a save without reloading the whole page.
+   */
+  riderZones: (riderId: string) =>
+    request<{ results: RiderZone[] }>(`/admin/riders/${riderId}/zones`),
+
+  /**
+   * Replaces that list.
+   *
+   * A replace, not a merge — the server deletes what is not in `zoneIds`. That
+   * is why the editor sends every zone that should remain, not just the one
+   * being added.
+   *
+   * **This is what makes a partner approvable.** Dispatch inner-joins
+   * `rider_zones`, so a partner with no row here matches no order at all, and
+   * the API refuses to activate one — "This partner has no service zone
+   * assigned, so they would receive no work." Until this call existed in the
+   * panel there was no way to clear that from the UI, and no partner could be
+   * approved at all.
+   */
+  setRiderZones: (riderId: string, zoneIds: string[]) =>
+    request<{ results: RiderZone[] }>(`/admin/riders/${riderId}/zones`, {
+      method: "POST",
+      body: JSON.stringify({ zoneIds }),
+    }),
+
   rateCards: () => request<{ results: RateCard[] }>("/admin/rate-cards"),
   zones: () => request<{ results: Zone[] }>("/admin/zones"),
   vehicleTypes: () =>
@@ -1231,6 +1260,19 @@ export interface Zone {
   isActive: boolean;
   riders: number;
   orders: number;
+}
+
+/**
+ * One zone as it appears against a partner.
+ *
+ * Narrower than [Zone] on purpose: the assignment endpoints return only what
+ * identifies the zone, not its rider or order counts, and typing it as a full
+ * `Zone` would invite a component to read a `riders` field that is never sent.
+ */
+export interface RiderZone {
+  id: string;
+  name: string;
+  city: string;
 }
 
 export interface RiderDetail {
