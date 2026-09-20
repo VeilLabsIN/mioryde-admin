@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useStoredValue } from "@/lib/clientValue";
 
 /**
  * Which half of the business you are working on.
@@ -32,30 +32,20 @@ const KEY = "mioryde-layer";
  * filter that merely *looked* like a boundary would be worse than no filter at
  * all, because somebody would eventually rely on it.
  */
+function parseLayer(stored: string | null): Layer {
+  // Anything else — a key from an older build, or edited by hand — is `both`,
+  // which is the only value that cannot hide a page from somebody.
+  return stored === "both" || stored === "customer" || stored === "rider"
+    ? stored
+    : "both";
+}
+
 export function useLayer() {
-  const [layer, setLayer] = useState<Layer>("both");
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(KEY);
-      if (stored === "both" || stored === "customer" || stored === "rider") {
-        setLayer(stored);
-      }
-    } catch {
-      // Storage disabled. `both` is a working panel.
-    }
-  }, []);
-
-  const choose = (next: Layer) => {
-    setLayer(next);
-    try {
-      localStorage.setItem(KEY, next);
-    } catch {
-      // Not remembering is survivable.
-    }
-  };
-
-  return [layer, choose] as const;
+  // `both` on the server, the stored choice once the browser answers. Storage
+  // that throws in a locked-down profile still leaves a working panel; see
+  // `clientValue`.
+  const [layer, write] = useStoredValue(KEY, parseLayer, "both");
+  return [layer, write as (next: Layer) => void] as const;
 }
 
 const OPTIONS: { value: Layer; label: string; short: string }[] = [

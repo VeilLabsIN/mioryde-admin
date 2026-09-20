@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type SearchHit } from "@/lib/api";
+import { useAsync } from "@/lib/useAsync";
 import { allNavItems } from "@/lib/nav";
 import { siteLinksNotInNav } from "@/lib/siteLinks";
 import { type AdminRole, canAny } from "@/lib/permissions";
@@ -40,7 +41,7 @@ export function CommandSearch({ role }: { role: AdminRole }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [active, setActive] = useState(0);
+  const [wantedActive, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Nav first, then the pages that belong to everyone. Somebody looking for
@@ -62,37 +63,30 @@ export function CommandSearch({ role }: { role: AdminRole }) {
    * not necessarily come back in order. Without that check a slower earlier
    * response overwrites a newer one and the list disagrees with the box.
    */
-  const [hits, setHits] = useState<SearchHit[]>([]);
-
+  // 180ms: shorter than a comfortable typing rhythm, so a burst of keystrokes
+  // is one request rather than six.
+  const [debounced, setDebounced] = useState("");
   useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) {
-      setHits([]);
-      return;
-    }
-
-    let cancelled = false;
-    // 180ms: shorter than a comfortable typing rhythm, so a burst of keystrokes
-    // is one request rather than six.
-    const timer = window.setTimeout(() => {
-      void api
-        .search(q)
-        .then((res) => {
-          if (!cancelled) setHits(res.results);
-        })
-        .catch(() => {
-          // Silent, and the page list still works. A palette that shows an
-          // error banner because a background lookup failed is worse than one
-          // that quietly offers less.
-          if (!cancelled) setHits([]);
-        });
-    }, 180);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
+    const timer = window.setTimeout(() => setDebounced(query.trim()), 180);
+    return () => window.clearTimeout(timer);
   }, [query]);
+
+  // One character is every record in the system; the server is not asked until
+  // there are two. An empty term is the gate, so nothing is requested and
+  // there is nothing to clear.
+  const term = debounced.length >= 2 ? debounced : "";
+  const { data: found } = useAsync<SearchHit[]>(
+    () =>
+      api.search(term).then(
+        (res) => res.results,
+        // Silent, and the page list still works. A palette that shows an error
+        // banner because a background lookup failed is worse than one that
+        // quietly offers less.
+        () => [],
+      ),
+    [term],
+    { enabled: term !== "" },
+  );
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -126,7 +120,7 @@ export function CommandSearch({ role }: { role: AdminRole }) {
         group: item.group,
         href: item.href,
       })),
-      ...hits.map((hit) => ({
+      ...(found ?? []).map((hit) => ({
         key: `${hit.type}:${hit.id}`,
         mark: hit.type === "delivery" ? "DL" : hit.type === "customer" ? "CU" : "PT",
         label: hit.label,
@@ -135,7 +129,7 @@ export function CommandSearch({ role }: { role: AdminRole }) {
         href: hit.href,
       })),
     ],
-    [matches, hits],
+    [matches, found],
   );
 
   const close = useCallback(() => {
@@ -181,9 +175,11 @@ export function CommandSearch({ role }: { role: AdminRole }) {
   // the last page and the highlight jumped back up. The dependency was
   // already `rows.length`; the body disagreed with it, and the lint rule is
   // what noticed.
-  useEffect(() => {
-    setActive((value) => Math.min(value, Math.max(0, rows.length - 1)));
-  }, [rows.length]);
+  // Derived during render rather than corrected in an effect. The stored
+  // value is what the operator last asked for; this is what the list can
+  // actually offer right now. Clamping in an effect meant one render where the
+  // highlight pointed past the end of the list, and a second to fix it.
+  const active = Math.min(wantedActive, Math.max(0, rows.length - 1));
 
   return (
     <>
@@ -223,10 +219,10 @@ export function CommandSearch({ role }: { role: AdminRole }) {
               onKeyDown={(event) => {
                 if (event.key === "ArrowDown") {
                   event.preventDefault();
-                  setActive((v) => Math.min(v + 1, rows.length - 1));
+                  setActive(Math.min(active + 1, rows.length - 1));
                 } else if (event.key === "ArrowUp") {
                   event.preventDefault();
-                  setActive((v) => Math.max(v - 1, 0));
+                  setActive(Math.max(active - 1, 0));
                 } else if (event.key === "Enter") {
                   event.preventDefault();
                   const target = rows[active];

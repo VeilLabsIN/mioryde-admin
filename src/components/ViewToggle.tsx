@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
+
+import { useStoredValue } from "@/lib/clientValue";
 
 export type ListView = "cards" | "table";
 
@@ -13,32 +15,26 @@ export type ListView = "cards" | "table";
  * discussed, in whichever layout *they* work in. Layout is a habit, not part
  * of the address.
  *
- * Reads after mount rather than during render: `localStorage` does not exist
- * on the server, and initialising state from it produces markup that disagrees
- * with the client's first paint. The one frame of default layout is cheaper
- * than a hydration mismatch.
+ * The server has no `localStorage`, so the layout it renders is the fallback
+ * and the browser corrects it — but stated up front through the store rather
+ * than by rendering once and setting state. Same first paint, one render
+ * instead of two, and two windows now agree: an operator who switches layout
+ * in one tab sees the other follow.
  */
 export function useListView(key: string, fallback: ListView = "table") {
-  const [view, setView] = useState<ListView>(fallback);
+  const parse = useCallback(
+    (stored: string | null): ListView =>
+      stored === "cards" || stored === "table" ? stored : fallback,
+    [fallback],
+  );
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`mioryde-view-${key}`);
-      if (stored === "cards" || stored === "table") setView(stored);
-    } catch {
-      // Private mode, or storage disabled. The default is a working page.
-    }
-  }, [key]);
+  const [view, write] = useStoredValue(
+    `mioryde-view-${key}`,
+    parse,
+    fallback,
+  );
 
-  const choose = (next: ListView) => {
-    setView(next);
-    try {
-      localStorage.setItem(`mioryde-view-${key}`, next);
-    } catch {
-      // Not remembering is survivable; failing to switch is not.
-    }
-  };
-
+  const choose = useCallback((next: ListView) => write(next), [write]);
   return [view, choose] as const;
 }
 

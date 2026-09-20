@@ -247,15 +247,15 @@ export const api = {
       outboxPending: number;
     }>("/admin/overview"),
 
-  orders: (params: { page?: number; status?: string; search?: string } = {}) => {
+  orders: (
+    params: { page?: number; status?: string; search?: string } = {},
+  ) => {
     const query = new URLSearchParams();
     if (params.page) query.set("page", String(params.page));
     if (params.status) query.set("status", params.status);
     if (params.search) query.set("search", params.search);
     const qs = query.toString();
-    return request<Paged<AdminOrder>>(
-      `/admin/orders${qs ? `?${qs}` : ""}`,
-    );
+    return request<Paged<AdminOrder>>(`/admin/orders${qs ? `?${qs}` : ""}`);
   },
 
   /**
@@ -283,7 +283,10 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  updateBanner: (id: string, body: Partial<BannerInput> & { clearAction?: boolean }) =>
+  updateBanner: (
+    id: string,
+    body: Partial<BannerInput> & { clearAction?: boolean },
+  ) =>
     request<Banner>(`/admin/banners/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
@@ -350,9 +353,7 @@ export const api = {
     if (params.status) query.set("status", params.status);
     if (params.search) query.set("search", params.search);
     const qs = query.toString();
-    return request<OrdersSummary>(
-      `/admin/orders/summary${qs ? `?${qs}` : ""}`,
-    );
+    return request<OrdersSummary>(`/admin/orders/summary${qs ? `?${qs}` : ""}`);
   },
 
   payments: (
@@ -369,9 +370,7 @@ export const api = {
     if (params.purpose) query.set("purpose", params.purpose);
     if (params.search) query.set("search", params.search);
     const qs = query.toString();
-    return request<Paged<AdminPayment>>(
-      `/admin/payments${qs ? `?${qs}` : ""}`,
-    );
+    return request<Paged<AdminPayment>>(`/admin/payments${qs ? `?${qs}` : ""}`);
   },
 
   customers: (params: { page?: number; search?: string } = {}) => {
@@ -384,15 +383,15 @@ export const api = {
     );
   },
 
-  riders: (params: { page?: number; status?: string; search?: string } = {}) => {
+  riders: (
+    params: { page?: number; status?: string; search?: string } = {},
+  ) => {
     const query = new URLSearchParams();
     if (params.page) query.set("page", String(params.page));
     if (params.status) query.set("status", params.status);
     if (params.search) query.set("search", params.search);
     const qs = query.toString();
-    return request<Paged<AdminRider>>(
-      `/admin/riders${qs ? `?${qs}` : ""}`,
-    );
+    return request<Paged<AdminRider>>(`/admin/riders${qs ? `?${qs}` : ""}`);
   },
 
   reviewRider: (id: string, action: string, note?: string) =>
@@ -440,13 +439,12 @@ export const api = {
     if (params.action) query.set("action", params.action);
     if (params.subjectId) query.set("subjectId", params.subjectId);
     const qs = query.toString();
-    return request<Paged<AuditEntry>>(
-      `/admin/audit-log${qs ? `?${qs}` : ""}`,
-    );
+    return request<Paged<AuditEntry>>(`/admin/audit-log${qs ? `?${qs}` : ""}`);
   },
 
   /** Distinct actions present in the log, for the filter control. */
-  auditActions: () => request<{ results: string[] }>("/admin/audit-log/actions"),
+  auditActions: () =>
+    request<{ results: string[] }>("/admin/audit-log/actions"),
 
   /** A partner's last fifty deliveries. Capped, not paged — see the API. */
   riderOrders: (id: string) =>
@@ -495,9 +493,7 @@ export const api = {
 
   /** Documents a first reviewer approved, waiting on a second (§4.10). */
   kycCountersignQueue: (page = 0) =>
-    request<Paged<CountersignItem>>(
-      `/admin/kyc/countersign?page=${page}`,
-    ),
+    request<Paged<CountersignItem>>(`/admin/kyc/countersign?page=${page}`),
 
   /**
    * A short-lived link to look at one document.
@@ -552,6 +548,23 @@ export const api = {
     return request<Analytics>(`/admin/analytics?${query}`);
   },
 
+  /*
+   * The three panels that load on their own.
+   *
+   * Separate requests rather than more fields on `analytics`, because the
+   * ledger scan behind `money` is the slowest query on the page and the
+   * headline figures must not wait for it. Each panel skeletons and fails by
+   * itself.
+   */
+  analyticsDemand: (range: AnalyticsRange = {}) =>
+    request<DemandGrid>(`/admin/analytics/demand?${rangeQuery(range)}`),
+
+  analyticsFunnel: (range: AnalyticsRange = {}) =>
+    request<OrderFunnel>(`/admin/analytics/funnel?${rangeQuery(range)}`),
+
+  analyticsMoney: (range: AnalyticsRange = {}) =>
+    request<MoneyBreakdown>(`/admin/analytics/money?${rangeQuery(range)}`),
+
   /**
    * Downloads the daily series as a CSV.
    *
@@ -573,7 +586,9 @@ export const api = {
   },
 
   /** Every partner who delivered in the period, not just the top fifteen. */
-  downloadPartnersCsv(range: { days?: number; from?: string; to?: string } = {}) {
+  downloadPartnersCsv(
+    range: { days?: number; from?: string; to?: string } = {},
+  ) {
     const query = new URLSearchParams();
     if (range.from && range.to) {
       query.set("from", range.from);
@@ -754,7 +769,8 @@ export const api = {
 
   // ── Access control ─────────────────────────────────────────────────────────
 
-  adminUsers: () => request<{ results: AdminAccount[] }>("/admin/access/admins"),
+  adminUsers: () =>
+    request<{ results: AdminAccount[] }>("/admin/access/admins"),
 
   /**
    * Creates an admin and returns their password **once**.
@@ -784,10 +800,7 @@ export const api = {
       { method: "POST" },
     ),
 
-  changeOwnPassword: (body: {
-    currentPassword: string;
-    newPassword: string;
-  }) =>
+  changeOwnPassword: (body: { currentPassword: string; newPassword: string }) =>
     request<{ changed: boolean }>("/admin/access/password", {
       method: "POST",
       body: JSON.stringify(body),
@@ -917,6 +930,68 @@ export interface Paged<T> {
   page: PageMeta;
 }
 
+export type AnalyticsRange = { days?: number; from?: string; to?: string };
+
+/**
+ * The same rule the main analytics call uses: `from`/`to` win when both are
+ * present, and only what was chosen is sent, so a network log reads as the
+ * question that was asked.
+ */
+function rangeQuery(range: AnalyticsRange): string {
+  const query = new URLSearchParams();
+  if (range.from && range.to) {
+    query.set("from", range.from);
+    query.set("to", range.to);
+  } else {
+    query.set("days", String(range.days ?? 30));
+  }
+  return query.toString();
+}
+
+/** Orders by day of week and hour — every cell present, zeros included. */
+export interface DemandGrid {
+  range: { from: string; to: string; days: number };
+  /** `dow` is 0–6 with Sunday at 0, matching Postgres. */
+  cells: { dow: number; hour: number; placed: number; delivered: number }[];
+  asOf: string;
+}
+
+/** Where orders stop, measured from the four timestamps on the order. */
+export interface OrderFunnel {
+  range: { from: string; to: string; days: number };
+  steps: {
+    placed: number;
+    assigned: number;
+    pickedUp: number;
+    delivered: number;
+    cancelled: number;
+  };
+  /** Medians, not means: one order stranded overnight would move a mean. */
+  medianSeconds: {
+    toAssign: number | null;
+    toPickup: number | null;
+    toDeliver: number | null;
+  };
+  /**
+   * As written by whoever cancelled. `orders.cancellation_reason` is free
+   * text, so these are listed rather than grouped into invented categories.
+   */
+  cancellationReasons: { reason: string; count: number }[];
+  asOf: string;
+}
+
+/** What the platform actually earned, from the ledger rather than turnover. */
+export interface MoneyBreakdown {
+  range: { from: string; to: string; days: number };
+  accounts: {
+    /** `commission`, `gst_payable`, `earnings`, `cash_in_hand`, … */
+    purpose: string;
+    ownerType: string;
+    amount: Money;
+  }[];
+  asOf: string;
+}
+
 export interface Analytics {
   days: number;
   /** The window the server actually used, resolved in the business timezone. */
@@ -937,10 +1012,28 @@ export interface Analytics {
     cancelled: number;
     placed: number;
   }[];
+  /**
+   * The same series over the window immediately before this one, aligned by
+   * position so it can be drawn behind the current line.
+   *
+   * Null when the caller asked not to compare — which is not the same as an
+   * empty array, and must not render as "the previous period had no orders".
+   */
+  dailyPrevious:
+    | {
+        date: string;
+        revenue: Money;
+        delivered: number;
+        cancelled: number;
+        placed: number;
+      }[]
+    | null;
   breakdowns: {
     zones: { label: string; orders: number; revenue: Money }[];
     vehicles: { label: string; orders: number; revenue: Money }[];
     payments: { label: string; orders: number; revenue: Money }[];
+    /** What was moved. Orders with no category come back as "Uncategorised". */
+    goods: { label: string; orders: number; revenue: Money }[];
   };
   fleet: {
     active: number;
@@ -1239,10 +1332,7 @@ export interface RefundContext {
 }
 
 export type RefundReason =
-  | "service_deficiency"
-  | "order_cancelled"
-  | "price_correction"
-  | "goodwill";
+  "service_deficiency" | "order_cancelled" | "price_correction" | "goodwill";
 
 export interface SettingRow {
   label: string;
@@ -1405,7 +1495,10 @@ export interface BannerInput {
 }
 
 /** Live now, starting later, or finished. Derived rather than stored. */
-export function bannerState(b: Banner, now = new Date()): "live" | "scheduled" | "ended" {
+export function bannerState(
+  b: Banner,
+  now = new Date(),
+): "live" | "scheduled" | "ended" {
   if (b.endsAt !== null && new Date(b.endsAt) <= now) return "ended";
   if (new Date(b.startsAt) > now) return "scheduled";
   return "live";

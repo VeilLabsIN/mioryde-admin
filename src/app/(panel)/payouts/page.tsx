@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   Button,
   Card,
@@ -13,9 +13,7 @@ import {
 } from "@/components/ui";
 import {
   ApiError,
-  type PageMeta,
   type Payout,
-  type PayoutTotals,
   api,
   formatMoney,
 } from "@/lib/api";
@@ -23,6 +21,7 @@ import { ExportButton } from "@/components/ExportButton";
 import { RevealPhone } from "@/components/RevealPhone";
 import { RiderDrawer } from "@/components/RiderDrawer";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
+import { usePagedAsync } from "@/lib/useAsync";
 
 const FILTERS = [
   { value: "requested", label: "To action" },
@@ -61,44 +60,35 @@ export default function PayoutsPage() {
   // Which partner is open, if any. The payout being settled is already the
   // row in front of the operator; what the drawer adds is who they are paying.
   const [openRiderId, setOpenRiderId] = useState<string | null>(null);
-  const [payouts, setPayouts] = useState<Payout[] | null>(null);
-  const [pending, setPending] = useState<PayoutTotals | null>(null);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
   const [page, setPage, pageReady] = useUrlPage();
   const urlReady = statusReady && pageReady;
-  const [error, setError] = useState<string | null>(null);
 
-  // Guards against a slow response for an old filter landing after a newer one
-  // and repainting the table with the wrong rows.
-  const requestId = useRef(0);
-
-  const load = useCallback(() => {
-    if (!urlReady) return;
-
-    const id = ++requestId.current;
-    setPayouts(null);
-    setError(null);
-    api
-      .payouts({ ...(page ? { page } : {}), ...(status ? { status } : {}) })
-      .then((res) => {
-        if (id !== requestId.current) return;
-        if (res.page.beyondEnd) {
-          setPage(0);
-          return;
-        }
-        setPayouts(res.results);
-        setPending(res.pending);
-        setMeta(res.page);
-      })
-      .catch((e: unknown) => {
-        if (id !== requestId.current) return;
-        setError(
-          e instanceof ApiError ? e.message : "Could not load payouts.",
-        );
+  // The pending total describes the whole queue rather than the page on
+  // screen, so it comes back with the pager rather than with the rows and
+  // stays put while a page loads.
+  const {
+    rows: payouts,
+    data: loaded,
+    meta,
+    error,
+    reload: load,
+  } = usePagedAsync(
+    async () => {
+      const res = await api.payouts({
+        ...(page ? { page } : {}),
+        ...(status ? { status } : {}),
       });
-  }, [status, page, urlReady, setPage]);
-
-  useEffect(load, [load]);
+      // Past the end. The page below is the answer, not an empty queue.
+      if (res.page.beyondEnd) {
+        setPage(0);
+        return null;
+      }
+      return res;
+    },
+    [status, page],
+    { enabled: urlReady, fallback: "Could not load payouts." },
+  );
+  const pending = loaded?.pending ?? null;
 
   return (
     <div className="flex flex-col gap-4">

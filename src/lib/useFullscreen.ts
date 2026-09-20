@@ -1,30 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
-const PREFERENCE_KEY = "mioryde-fullscreen-on-login";
-
-/**
- * Whether the operator asked for the panel to open fullscreen.
- *
- * Read outside React as well as in it, because the login form needs the answer
- * inside a submit handler rather than at render.
- */
-export function prefersFullscreenOnLogin(): boolean {
-  try {
-    return localStorage.getItem(PREFERENCE_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-export function setFullscreenOnLogin(next: boolean): void {
-  try {
-    localStorage.setItem(PREFERENCE_KEY, String(next));
-  } catch {
-    // Not remembering is survivable; the toggle in the bar still works.
-  }
-}
+import { useClientOnce } from "@/lib/clientValue";
 
 /**
  * Enter and leave browser fullscreen, and know which one you are in.
@@ -41,12 +19,17 @@ export function setFullscreenOnLogin(next: boolean): void {
  * and it survives the navigation because fullscreen belongs to the document and
  * the panel is a client-side route change rather than a page load.
  *
- * ## Why it is a preference rather than a behaviour
+ * ## Why it is not a preference
  *
- * A panel that seizes the whole display every time somebody signs in is hostile
- * to the operator who runs it beside a spreadsheet and a phone. It is opt-in,
- * remembered, and there is a manual toggle in the top bar either way — which is
- * also the escape hatch for anyone who turned it on and regretted it.
+ * It was a tick on the sign-in form, off by default. That put a decision in
+ * front of somebody who has not seen the product yet, to answer a question
+ * they cannot have an opinion about — and the answer they gave by not reading
+ * it was "no", so the dispatch screen it was built for almost never got it.
+ *
+ * The panel is a dispatch console. Full screen is what it is *for*, so it is
+ * simply what happens, and the top bar keeps the manual toggle as the escape
+ * hatch for the shift that wants it beside a spreadsheet. Esc leaves it too,
+ * because the browser says so and we do not fight that.
  *
  * ## Why the state is read from the document, not tracked
  *
@@ -55,25 +38,37 @@ export function setFullscreenOnLogin(next: boolean): void {
  * disagreed, and the button would offer to do the thing it was already not
  * doing. `fullscreenchange` is the only honest source.
  */
+/** Module-level so its identity is stable; see `clientValue`. */
+function subscribeToFullscreen(listener: () => void): () => void {
+  document.addEventListener("fullscreenchange", listener);
+  return () => document.removeEventListener("fullscreenchange", listener);
+}
+
 export function useFullscreen(): {
   isFullscreen: boolean;
   supported: boolean;
   toggle: () => Promise<void>;
 } {
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [supported, setSupported] = useState(false);
+  // Both are false on the server, where there is no `document` — said
+  // explicitly through a server snapshot rather than reached by rendering once
+  // with a default and then setting state. A value that differs between the
+  // server HTML and the first client render is still a hydration mismatch;
+  // this states which value the server used instead of guessing.
+  //
+  // The two are different kinds of fact and are read differently. Whether the
+  // browser *allows* fullscreen cannot change while the page is open. Whether
+  // the document *is* fullscreen changes constantly, and `fullscreenchange` is
+  // the only honest source for it — see the note above.
+  const supported = useClientOnce(
+    () => Boolean(document.fullscreenEnabled),
+    false,
+  );
 
-  useEffect(() => {
-    // Read in an effect rather than during render: `document` does not exist
-    // on the server, and a value that differs between the server HTML and the
-    // first client render is a hydration mismatch.
-    setSupported(Boolean(document.fullscreenEnabled));
-    setIsFullscreen(Boolean(document.fullscreenElement));
-
-    const sync = () => setIsFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener("fullscreenchange", sync);
-    return () => document.removeEventListener("fullscreenchange", sync);
-  }, []);
+  const isFullscreen = useSyncExternalStore(
+    subscribeToFullscreen,
+    () => Boolean(document.fullscreenElement),
+    () => false,
+  );
 
   const toggle = useCallback(async () => {
     try {
@@ -95,15 +90,22 @@ export function useFullscreen(): {
 }
 
 /**
- * Requests fullscreen from inside a user gesture, if the operator asked for it.
+ * Takes the whole screen, from inside the sign-in gesture.
  *
- * Called by the sign-in handler. Deliberately **not** awaited by the caller:
- * the navigation must not wait on a display change, and a refusal must not
- * stop somebody signing in.
+ * Called by the submit handler and by nothing else, because that click is the
+ * only moment the browser will allow it — see the note at the top.
+ *
+ * Deliberately **not** awaited by the caller: the navigation must not wait on
+ * a display change, and a refusal must not stop somebody signing in. Every
+ * failure here is silent by design. A browser that says no leaves a windowed
+ * panel that works exactly as well, and an error dialog about it would be the
+ * first thing an operator sees after typing their password.
  */
-export function enterFullscreenIfPreferred(): void {
-  if (!prefersFullscreenOnLogin()) return;
+export function enterFullscreenOnSignIn(): void {
   try {
+    // `fullscreenEnabled` is false in an iframe without `allow="fullscreen"`
+    // and under some kiosk policies; `fullscreenElement` means an earlier
+    // sign-in in this document already did it, and asking twice throws.
     if (!document.fullscreenEnabled || document.fullscreenElement) return;
     void document.documentElement.requestFullscreen().catch(() => {
       // As above: a refused convenience is not an error worth showing.

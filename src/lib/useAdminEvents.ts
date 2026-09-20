@@ -49,7 +49,26 @@ export function useAdminEvents(enabled = true): {
   state: StreamState;
 } {
   const [events, setEvents] = useState<AdminEvent[]>([]);
-  const [state, setState] = useState<StreamState>("connecting");
+
+  /*
+   * What the stream reports, and what the caller asked for, kept apart.
+   *
+   * `stopped` is not something the stream says — it is what pausing *means* —
+   * so it is derived rather than written into the same variable. They shared
+   * one before, and the cost was subtle: resuming after a pause read as
+   * whatever the previous run had last reported, so a board that had been
+   * paused for an hour claimed to be `live` again the instant it resumed,
+   * until the new fetch came back and said otherwise.
+   */
+  const [reported, setReported] = useState<StreamState>("connecting");
+  const [wasEnabled, setWasEnabled] = useState(enabled);
+  if (enabled !== wasEnabled) {
+    setWasEnabled(enabled);
+    // A resumed stream is connecting. Adjusting during render rather than in
+    // an effect so no commit ever shows the previous run's answer.
+    setReported("connecting");
+  }
+  const state: StreamState = enabled ? reported : "stopped";
 
   // Survives re-renders without restarting the stream. Putting the connection
   // in state would tear it down and rebuild it on every event received, which
@@ -58,10 +77,7 @@ export function useAdminEvents(enabled = true): {
   const seenRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!enabled) {
-      setState("stopped");
-      return;
-    }
+    if (!enabled) return;
 
     let cancelled = false;
     let attempt = 0;
@@ -114,7 +130,7 @@ export function useAdminEvents(enabled = true): {
         }
 
         if (!cancelled) {
-          setState("live");
+          setReported("live");
           attempt = 0;
         }
 
@@ -168,7 +184,7 @@ export function useAdminEvents(enabled = true): {
         }
 
         if (cancelled) return;
-        setState("reconnecting");
+        setReported("reconnecting");
 
         const delay = BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length - 1)] ?? 30_000;
         attempt += 1;

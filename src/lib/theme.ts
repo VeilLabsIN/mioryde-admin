@@ -12,8 +12,62 @@ export type Theme = (typeof THEMES)[number];
 export const DEFAULT_THEME: Theme = "daylight";
 export const THEME_STORAGE_KEY = "mioryde-admin-theme";
 
+/**
+ * The sign-in page is always dark, whatever the operator's theme is.
+ *
+ * It is the one screen that is not the operator's workspace — it is the front
+ * door, and it is the only page in the panel that is a composition rather than
+ * a table. The dark ground is what the scene behind the form is drawn for: the
+ * ambient light reads as light on it, and on the warm off-white of `daylight`
+ * the same glow reads as a smudge on the paper.
+ *
+ * It does **not** touch the stored preference. Somebody whose panel is
+ * `daylight` signs in on black and lands on their own light panel, and the
+ * splash covers the change. Writing it down would be a page quietly changing
+ * a setting nobody asked it to.
+ */
+export const LOGIN_PATH = "/login";
+export const LOGIN_THEME: Theme = "tokyo";
+
 export function isTheme(value: unknown): value is Theme {
   return typeof value === "string" && (THEMES as readonly string[]).includes(value);
+}
+
+/**
+ * The operator's stored preference, normalised.
+ *
+ * The `midnight` line migrates the old pitch-black theme, whose key is still
+ * sitting in localStorage for everyone who picked it. Without it those users
+ * would silently be dropped back to daylight, which reads as the panel
+ * forgetting their choice rather than as a redesign.
+ *
+ * Kept in step with `themeBootScript` below, which has to do the same thing
+ * inline and cannot call this.
+ */
+export function readStoredTheme(): Theme {
+  try {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "midnight") return "tokyo";
+    return isTheme(stored) ? stored : DEFAULT_THEME;
+  } catch {
+    // Private browsing throws on read, not only on write.
+    return DEFAULT_THEME;
+  }
+}
+
+/**
+ * What `data-theme` should actually say, given the preference and the route.
+ *
+ * The distinction matters: `preference` is what the operator chose and what
+ * the theme switcher shows, and this is what the document is painted with.
+ * Collapsing the two is how the sign-in page would end up saving `tokyo` over
+ * somebody's `daylight`.
+ */
+export function effectiveTheme(preference: Theme, pathname: string): Theme {
+  // Next writes the route without a trailing slash, but a static export served
+  // by something that adds one must not fall through to the light theme.
+  const onLogin = pathname === LOGIN_PATH || pathname === `${LOGIN_PATH}/`;
+  return onLogin ? LOGIN_THEME : preference;
 }
 
 /**
@@ -29,18 +83,26 @@ export function isTheme(value: unknown): value is Theme {
  * would silently be dropped back to daylight, which reads as the panel
  * forgetting their choice rather than as a redesign.
  *
+ * The route check is the sign-in page's dark ground, applied here rather than
+ * only in React for the same reason as everything else in this script: React
+ * corrects it after hydration, which is a light flash on the one page that is
+ * always a cold load. It reads the preference and then ignores it, so nothing
+ * is written and the operator's own theme is waiting on the other side.
+ *
  * Kept deliberately tiny and dependency-free, because it is on the critical
  * path of every single page load.
  */
 export const themeBootScript = `
 (function(){
+  var p = location.pathname;
+  var login = p === ${JSON.stringify(LOGIN_PATH)} || p === ${JSON.stringify(LOGIN_PATH + "/")};
   try {
     var t = localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
     if (t === "midnight") t = "tokyo";
     if (t !== "daylight" && t !== "tokyo" && t !== "system") t = ${JSON.stringify(DEFAULT_THEME)};
-    document.documentElement.dataset.theme = t;
+    document.documentElement.dataset.theme = login ? ${JSON.stringify(LOGIN_THEME)} : t;
   } catch (e) {
-    document.documentElement.dataset.theme = ${JSON.stringify(DEFAULT_THEME)};
+    document.documentElement.dataset.theme = login ? ${JSON.stringify(LOGIN_THEME)} : ${JSON.stringify(DEFAULT_THEME)};
   }
 })();
 `.trim();

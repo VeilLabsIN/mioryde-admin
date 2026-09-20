@@ -20,6 +20,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * serve a widget that appears on one would widen the CSP for the whole app —
  * and `script-src` is already the weakest line in that policy.
  *
+ * ## Two ways it can be shown
+ *
+ * `interaction-only` is the normal one: Cloudflare renders nothing at all
+ * unless it actually wants a human to do something, so for staff signing in
+ * from an office this is invisible — which is the point, because a control
+ * nobody notices is a control nobody works around.
+ *
+ * `always` is the fallback the login form switches to when the silent check
+ * did not finish. It forces the visible "Verify you are human" box onto the
+ * page so there is something to click. Changing `appearance` tears the widget
+ * down and renders a fresh one, because Cloudflare has no way to change the
+ * mode of a widget that already exists.
+ *
  * ## Two callbacks that are not optional
  *
  * `expired-callback` and `error-callback` both exist because the token is not
@@ -92,6 +105,7 @@ export function Turnstile({
   onUnavailable,
   onError,
   handleRef,
+  appearance = "interaction-only",
 }: {
   siteKey: string;
   /** Called with a token, or null whenever the current one stops being valid. */
@@ -108,6 +122,13 @@ export function Turnstile({
    */
   onError?: () => void;
   handleRef?: React.MutableRefObject<TurnstileHandle | null>;
+  /**
+   * Whether to show the widget when Cloudflare would not have.
+   *
+   * Defaults to the invisible mode. `always` forces the visible checkbox, and
+   * changing this re-renders the widget from scratch — see the note above.
+   */
+  appearance?: "always" | "interaction-only";
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetId = useRef<string | null>(null);
@@ -169,11 +190,7 @@ export function Turnstile({
             onErrorRef.current?.();
           },
           theme: "dark",
-          // Only shows a visible challenge when Cloudflare actually wants one.
-          // For staff signing in from an office this is invisible in practice,
-          // which is the point: a control nobody notices is a control nobody
-          // works around.
-          appearance: "interaction-only",
+          appearance,
         });
       })
       .catch(() => {
@@ -192,11 +209,16 @@ export function Turnstile({
         widgetId.current = null;
       }
     };
-    // siteKey is a build-time constant; onUnavailable is only read on the
-    // failure path. Re-running this effect re-renders the widget, so the
-    // dependency list is deliberately empty.
+    // `appearance` is the one thing that must re-run this, because it is the
+    // only way to change how the widget is shown — the cleanup above removes
+    // the old one first, so the two modes cannot end up on the page together.
+    //
+    // siteKey is a build-time constant and onUnavailable is only read on the
+    // failure path; both are deliberately left out, because re-running this
+    // effect destroys and rebuilds a challenge the operator may be mid-way
+    // through solving.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [appearance]);
 
   if (failed) {
     return (
@@ -207,7 +229,8 @@ export function Turnstile({
     );
   }
 
-  // `interaction-only` renders nothing until a challenge is actually needed,
-  // so this is usually a zero-height element. It still has to be in the tree.
-  return <div ref={containerRef} className="flex justify-center" />;
+  // Under `interaction-only` this renders nothing until a challenge is
+  // actually needed, so it is usually a zero-height element. It still has to
+  // be in the tree. Under `always` it is the visible checkbox.
+  return <div ref={containerRef} className="flex justify-center empty:hidden" />;
 }

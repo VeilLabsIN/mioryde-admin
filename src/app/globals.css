@@ -187,6 +187,18 @@
   --grain-opacity: 0.035;
   /* Barely there. At 0.05 it is texture; at 0.12 it is graph paper. */
   --dot-color: rgb(90 74 40 / 0.055);
+
+  /* The lattice behind the panel's content column. See `PanelScene`.
+     Warm ink on cream: the same family as `--dot-color`, drawn as outlines
+     rather than dots so the two textures do not moiré against each other.
+
+     Weaker here than in tokyo, and deliberately so. Daylight already has the
+     body's 24px dot grid doing this job; the lattice is a second texture on
+     the same ground, and at the weight tokyo needs the two together stop
+     reading as paper and start reading as a pattern behind the table. */
+  --scene-line: rgb(90 74 40 / 0.032);
+  --scene-glow-a: rgb(245 179 1 / 0.055);
+  --scene-glow-b: rgb(120 160 90 / 0.04);
   color-scheme: light;
 }
 
@@ -236,6 +248,14 @@
   --grain-opacity: 0.02;
   /* Off in tokyo — dots on a dark ground read as dust. */
   --dot-color: transparent;
+
+  /* The lattice survives where the dot grid does not: an outline reads as
+     structure at this weight, while a dot the same size reads as a dead
+     pixel. Brighter glows than daylight, because a near-black ground can
+     carry colour that cream turns into a stain. */
+  --scene-line: rgb(192 202 245 / 0.045);
+  --scene-glow-a: rgb(224 175 104 / 0.07);
+  --scene-glow-b: rgb(122 162 247 / 0.06);
   color-scheme: dark;
 }
 
@@ -291,6 +311,9 @@
   --glow: color-mix(in oklab, var(--accent) 6%, transparent);
   --grain-opacity: light-dark(0.035, 0.02);
   --dot-color: light-dark(rgb(90 74 40 / 0.055), transparent);
+  --scene-line: light-dark(rgb(90 74 40 / 0.032), rgb(192 202 245 / 0.045));
+  --scene-glow-a: light-dark(rgb(245 179 1 / 0.055), rgb(224 175 104 / 0.07));
+  --scene-glow-b: light-dark(rgb(120 160 90 / 0.04), rgb(122 162 247 / 0.06));
 }
 
 
@@ -849,22 +872,41 @@
    standing still.
    ──────────────────────────────────────────────────────────────────────── */
 
-/* The delivery route drawing itself, over and over. */
+/*
+ * The delivery route drawing itself. Once.
+ *
+ * It used to loop for as long as the page was open: draw, hold, fade, redraw,
+ * every seven seconds. Nothing on a sign-in page takes seven seconds, so what
+ * an operator actually saw was the same three seconds of animation replaying
+ * behind them while they typed a password — motion with no cause, which is
+ * what makes a background read as a GIF rather than as a page.
+ *
+ * Now it is an entrance with an end: the pickup registers, the route draws,
+ * the vehicle runs it, the drop registers, and the scene stops. What is left
+ * on screen is a completed delivery rather than one permanently in progress,
+ * which is both the better still image and the more honest one.
+ *
+ * The ambient light behind it keeps moving — 18 and 24 second drifts, slow
+ * enough to read as light rather than as animation. That is the part worth
+ * keeping alive on a page somebody may be sitting at for a minute.
+ */
 @keyframes route-draw {
-  0%   { stroke-dashoffset: var(--route-length); }
-  55%  { stroke-dashoffset: 0; }
-  85%  { stroke-dashoffset: 0; opacity: 1; }
-  100% { stroke-dashoffset: 0; opacity: 0; }
+  from { stroke-dashoffset: var(--route-length); }
+  to   { stroke-dashoffset: 0; }
 }
 
 /* The vehicle running the route. Driven by `offset-distance`, so the marker
    follows the same path data the line is drawn from and the two cannot drift
-   apart the way two hand-tuned keyframe tracks would. */
+   apart the way two hand-tuned keyframe tracks would.
+
+   It fades as it arrives rather than parking, because the drop pin lands on
+   the same coordinate at the same moment — two filled circles on one point
+   would read as a rendering fault. The vehicle hands over to the pin. */
 @keyframes route-run {
-  0%,  8%  { offset-distance: 0%;   opacity: 0; }
-  14%      { opacity: 1; }
-  60%      { offset-distance: 100%; opacity: 1; }
-  72%, 100% { offset-distance: 100%; opacity: 0; }
+  0%   { offset-distance: 0%;   opacity: 0; }
+  8%   { opacity: 1; }
+  88%  { offset-distance: 100%; opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
 }
 
 /* Ambient light behind the scene. Two blobs on different periods so the
@@ -887,9 +929,80 @@
 
 .scene-orb-a { animation: drift-a 18s ease-in-out infinite; }
 .scene-orb-b { animation: drift-b 24s ease-in-out infinite; }
-.scene-route { animation: route-draw 7s var(--ease-out-quint) infinite; }
-.scene-vehicle { animation: route-run 7s var(--ease-out-quint) infinite; }
+/*
+ * One pass, then still. `both` holds the finished state — without it every
+ * one of these snaps back to its start value the moment the animation ends,
+ * which is the whole route disappearing at 2.2 seconds.
+ *
+ * The delays are a sequence, not decoration: pickup at 200ms, the route
+ * drawing from 300ms, the vehicle leaving at 400ms and arriving at ~1.7s,
+ * and the drop landing on that arrival. Each is set where the element is
+ * declared except these two, which have no other home.
+ */
+/*
+ * The whole delivery recedes once it has happened.
+ *
+ * Without this the route simply stops at full strength and stays there, and
+ * on a short window — where `slice` scales the 280px viewBox up to cover the
+ * viewport — that is a nine-pixel green stroke and a bright pin sitting
+ * permanently beside the sign-in form. The looping version hid the problem by
+ * fading the route out every seven seconds; ending the loop exposed it.
+ *
+ * So the sequence plays at full strength, and then the group holding it eases
+ * back to roughly half. It is one animation on one wrapper rather than a tail
+ * on each of the four elements, which is what keeps the four in agreement.
+ */
+@keyframes scene-settle {
+  from { opacity: 1; }
+  to   { opacity: 0.45; }
+}
+.scene-settle {
+  animation: scene-settle 1.4s var(--ease-out-quint) 2s both;
+}
+
+.scene-route {
+  animation: route-draw 1.6s var(--ease-out-quint) 300ms both;
+}
+.scene-vehicle {
+  animation: route-run 1.5s var(--ease-out-quint) 400ms both;
+}
 .scene-pin { animation: pin-drop var(--dur-slow) var(--ease-spring) both; }
+
+/* ── Panel scene ────────────────────────────────────────────────────────
+   The same idea as the sign-in scene, behind the panel's content column —
+   and deliberately a *different* pattern, because the two are seen one after
+   the other and repeating the composition would read as the sign-in page
+   having failed to go away.
+
+   Sign-in is a ruled city grid with solid blocks and a route across it: a
+   picture of the thing the business does, on a page with nothing else to look
+   at. This is a staggered lattice of empty outlines with nothing drawn on it,
+   because everything worth looking at here is the data on top. Outlines
+   rather than dots so it does not moiré against the body's own dot grid in
+   daylight, and staggered rather than square so it is not mistaken for the
+   gridlines of the table sitting on it.
+
+   The motion differs too. The sign-in orbs *drift*, which is movement across
+   the frame; these *breathe*, which is a change in brightness and nothing
+   else. On a page where an operator is reading rows, anything that moves
+   laterally in the background is caught by peripheral vision and read as
+   something having happened.
+
+   Cheap by construction: two blurred divs and one tiled SVG pattern, all
+   `opacity` only, all behind `-z-10`, none of it repainting on scroll because
+   the layer is fixed to the column rather than to the scrolling content.
+   ──────────────────────────────────────────────────────────────────────── */
+@keyframes scene-breathe {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+/* Two periods, deliberately coprime-ish, so the pair never settles into a
+   visible pulse the way two equal ones would. Very slow: at 34 seconds this
+   is below the threshold at which it reads as animation at all, which is the
+   only speed a background on a working screen is allowed to move at. */
+.panel-glow-a { animation: scene-breathe 34s ease-in-out infinite; }
+.panel-glow-b { animation: scene-breathe 47s ease-in-out infinite; }
 
 /* ── Night mode arrival ─────────────────────────────────────────────────
    Plays over the panel without replacing it. Deliberately *not* a reload:
@@ -975,6 +1088,13 @@
     animation: none !important;
   }
   .scene-route { stroke-dashoffset: 0 !important; opacity: 1 !important; }
+  /* Straight to the resting state rather than to full strength — the settled
+     scene is the one the page is designed around. */
+  .scene-settle { animation: none !important; opacity: 0.45 !important; }
+  /* Held at full brightness rather than at the dim end of the cycle: the
+     lattice is faint enough that the low end reads as a rendering fault. */
+  .panel-glow-a,
+  .panel-glow-b { animation: none !important; opacity: 1 !important; }
   .scene-vehicle { offset-distance: 62% !important; opacity: 1 !important; }
 
   html { scroll-behavior: auto; }

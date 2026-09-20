@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Button,
   Card,
@@ -15,11 +15,11 @@ import {
   ApiError,
   type CountersignItem,
   type KycQueueItem,
-  type PageMeta,
   type PendingVehicle,
   api,
 } from "@/lib/api";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
+import { usePagedAsync } from "@/lib/useAsync";
 
 /**
  * Reasons a document can be turned down.
@@ -64,13 +64,8 @@ export default function KycPage() {
   const tab: Tab = TABS.some((t) => t.value === tabRaw)
     ? (tabRaw as Tab)
     : "review";
-  const [queue, setQueue] = useState<KycQueueItem[] | null>(null);
-  const [countersign, setCountersign] = useState<CountersignItem[] | null>(null);
-  const [vehicles, setVehicles] = useState<PendingVehicle[] | null>(null);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
   const [page, setPage, pageReady] = useUrlPage();
   const urlReady = tabReady && pageReady;
-  const [error, setError] = useState<string | null>(null);
   /**
    * Things a decision turned up that outlive the card it happened on.
    *
@@ -83,51 +78,56 @@ export default function KycPage() {
    */
   const [notices, setNotices] = useState<string[]>([]);
 
-  // Guards against a slow response for an old tab landing after a newer one
-  // and repainting the list with the wrong rows.
-  const requestId = useRef(0);
+  /*
+   * One request, one queue.
+   *
+   * Only one of the three is ever on screen, and this used to be three pieces
+   * of state that could all hold rows at once — so a tab switch showed the
+   * *previous* queue's rows until the new ones landed, under the new tab's
+   * heading. Keyed on the tab, there is nothing to show it from.
+   *
+   * One `page` and one `meta` across all three for the same reason. Per-tab
+   * paging state would let an operator return to a tab and find themselves on
+   * page four of a queue they thought they had left at the top.
+   *
+   * The tab is carried on the result so the rows can be narrowed back to the
+   * queue that asked for them — the three endpoints return the same shape and
+   * nothing in the payload itself says which one it came from.
+   */
+  const {
+    rows,
+    data,
+    meta,
+    error,
+    reload: load,
+  } = usePagedAsync(
+    async () => {
+      const result =
+        tab === "review"
+          ? { tab: "review" as const, ...(await api.kycQueue(page)) }
+          : tab === "countersign"
+            ? {
+                tab: "countersign" as const,
+                ...(await api.kycCountersignQueue(page)),
+              }
+            : { tab: "vehicles" as const, ...(await api.pendingVehicles(page)) };
 
-  const load = useCallback(() => {
-    if (!urlReady) return;
+      // Past the end. The page below is the answer, not an empty queue.
+      if (result.page.beyondEnd) {
+        setPage(0);
+        return null;
+      }
+      return result;
+    },
+    [tab, page],
+    { enabled: urlReady, fallback: "Could not load the queue." },
+  );
 
-    const id = ++requestId.current;
-    setError(null);
-
-    const fail = (caught: unknown) => {
-      if (id !== requestId.current) return;
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : "Could not load the queue.",
-      );
-    };
-
-    // One `page` and one `meta` across all three tabs, because only one queue
-    // is on screen at a time. Per-tab paging state would let an operator return
-    // to a tab and find themselves on page four of a queue they thought they
-    // had left at the top.
-    const took = <T,>(setter: (value: T[] | null) => void) =>
-      (result: { results: T[]; page: PageMeta }) => {
-        if (id !== requestId.current) return;
-        if (result.page.beyondEnd) {
-          setPage(0);
-          return;
-        }
-        setter(result.results);
-        setMeta(result.page);
-      };
-
-    if (tab === "review") {
-      setQueue(null);
-      api.kycQueue(page).then(took(setQueue)).catch(fail);
-    } else if (tab === "countersign") {
-      setCountersign(null);
-      api.kycCountersignQueue(page).then(took(setCountersign)).catch(fail);
-    } else {
-      setVehicles(null);
-      api.pendingVehicles(page).then(took(setVehicles)).catch(fail);
-    }
-  }, [tab, page, urlReady, setPage]);
+  // `rows` is null exactly when nothing should be shown — loading, or failed.
+  const shown = rows === null ? null : data;
+  const queue = shown?.tab === "review" ? shown.results : null;
+  const countersign = shown?.tab === "countersign" ? shown.results : null;
+  const vehicles = shown?.tab === "vehicles" ? shown.results : null;
 
   const addNotice = useCallback((message: string) => {
     // Deduplicated: re-deciding the same document should not stack two
@@ -136,8 +136,6 @@ export default function KycPage() {
       current.includes(message) ? current : [...current, message],
     );
   }, []);
-
-  useEffect(load, [load]);
 
   return (
     <div className="space-y-6">

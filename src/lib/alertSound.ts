@@ -1,5 +1,7 @@
 "use client";
 
+import { writeStored } from "@/lib/clientValue";
+
 /**
  * Sound, for the one thing sound is good at.
  *
@@ -22,27 +24,39 @@
  * it has said as much as the platform lets them.
  */
 
-const ENABLED_KEY = "mioryde-alert-sound";
+/** Exported so `TopBar` can subscribe to it rather than read it once. */
+export const ENABLED_KEY = "mioryde-alert-sound";
+
+/** Whether a stored value means sound is on. Off unless it says otherwise. */
+export function parseSoundEnabled(stored: string | null): boolean {
+  return stored === "true";
+}
 
 /** How long after an operator's own action its sound is suppressed. */
 const OWN_ACTION_WINDOW_MS = 6000;
 
 export type AlertKind = "placed" | "cancelled" | "urgent";
 
+/**
+ * The preference, read on the spot.
+ *
+ * Still here for the non-React callers below, which run outside a render and
+ * cannot use a hook. `TopBar` subscribes through `useStoredValue` instead, so
+ * the switch it draws follows a change made in another tab.
+ */
 export function soundEnabled(): boolean {
   try {
-    return localStorage.getItem(ENABLED_KEY) === "true";
+    return parseSoundEnabled(localStorage.getItem(ENABLED_KEY));
   } catch {
     return false;
   }
 }
 
 export function setSoundEnabled(next: boolean): void {
-  try {
-    localStorage.setItem(ENABLED_KEY, String(next));
-  } catch {
-    // Not remembering is survivable; the control still works this session.
-  }
+  // Through the store, not straight to `localStorage`: the browser fires
+  // `storage` in every tab except the one that wrote, so a direct write would
+  // leave the window the operator is looking at showing the old state.
+  writeStored(ENABLED_KEY, String(next));
 }
 
 /**

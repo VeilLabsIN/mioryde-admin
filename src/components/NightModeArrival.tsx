@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTheme } from "./ThemeProvider";
 
 /**
@@ -41,31 +41,41 @@ export function NightModeArrival() {
   const { theme } = useTheme();
   const [playing, setPlaying] = useState(false);
 
-  // `undefined` until the first effect runs, which is how "already dark on
-  // arrival" is told apart from "just switched to dark".
-  const previous = useRef<string | undefined>(undefined);
+  /*
+   * The theme this component last rendered against.
+   *
+   * Held as state rather than a ref written in an effect, and compared during
+   * render, which is React's own answer to "do something when a prop changes":
+   * the veil is up in the same commit as the theme it is reacting to. The
+   * effect version decided one paint later, so for one frame the panel was
+   * dark with no veil over it — the exact frame this exists to cover.
+   *
+   * Seeded with the current theme, which is what makes arriving on a page that
+   * is *already* dark silent: on the first render there is nothing to compare
+   * against, so nothing has changed.
+   */
+  const [previous, setPrevious] = useState(theme);
+  if (theme !== previous) {
+    setPrevious(theme);
+    // Only ever reached from a render caused by a theme change, which the
+    // server's single render cannot be — so `window` is here.
+    if (
+      theme === "tokyo" &&
+      previous !== "tokyo" &&
+      !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    ) {
+      setPlaying(true);
+    }
+  }
 
   useEffect(() => {
-    const wasFirstRender = previous.current === undefined;
-    const from = previous.current;
-    previous.current = theme;
-
-    if (wasFirstRender) return;
-    if (theme !== "tokyo" || from === "tokyo") return;
-
-    if (
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-    ) {
-      return;
-    }
-
-    setPlaying(true);
+    if (!playing) return;
     // Matches the 2200ms animation in globals.css. A timer rather than
     // `animationend` because three elements animate and the last one to finish
     // is not guaranteed to be the one a listener is attached to.
     const timer = setTimeout(() => setPlaying(false), 2200);
     return () => clearTimeout(timer);
-  }, [theme]);
+  }, [playing]);
 
   if (!playing) return null;
 

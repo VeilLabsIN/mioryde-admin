@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Card,
   EmptyState,
@@ -12,11 +12,11 @@ import {
 } from "@/components/ui";
 import {
   type AdminOrder,
-  type PageMeta,
   api,
   formatMoney,
 } from "@/lib/api";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
+import { usePagedAsync } from "@/lib/useAsync";
 import { type Column, DataTable } from "@/components/DataTable";
 import { OrderDrawer } from "@/components/OrderDrawer";
 import { OrdersSummaryRail } from "@/components/OrdersSummaryRail";
@@ -168,16 +168,12 @@ function orderColumns(
 }
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<AdminOrder[] | null>(null);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
-
   // Filters, search and page live in the URL, so this view is linkable. The
   // overview's recent-delivery links point here with ?search=<code> and were
   // silently dropping the filter before this — see PATTERNS.md A3.
   const [page, setPage, pageReady] = useUrlPage();
   const [status, setStatus, statusReady] = useUrlParam("status");
   const [search, setSearch, searchReady] = useUrlParam("search");
-  const [error, setError] = useState<string | null>(null);
 
   // The URL is read in an effect after mount, so the first render holds
   // defaults. Fetching then would fire a request for the unfiltered list and
@@ -213,39 +209,30 @@ export default function OrdersPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Guards against out-of-order responses: a slow request for "98" must not
-  // overwrite results for the later, more specific "9876".
-  const requestId = useRef(0);
-
-  useEffect(() => {
-    if (!urlReady) return;
-
-    const id = ++requestId.current;
-    setOrders(null);
-    setError(null);
-
-    api
-      .orders({
+  // The request token guards against out-of-order responses: a slow request
+  // for "98" must not overwrite results for the later, more specific "9876".
+  const {
+    rows: orders,
+    meta,
+    error,
+  } = usePagedAsync(
+    async () => {
+      const res = await api.orders({
         ...(page ? { page } : {}),
         ...(status ? { status } : {}),
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
-      })
-      .then((res) => {
-        if (id !== requestId.current) return;
-        // A stale or typed page number past the end. Recover rather than show
-        // an empty table for a set that has rows in it.
-        if (res.page.beyondEnd) {
-          setPage(0);
-          return;
-        }
-        setOrders(res.results);
-        setMeta(res.page);
-      })
-      .catch((e: unknown) => {
-        if (id !== requestId.current) return;
-        setError(e instanceof Error ? e.message : "Could not load deliveries.");
       });
-  }, [status, debouncedSearch, page, urlReady, setPage]);
+      // A stale or typed page number past the end. Recover rather than show an
+      // empty table for a set that has rows in it.
+      if (res.page.beyondEnd) {
+        setPage(0);
+        return null;
+      }
+      return res;
+    },
+    [status, debouncedSearch, page],
+    { enabled: urlReady, fallback: "Could not load deliveries." },
+  );
 
   // The open row's id *is* the drawer's open state. A separate boolean would be
   // a second thing to keep in step, and the pair disagreeing means either a

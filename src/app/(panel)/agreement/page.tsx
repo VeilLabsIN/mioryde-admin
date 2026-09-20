@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   Button,
   Card,
@@ -11,6 +11,7 @@ import {
   PageHeader,
 } from "@/components/ui";
 import { ApiError, type Agreement, api } from "@/lib/api";
+import { useAsync } from "@/lib/useAsync";
 
 /**
  * Publishing partner agreement terms.
@@ -30,9 +31,6 @@ import { ApiError, type Agreement, api } from "@/lib/api";
  * Owner-only, enforced by the API.
  */
 export default function AgreementPage() {
-  const [current, setCurrent] = useState<Agreement | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [result, setResult] = useState<{
     version: string;
@@ -44,38 +42,32 @@ export default function AgreementPage() {
   const [body, setBody] = useState("");
   const [confirm, setConfirm] = useState("");
 
-  const requestId = useRef(0);
-
-  const load = useCallback(() => {
-    const id = ++requestId.current;
-    setLoading(true);
-    setError(null);
-
-    api
-      .currentAgreement()
-      .then((agreement) => {
-        if (id === requestId.current) setCurrent(agreement);
-      })
-      .catch((caught: unknown) => {
-        if (id !== requestId.current) return;
+  const {
+    data: current,
+    error: loadError,
+    loading,
+    reload: load,
+  } = useAsync<Agreement>(
+    async () => {
+      try {
+        return await api.currentAgreement();
+      } catch (caught) {
         // A 404 means nothing has been published yet, which is a legitimate
-        // starting state rather than a failure.
-        if (caught instanceof ApiError && caught.status === 404) {
-          setCurrent(null);
-          return;
-        }
-        setError(
-          caught instanceof ApiError
-            ? caught.message
-            : "Could not load the current agreement.",
-        );
-      })
-      .finally(() => {
-        if (id === requestId.current) setLoading(false);
-      });
-  }, []);
+        // starting state rather than a failure — `null` is "nothing to show",
+        // which is exactly what this is.
+        if (caught instanceof ApiError && caught.status === 404) return null;
+        throw caught;
+      }
+    },
+    [],
+    { fallback: "Could not load the current agreement." },
+  );
 
-  useEffect(load, [load]);
+  // A refused publish is not a failed load, and the two used to overwrite each
+  // other: publishing reloads, and the reload cleared the message saying why
+  // the publish had been refused before the operator could read it.
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const error = loadError ?? publishError;
 
   // Typing the version number back is the confirmation. A checkbox is too easy
   // to tick past for something that cannot be undone.
@@ -91,7 +83,7 @@ export default function AgreementPage() {
 
   const publish = async () => {
     setPublishing(true);
-    setError(null);
+    setPublishError(null);
     try {
       const published = await api.publishAgreement({
         version: version.trim(),
@@ -108,7 +100,7 @@ export default function AgreementPage() {
       setConfirm("");
       load();
     } catch (caught) {
-      setError(
+      setPublishError(
         caught instanceof ApiError ? caught.message : "Could not publish.",
       );
     } finally {

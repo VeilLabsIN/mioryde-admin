@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Button,
   Card,
@@ -18,6 +18,7 @@ import {
   ApiError,
   api,
 } from "@/lib/api";
+import { useAsync } from "@/lib/useAsync";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { type Column, DataTable } from "@/components/DataTable";
 
@@ -70,8 +71,15 @@ const ADMIN_COLUMNS: readonly Column<AdminAccount>[] = [
 ];
 
 export default function AccessPage() {
-  const [admins, setAdmins] = useState<AdminAccount[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: admins,
+    error,
+    reload,
+  } = useAsync<AdminAccount[]>(
+    async () => (await api.adminUsers()).results,
+    [],
+    { fallback: "Could not load admins." },
+  );
   const [creating, setCreating] = useState(false);
 
   /**
@@ -84,20 +92,6 @@ export default function AccessPage() {
     password: string;
     reason: "created" | "reset";
   } | null>(null);
-
-  async function load() {
-    try {
-      const res = await api.adminUsers();
-      setAdmins(res.results);
-      setError(null);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Could not load admins.");
-    }
-  }
-
-  useEffect(() => {
-    void load();
-  }, []);
 
   const owners = (admins ?? []).filter((a) => a.role === "owner" && a.isActive);
 
@@ -127,7 +121,7 @@ export default function AccessPage() {
           onCreated={(result) => {
             setCreating(false);
             setIssued({ ...result, reason: "created" });
-            void load();
+            reload();
           }}
         />
       )}
@@ -157,7 +151,7 @@ export default function AccessPage() {
                 isLastOwner={
                   admin.role === "owner" && admin.isActive && owners.length <= 1
                 }
-                onChanged={load}
+                onChanged={reload}
                 onReset={(result) => setIssued({ ...result, reason: "reset" })}
               />
             )}

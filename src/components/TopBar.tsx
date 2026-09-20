@@ -9,7 +9,13 @@ import { Avatar, BrandMark } from "./BrandMark";
 import { type AdminIdentity, api, auth } from "@/lib/api";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { useFullscreen } from "@/lib/useFullscreen";
-import { playAlert, setSoundEnabled, soundEnabled } from "@/lib/alertSound";
+import {
+  ENABLED_KEY as SOUND_KEY,
+  parseSoundEnabled,
+  playAlert,
+  setSoundEnabled,
+} from "@/lib/alertSound";
+import { useStoredValue } from "@/lib/clientValue";
 
 /**
  * The bar across the top of every page.
@@ -41,11 +47,10 @@ export function TopBar({
     toggle: toggleFullscreen,
   } = useFullscreen();
 
-  // Read in an effect, not at render: `localStorage` does not exist on the
-  // server, and a value that differs between the server HTML and the first
-  // client render is a hydration mismatch.
-  const [sound, setSound] = useState(false);
-  useEffect(() => setSound(soundEnabled()), []);
+  // Off on the server, since there is no `localStorage` there — stated
+  // through the store rather than reached by rendering once and correcting.
+  // Subscribed, so a second window of the panel shows the same switch.
+  const [sound] = useStoredValue(SOUND_KEY, parseSoundEnabled, false);
 
   // `?` is the shortcut people try first, but it is also a character — so it
   // only counts when nothing is being typed into.
@@ -151,7 +156,9 @@ export function TopBar({
           type="button"
           onClick={() => {
             const next = !sound;
-            setSound(next);
+            // One write. `setSoundEnabled` goes through the store, which is
+            // what re-renders this button — there is no separate React state
+            // to keep in step with it any more.
             setSoundEnabled(next);
             // A short confirmation, played only when switching on, and forced
             // past the enabled check because the preference has only just been

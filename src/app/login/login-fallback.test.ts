@@ -18,6 +18,14 @@ import { describe, expect, it } from "vitest";
  * security check…" for as long as anyone is willing to wait, with nothing on
  * the page saying what to do. A lockout with a polite caption.
  *
+ * ## What the operator is actually given
+ *
+ * Cloudflare's own widget, forced visible. The wrapper renders
+ * `interaction-only` normally — invisible unless Cloudflare wants something —
+ * and the form switches it to `always` the moment the silent check stalls, so
+ * a real "Verify you are human" box appears and ticking it produces a real
+ * token. A lookalike checkbox of our own would confirm nothing to the server.
+ *
  * ## Why signing in anyway is safe
  *
  * The server holds `TURNSTILE_SECRET_KEY` and is the authority on whether a
@@ -77,23 +85,50 @@ describe("a stalled security check hands over to the operator", () => {
     );
   });
 
-  it("and the operator is given something to click", () => {
-    expect(pageCode).toContain("runCheckAgain");
-    expect(page).toContain("Run it again");
-    expect(page).toContain("did not finish on its own");
+  it("and the operator is given a real box to tick", () => {
+    // Cloudflare's own widget, forced visible — not a checkbox of ours, which
+    // would confirm nothing to the server. This is the whole handover.
+    expect(pageCode).toContain(
+      'appearance={checkStalled ? "always" : "interaction-only"}',
+    );
+    expect(page).toContain("Confirm you are");
+    expect(page).toContain("not a bot");
   });
 
-  it("clicking it asks for a genuinely fresh challenge", () => {
+  it("and a way to ask for another one if that box is itself broken", () => {
+    expect(pageCode).toContain("runCheckAgain");
+    expect(pageCode).toContain("onClick={runCheckAgain}");
+  });
+
+  it("asking again gets a genuinely fresh challenge", () => {
     // A Turnstile token is single-use; retrying without a reset re-sends a
     // token Cloudflare has already seen.
     const fn = pageCode.slice(pageCode.indexOf("function runCheckAgain"));
     expect(fn.slice(0, 300)).toContain("turnstile.current?.reset()");
-    expect(fn.slice(0, 300)).toContain("setCheckStalled(false)");
   });
 
-  it("a token arriving retires the offer", () => {
-    // Otherwise the retry button sits next to a check that is working.
-    expect(pageCode).toContain("if (token) setCheckStalled(false)");
+  it("asking again stays in the visible mode", () => {
+    // Clearing the stall here would drop the widget back to the silent mode
+    // that has just failed, putting the operator on the same eight-second
+    // wait with nothing to do. The stall is only cleared by a token arriving.
+    const fn = pageCode.slice(pageCode.indexOf("function runCheckAgain"));
+    expect(fn.slice(0, 300)).not.toContain("setCheckStalled(false)");
+  });
+
+  it("a token arriving retires the instruction", () => {
+    // Otherwise "confirm you are not a bot" sits next to a check that has
+    // already worked. Driven by the token rather than by clearing the stall,
+    // which would tear the widget down at the moment it succeeded.
+    expect(pageCode).toContain(
+      "{challengeRequired && !turnstileToken && checkStalled ? (",
+    );
+  });
+
+  it("the escalation only ever goes one way", () => {
+    // `setCheckStalled(false)` anywhere would flip `appearance` back to the
+    // silent mode that has already failed once — and would do it at the exact
+    // moment the operator solved the visible box.
+    expect(pageCode).not.toContain("setCheckStalled(false)");
   });
 });
 
@@ -113,7 +148,15 @@ describe("a challenge that errors does not wait out the timer", () => {
     expect(widgetCode).toContain("onErrorRef");
   });
 
-  it("the form goes straight to the manual offer on an error", () => {
+  it("the form goes straight to the visible box on an error", () => {
     expect(pageCode).toContain("onError={() => setCheckStalled(true)}");
+  });
+
+  it("the widget can actually be shown, and re-renders when that changes", () => {
+    // Cloudflare has no way to change the mode of a widget that already
+    // exists, so `appearance` has to be a dependency of the effect that
+    // renders it — the one dependency it is allowed to have.
+    expect(widgetCode).toContain("appearance");
+    expect(widgetCode).toMatch(/\}, \[appearance\]\);/);
   });
 });

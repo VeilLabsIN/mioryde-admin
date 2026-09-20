@@ -1,7 +1,7 @@
 "use client";
 import { RevealPhone } from "@/components/RevealPhone";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { RiderCard } from "@/components/RiderCard";
 import { RiderDrawer } from "@/components/RiderDrawer";
 import {
@@ -19,8 +19,9 @@ import {
   SkeletonRows,
   PageHeader,
 } from "@/components/ui";
-import { type AdminRider, type PageMeta, ApiError, api } from "@/lib/api";
+import { type AdminRider, ApiError, api } from "@/lib/api";
 import { useUrlPage, useUrlParam } from "@/lib/useUrlState";
+import { usePagedAsync } from "@/lib/useAsync";
 
 // Labels, colours and the filter list all moved to `lib/riderStatus.ts`. Three
 // copies of the same map lived in this page, `RiderCard` and nowhere shared —
@@ -46,10 +47,7 @@ export default function RidersPage() {
    * list they did not choose.
    */
   const [openRiderId, setOpenRiderId] = useState<string | null>(null);
-  const [riders, setRiders] = useState<AdminRider[] | null>(null);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
   const [page, setPage, pageReady] = useUrlPage();
-  const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [view, setView] = useListView("riders", "table");
 
@@ -64,44 +62,50 @@ export default function RidersPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const requestId = useRef(0);
-
-  const load = useCallback(() => {
-    if (!urlReady) return;
-
-    const id = ++requestId.current;
-    setRiders(null);
-    setError(null);
-    api
-      .riders({
+  const {
+    rows: riders,
+    meta,
+    error: loadError,
+    reload: load,
+  } = usePagedAsync(
+    async () => {
+      const res = await api.riders({
         ...(page ? { page } : {}),
         ...(status ? { status } : {}),
         ...(debounced ? { search: debounced } : {}),
-      })
-      .then((res) => {
-        if (id !== requestId.current) return;
-        if (res.page.beyondEnd) {
-          setPage(0);
-          return;
-        }
-        setRiders(res.results);
-        setMeta(res.page);
-      })
-      .catch((e: unknown) => {
-        if (id !== requestId.current) return;
-        setError(e instanceof Error ? e.message : "Could not load partners.");
       });
-  }, [status, debounced, page, urlReady, setPage]);
+      // Past the end. The page below is the answer, not an empty queue.
+      if (res.page.beyondEnd) {
+        setPage(0);
+        return null;
+      }
+      return res;
+    },
+    [status, debounced, page],
+    { enabled: urlReady, fallback: "Could not load partners." },
+  );
 
-  useEffect(load, [load]);
+  /*
+   * A refused action is not a failed load.
+   *
+   * They shared one `error` before, which meant approving a partner and having
+   * it rejected wrote a message the next successful load silently cleared —
+   * and a load failure could be cleared by an approval that had nothing to do
+   * with it. They are separate now, and only one line is ever shown, the load
+   * failure first: if the list itself is not there, what happened to one row
+   * in it is not the operator's problem yet.
+   */
+  const [actionError, setActionError] = useState<string | null>(null);
+  const error = loadError ?? actionError;
 
   async function review(rider: AdminRider, action: string) {
     setBusyId(rider.id);
     try {
       await api.reviewRider(rider.id, action);
+      setActionError(null);
       load();
     } catch (e) {
-      setError(
+      setActionError(
         e instanceof ApiError ? e.message : "That action could not be applied.",
       );
     } finally {

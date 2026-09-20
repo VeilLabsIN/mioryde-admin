@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   Button,
   Card,
@@ -15,12 +15,12 @@ import {
 import {
   ApiError,
   type OutstandingCash,
-  type PageMeta,
   api,
   formatMoney,
 } from "@/lib/api";
 import { ExportButton } from "@/components/ExportButton";
 import { useUrlPage } from "@/lib/useUrlState";
+import { usePagedAsync } from "@/lib/useAsync";
 
 const METHODS = [
   { value: "bank_transfer", label: "Bank transfer" },
@@ -48,43 +48,26 @@ const METHODS = [
  * our money", not "find me this partner".
  */
 export default function CollectionsPage() {
-  const [rows, setRows] = useState<OutstandingCash[] | null>(null);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
   const [page, setPage, urlReady] = useUrlPage();
-  const [error, setError] = useState<string | null>(null);
 
-  // Guards against a slow response landing after a newer one.
-  const requestId = useRef(0);
-
-  const load = useCallback(() => {
-    if (!urlReady) return;
-
-    const id = ++requestId.current;
-    setError(null);
-    setRows(null);
-
-    api
-      .outstandingCash(page)
-      .then((result) => {
-        if (id !== requestId.current) return;
-        if (result.page.beyondEnd) {
-          setPage(0);
-          return;
-        }
-        setRows(result?.results ?? []);
-        setMeta(result.page);
-      })
-      .catch((caught: unknown) => {
-        if (id !== requestId.current) return;
-        setError(
-          caught instanceof ApiError
-            ? caught.message
-            : "Could not load outstanding cash.",
-        );
-      });
-  }, [page, urlReady, setPage]);
-
-  useEffect(load, [load]);
+  const {
+    rows,
+    meta,
+    error,
+    reload: load,
+  } = usePagedAsync(
+    async () => {
+      const result = await api.outstandingCash(page);
+      // Past the end. The page below is the answer, not an empty list.
+      if (result.page.beyondEnd) {
+        setPage(0);
+        return null;
+      }
+      return result;
+    },
+    [page],
+    { enabled: urlReady, fallback: "Could not load outstanding cash." },
+  );
 
   const totalHeld =
     rows?.reduce((sum, row) => sum + row.held.minor, 0) ?? 0;

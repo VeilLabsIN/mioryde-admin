@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useStoredValue, writeStored } from "@/lib/clientValue";
 
 /**
  * The panel's language preference.
@@ -32,11 +32,16 @@ export type PanelLocale = "en-IN" | "hi-IN";
 
 const KEY = "mioryde-panel-locale";
 
+/** Which locale a stored value means. English unless it says Hindi. */
+function parsePanelLocale(stored: string | null): PanelLocale {
+  return stored === "hi-IN" ? "hi-IN" : "en-IN";
+}
+
 /** Read once, synchronously, so the first render is not the wrong locale. */
 export function readPanelLocale(): PanelLocale {
   if (typeof window === "undefined") return "en-IN";
   try {
-    return window.localStorage.getItem(KEY) === "hi-IN" ? "hi-IN" : "en-IN";
+    return parsePanelLocale(window.localStorage.getItem(KEY));
   } catch {
     // Storage can throw outright in a locked-down browser profile. English is
     // the safe answer and the panel still works.
@@ -45,20 +50,14 @@ export function readPanelLocale(): PanelLocale {
 }
 
 export function LanguagePreference() {
-  // Starts on English and corrects after mount rather than reading storage
-  // during render: the server render has no localStorage, and a mismatch
-  // between it and the first client render is a hydration error.
-  const [locale, setLocale] = useState<PanelLocale>("en-IN");
-
-  useEffect(() => setLocale(readPanelLocale()), []);
+  // English on the server, which has no `localStorage` — stated as a server
+  // snapshot rather than reached by rendering once and correcting. A mismatch
+  // between the server HTML and the first client render is a hydration error;
+  // this says which value the server used instead of arriving at it.
+  const [locale] = useStoredValue(KEY, parsePanelLocale, "en-IN");
 
   function choose(next: PanelLocale) {
-    setLocale(next);
-    try {
-      window.localStorage.setItem(KEY, next);
-    } catch {
-      // The choice still applies to this session.
-    }
+    writeStored(KEY, next);
     // A full reload rather than a context broadcast. Formatting happens in
     // dozens of leaf components and a few module-level helpers that hold no
     // React state; re-reading them all correctly is more machinery than a
