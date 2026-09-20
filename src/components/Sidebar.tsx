@@ -155,19 +155,29 @@ export function Sidebar({
    */
   const narrowViewport = useMediaQuery(NARROW_BELOW, false);
 
-  const parseCollapsed = useCallback(
-    (stored: string | null): boolean =>
-      stored === "true" || stored === "false"
-        ? stored === "true"
-        : narrowViewport,
-    [narrowViewport],
+  /**
+   * `storeSnapshot` (in `clientValue.ts`) caches the parsed value per key,
+   * keyed on the raw stored string alone — by design, so every reader of a
+   * key shares one answer. A `parse` that also closes over `narrowViewport`
+   * broke that: resizing across `NARROW_BELOW` produces a new closure but,
+   * with the stored string unchanged, the cache returns the *previous*
+   * closure's answer, and the rail silently stops following the viewport.
+   * Keeping `parse` pure in `stored` alone and folding the viewport in here
+   * during render sidesteps the cache instead of fighting it.
+   */
+  const parseStoredOverride = useCallback(
+    (stored: string | null): boolean | null =>
+      stored === "true" || stored === "false" ? stored === "true" : null,
+    [],
   );
 
-  const [collapsed, writeCollapsed] = useStoredValue(
+  const [storedOverride, writeCollapsed] = useStoredValue(
     COLLAPSED_KEY,
-    parseCollapsed,
-    false,
+    parseStoredOverride,
+    null,
   );
+
+  const collapsed = storedOverride ?? narrowViewport;
 
   /**
    * Whether the pointer is over a collapsed rail.
