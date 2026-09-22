@@ -532,10 +532,9 @@ export const api = {
    * poisoning the record the endpoint exists to create.
    */
   viewKycDocument: (id: string) =>
-    request<{ url: string; expiresInSeconds: number }>(
-      `/admin/kyc/documents/${id}/view`,
-      { method: "POST" },
-    ),
+    request<KycDocumentView>(`/admin/kyc/documents/${id}/view`, {
+      method: "POST",
+    }),
 
   /**
    * `expiresAt` is the date **this reviewer read off the document**, sent as a
@@ -850,10 +849,49 @@ export const api = {
     }),
 };
 
+/**
+ * One document, opened.
+ *
+ * ## `renderable` is the field that matters
+ *
+ * Originals are served with `Content-Disposition: attachment`, deliberately —
+ * a browser must never hand a partner's uploaded bytes to its PDF engine. For
+ * a long time this screen ignored that and put the URL in an `<img>` anyway,
+ * which a browser will not render for an `attachment` response. The preview
+ * therefore failed for *every* document, and because Approve was gated on the
+ * URL having arrived rather than on anything appearing, it unlocked regardless
+ * (A1, A2).
+ *
+ * The server now renders documents it can — decoded, re-encoded to one known
+ * format, metadata stripped — and serves those inline. `renderable` says which
+ * of the two `url` is: something to display, or something that downloads.
+ */
+export interface KycDocumentView {
+  /** The preview when `renderable`; the original, as a download, when not. */
+  url: string;
+  /** Triage-sized version of the same render. Null when there is no rendition. */
+  thumbnailUrl: string | null;
+  /** Whether `url` may be put in an `<img>`. */
+  renderable: boolean;
+  contentType: string;
+  /** The real TTL, from the server. It used to be hardcoded as prose here. */
+  expiresInSeconds: number;
+  /** Shown to the reviewer when a document could not be rendered. */
+  renditionError: string | null;
+}
+
 export interface KycQueueItem {
   id: string;
   kind: string;
   label: string;
+  /**
+   * Which face this is: `single`, `front` or `back`.
+   *
+   * Returned by the server since 0052 and dropped here until now, which is why
+   * the queue showed two identically-named rows for every licence and Aadhaar
+   * and a reviewer had to open both to tell them apart (A6).
+   */
+  side: string;
   status: string;
   riderId: string;
   riderName: string;
@@ -890,6 +928,8 @@ export interface CountersignItem {
   id: string;
   kind: string;
   label: string;
+  /** As on [KycQueueItem]. A countersigner sees two rows per licence too. */
+  side: string;
   riderId: string;
   riderName: string;
   expiryRequired: boolean;

@@ -14,6 +14,7 @@ import {
 import {
   ApiError,
   type CountersignItem,
+  type KycDocumentView,
   type KycQueueItem,
   type PendingVehicle,
   api,
@@ -36,6 +37,23 @@ const REJECT_CODES = [
   { value: "name_mismatch", label: "Name does not match" },
   { value: "suspected_forgery", label: "Suspected forgery" },
 ] as const;
+
+/**
+ * The document's name, including which face of it this is.
+ *
+ * A licence and an Aadhaar are each uploaded as two objects, and the server
+ * has said which is which since 0052 — the panel simply never read the field,
+ * so the queue showed two rows reading "Driving licence" for the same partner
+ * and a reviewer had to open both to tell them apart (A6).
+ *
+ * `single` adds nothing: most kinds have one face, and "Insurance — single"
+ * is noise on every row of the queue to no benefit.
+ */
+function documentLabel(label: string, side: string): string {
+  if (side === "front") return `${label} — front`;
+  if (side === "back") return `${label} — back`;
+  return label;
+}
 
 type Tab = "review" | "countersign" | "vehicles";
 
@@ -239,7 +257,7 @@ function ReviewQueue({
         <DocumentCard
           key={item.id}
           documentId={item.id}
-          label={item.label}
+          label={documentLabel(item.label, item.side)}
           riderName={item.riderName}
           meta={`Uploaded ${formatWhen(item.uploadedAt)}`}
           expiryRequired={item.expiryRequired}
@@ -277,7 +295,7 @@ function CountersignQueue({
         <DocumentCard
           key={item.id}
           documentId={item.id}
-          label={item.label}
+          label={documentLabel(item.label, item.side)}
           riderName={item.riderName}
           meta={`First approved by ${item.firstReviewerName ?? "a colleague"} ${formatWhen(item.firstReviewedAt)}`}
           expiryRequired={item.expiryRequired}
@@ -318,7 +336,18 @@ function DocumentCard({
   onNotice: (message: string) => void;
   mode: "review" | "countersign";
 }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const [view, setView] = useState<KycDocumentView | null>(null);
+  /**
+   * Whether the preview has actually appeared on screen.
+   *
+   * **Not** the same question as "did the request return", which is what this
+   * screen used to gate Approve on. The two came apart because every document
+   * URL is served as an `attachment`, which a browser will not render in an
+   * `<img>` — so the fetch succeeded, nothing was displayed, and Approve
+   * unlocked anyway (A2). Set from the image's own `onLoad`, so it cannot be
+   * true unless pixels reached the reviewer.
+   */
+  const [rendered, setRendered] = useState(false);
   const [opening, setOpening] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [code, setCode] = useState<string>(REJECT_CODES[0].value);
@@ -330,9 +359,20 @@ function DocumentCard({
   const open = async () => {
     setOpening(true);
     setProblem(null);
+    // A re-open is a new link and a new render; the old one may have expired.
+    setRendered(false);
     try {
       const result = await api.viewKycDocument(documentId);
-      setUrl(result?.url ?? null);
+      setView(result ?? null);
+      if (result && !result.renderable) {
+        // Nothing will render, so nothing will set `rendered`. Say why, rather
+        // than leaving the reviewer with a disabled Approve and no reason.
+        setProblem(
+          result.renditionError ??
+            "This document is a PDF, so it downloads rather than opening here. " +
+              "Open the downloaded file, then confirm below.",
+        );
+      }
     } catch (caught) {
       setProblem(
         caught instanceof ApiError ? caught.message : "Could not open it.",
@@ -412,23 +452,63 @@ function DocumentCard({
           <p className="text-fg-faint text-sm">{meta}</p>
         </div>
         <GhostButton onClick={open} disabled={opening}>
-          {opening ? "Opening…" : url ? "Reopen" : "View document"}
+          {opening ? "Opening…" : view ? "Reopen" : "View document"}
         </GhostButton>
       </div>
 
-      {url ? (
+      {view?.renderable ? (
         <div className="mt-4">
           {/* eslint-disable-next-line @next/next/no-img-element -- a signed,
               short-lived URL on the storage provider's host; next/image would
               try to proxy and optimise it, which fails once it expires. */}
           <img
-            src={url}
+            src={view.url}
             alt={`${label} for ${riderName}`}
             className="border-edge max-h-[28rem] w-auto rounded border"
+            // The gate. Approve cannot unlock until this fires, and it fires
+            // only when the browser has actually painted the document.
+            onLoad={() => setRendered(true)}
+            onError={() => {
+              setRendered(false);
+              setProblem(
+                "The preview did not load. The link may have expired — reopen it.",
+              );
+            }}
           />
           <p className="text-fg-faint mt-2 text-xs">
-            This link expires in about two minutes.
+            {/* The server's own number, not a sentence that happened to match
+                it. This was hardcoded as "about two minutes" against a field
+                the server never sent (A4). */}
+            This link expires in {Math.round(view.expiresInSeconds / 60)} minute
+            {view.expiresInSeconds >= 120 ? "s" : ""}.
           </p>
+        </div>
+      ) : view ? (
+        <div className="mt-4">
+          {/* No rendition: a PDF, or bytes that would not decode. The original
+              is still reachable and still downloads — the difference is that
+              the reviewer is told so, instead of being shown a broken image
+              and left to guess (A1). */}
+          <a
+            href={view.url}
+            className="border-edge inline-flex items-center gap-2 rounded border px-3 py-2 text-sm"
+          >
+            Download to read it
+          </a>
+          <label className="mt-3 flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={rendered}
+              onChange={(event) => setRendered(event.target.checked)}
+              className="mt-0.5"
+            />
+            {/* A weaker gate than the rendered one, and deliberately so: the
+                panel cannot observe a file opened outside the browser, so for
+                these it has to take the reviewer's word. Recorded here so
+                nobody mistakes it for the same assurance. Removed once PDFs
+                rasterise server-side (A23). */}
+            <span>I have opened this file and read it.</span>
+          </label>
         </div>
       ) : null}
 
@@ -466,7 +546,7 @@ function DocumentCard({
         </div>
       ) : (
         <div className="mt-4 space-y-3">
-          {expiryRequired && url ? (
+          {expiryRequired && rendered ? (
             <div>
               <label
                 htmlFor={`expiry-${documentId}`}
@@ -496,19 +576,22 @@ function DocumentCard({
           <div className="flex gap-2">
             <Button
               onClick={() => decide("approve")}
-              disabled={busy || !url || (expiryRequired && !expiry)}
+              disabled={busy || !rendered || (expiryRequired && !expiry)}
             >
               {mode === "countersign" ? "Countersign" : "Approve"}
             </Button>
             <GhostButton onClick={() => setRejecting(true)} disabled={busy}>
               Reject
             </GhostButton>
-            {!url ? (
+            {!rendered ? (
               // Approving something you have not looked at is the failure this
               // whole screen exists to prevent, so the button stays disabled
-              // until the document has actually been opened.
+              // until the document has actually been *rendered* — not merely
+              // requested, which is all this used to check (A2).
               <span className="text-fg-faint self-center text-xs">
-                Open the document before deciding
+                {view
+                  ? "Confirm you have read it before deciding"
+                  : "Open the document before deciding"}
               </span>
             ) : expiryRequired && !expiry ? (
               <span className="text-fg-faint self-center text-xs">
