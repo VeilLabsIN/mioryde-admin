@@ -518,7 +518,7 @@ export const api = {
   // ── KYC ────────────────────────────────────────────────────────────────────
 
   kycQueue: (page = 0) =>
-    request<Paged<KycQueueItem>>(`/admin/kyc/queue?page=${page}`),
+    request<Paged<KycPartnerGroup>>(`/admin/kyc/queue?page=${page}`),
 
   /** Documents a first reviewer approved, waiting on a second (§4.10). */
   kycCountersignQueue: (page = 0) =>
@@ -893,9 +893,6 @@ export interface KycQueueItem {
    */
   side: string;
   status: string;
-  riderId: string;
-  riderName: string;
-  riderStage: string;
   uploadedAt: string;
   /**
    * Whether this kind lapses, and therefore needs a date read off the document.
@@ -907,6 +904,33 @@ export interface KycQueueItem {
    * gets confirmed; an empty one gets read.
    */
   expiryRequired: boolean;
+}
+
+/**
+ * One partner and everything of theirs that is waiting.
+ *
+ * The queue pages by partner now, not by document (A5). A partner is activated
+ * only when all of their documents pass, so a reviewer who finishes a document
+ * has finished nothing — and paging by document split a partner across a page
+ * boundary, which is how one licence's front and back were reviewed by two
+ * different people half an hour apart.
+ *
+ * Note what is absent: any "N of M complete" total. How many documents a
+ * partner owes depends on how many vehicles they have registered, so a fixed
+ * denominator would be wrong for everyone with two vans. The counts here are
+ * the ones that are true without knowing that.
+ */
+export interface KycPartnerGroup {
+  riderId: string;
+  riderName: string;
+  riderStage: string;
+  /** Drives the queue order: how long this partner has actually been waiting. */
+  oldestUploadedAt: string;
+  /** Fully approved, both signatures where the two-person rule asks for two. */
+  approvedCount: number;
+  /** Approved once, waiting on a different admin. Not this reviewer's job. */
+  awaitingSecondCount: number;
+  documents: KycQueueItem[];
 }
 
 /**
