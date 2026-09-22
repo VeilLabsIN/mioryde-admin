@@ -2,34 +2,55 @@
 
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { leafletLayer } from "protomaps-leaflet";
 import { useEffect, useRef } from "react";
 import { useTheme } from "./ThemeProvider";
 import { useMediaQuery } from "@/lib/clientValue";
 import type { LiveMapSnapshot, MapOrder, RiderMapStatus } from "@/lib/api";
+import {
+  MAX_ZOOM,
+  MIN_ZOOM,
+  OSM_ATTRIBUTION,
+  PROTOMAPS_ATTRIBUTION,
+  SERVICE_BOUNDS,
+  SHARED_LAYER_OPTIONS,
+  archiveUrl,
+  isArchive,
+} from "@/lib/basemap";
 
 /**
  * The map itself.
  *
- * ## Why Leaflet, and why raster tiles
+ * ## Why Leaflet
  *
  * Not Google Maps: that needs an API key in the browser, and a key in a
  * browser is public by definition — after a week spent making sure no
  * credential ships in this bundle, adding one back for a basemap would be an
- * odd trade. Not MapLibre either: vector rendering wants WebGL and about eight
- * hundred kilobytes, and this has to work on whatever machine is in the
- * dispatch office.
+ * odd trade. Not MapLibre either: vector rendering *through MapLibre* wants
+ * WebGL and about eight hundred kilobytes, and this has to work on whatever
+ * machine is in the dispatch office.
  *
- * Leaflet with raster tiles is a hundred and fifty kilobytes, needs no key,
- * and draws markers and lines — which is the entire requirement.
+ * Leaflet is a hundred and fifty kilobytes, needs no key, and draws markers
+ * and lines — which is the entire requirement.
  *
  * ## The tile source is configuration, not a constant
  *
- * `NEXT_PUBLIC_MAP_TILES_URL` overrides the default. It has to be overridable
- * because the default is OpenStreetMap's public tile server, whose usage
- * policy does not permit heavy commercial traffic. It is right for development
- * and wrong for a dispatch desk refreshing all day; production needs a paid
- * provider or self-hosted tiles. Attribution is rendered either way, because
- * that is a licence condition rather than a courtesy.
+ * `NEXT_PUBLIC_MAP_TILES_URL` selects the basemap, and it takes two forms:
+ *
+ *   - a `{z}/{x}/{y}` **raster** endpoint, billed per tile; or
+ *   - `pmtiles://<url>`, one **self-hosted vector archive** read by HTTP range
+ *     requests, with no per-tile meter at all.
+ *
+ * It has to be overridable because the default is OpenStreetMap's public tile
+ * server, whose usage policy does not permit heavy commercial traffic. That is
+ * right for development and wrong for a dispatch desk refreshing all day.
+ *
+ * The vector path does not reopen the MapLibre question: `protomaps-leaflet`
+ * paints into the **Canvas 2D** context Leaflet already uses, so there is no
+ * WebGL requirement and no second map engine — see `createBasemap`.
+ *
+ * Attribution is rendered on every path, because that is a licence condition
+ * rather than a courtesy.
  *
  * ## Why markers are updated in place
  *
@@ -56,8 +77,7 @@ const LIGHT_TILES =
  * surrounded by an interface chosen to be easy on the eyes at night, which
  * rather defeats the point of having the theme.
  */
-const DARK_TILES =
-  process.env["NEXT_PUBLIC_MAP_TILES_URL_DARK"] ?? LIGHT_TILES;
+const DARK_TILES = process.env["NEXT_PUBLIC_MAP_TILES_URL_DARK"] ?? LIGHT_TILES;
 
 /**
  * Whether the panel is currently dark.
@@ -101,6 +121,23 @@ function useIsDark(): boolean {
  * One request per map load, for a tile the browser was about to fetch anyway.
  */
 async function probeTiles(template: string): Promise<boolean> {
+  // A self-hosted archive has no key to reject and no per-tile endpoint to
+  // probe. What can still be wrong is the archive: a bucket that 403s, a path
+  // that 404s, or a host that does not honour range requests — in which case
+  // the layer silently renders nothing. Asking for the first bytes answers all
+  // three, and is the same request the reader makes anyway.
+  if (isArchive(template)) {
+    try {
+      const response = await fetch(archiveUrl(template), {
+        headers: { Range: "bytes=0-15" },
+        cache: "no-store",
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
   // A real tile over Ludhiana at the map's default zoom, so this is a request
   // the basemap would have made regardless.
   const url = template
@@ -120,7 +157,42 @@ async function probeTiles(template: string): Promise<boolean> {
 }
 
 /** Ludhiana. Where the business is, and the fallback when nothing is on screen. */
-const HOME: [number, number] = [30.9010, 75.8573];
+const HOME: [number, number] = [30.901, 75.8573];
+
+/**
+ * The basemap layer, of whichever kind the configuration asks for.
+ *
+ * ## Why vector tiles do not contradict the note at the top of this file
+ *
+ * That note rejects MapLibre, and still does: WebGL and eight hundred
+ * kilobytes is the wrong trade for a dispatch office machine. `leafletLayer`
+ * is a different thing — it decodes vector tiles and paints them with the
+ * **Canvas 2D** context Leaflet is already using, so there is no WebGL
+ * requirement and no second map engine. What it buys is the reason to self-
+ * host at all: one archive for the whole state instead of a per-tile meter.
+ *
+ * It also finally makes the night basemap real. The raster path can only swap
+ * one image URL for another, so a dark map needs a second provider style that
+ * somebody has to buy and configure; here the flavour is a parameter, and the
+ * same archive renders light or dark.
+ */
+function createBasemap(isDark: boolean): L.GridLayer {
+  const url = isDark ? DARK_TILES : LIGHT_TILES;
+
+  if (isArchive(url)) {
+    return leafletLayer({
+      ...SHARED_LAYER_OPTIONS,
+      url: archiveUrl(url),
+      flavor: isDark ? "dark" : "light",
+      attribution: PROTOMAPS_ATTRIBUTION,
+    }) as unknown as L.GridLayer;
+  }
+
+  return L.tileLayer(url, {
+    ...SHARED_LAYER_OPTIONS,
+    attribution: OSM_ATTRIBUTION,
+  });
+}
 
 const STATUS_COLOR: Record<RiderMapStatus, string> = {
   delivering: "var(--accent-alt)",
@@ -156,7 +228,7 @@ export function LiveMapCanvas({
   const isDark = useIsDark();
   const host = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
-  const tiles = useRef<L.TileLayer | null>(null);
+  const tiles = useRef<L.GridLayer | null>(null);
 
   // Layers are kept across polls so Leaflet can animate between positions.
   const riderMarkers = useRef(new Map<string, L.Marker>());
@@ -170,6 +242,14 @@ export function LiveMapCanvas({
     const instance = L.map(host.current, {
       center: HOME,
       zoom: 12,
+      minZoom: MIN_ZOOM,
+      maxZoom: MAX_ZOOM,
+      maxBounds: SERVICE_BOUNDS,
+      // Firm rather than elastic. The default lets a drag travel outside the
+      // bound and spring back, and every frame of that excursion requests the
+      // tiles it passes over — which is precisely the traffic the bound is
+      // here to stop.
+      maxBoundsViscosity: 1,
       // The default zoom control sits top-left, directly under the panel's
       // breadcrumb bar. Moved rather than removed — pinch-zoom is not a thing
       // on the desktops this runs on.
@@ -179,11 +259,11 @@ export function LiveMapCanvas({
 
     L.control.zoom({ position: "bottomright" }).addTo(instance);
 
-    tiles.current = L.tileLayer(LIGHT_TILES, {
-      maxZoom: 19,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(instance);
+    // `isDark` as it stands at mount. This effect deliberately does not depend
+    // on it — re-running would tear the map down and lose the dispatcher's pan
+    // and zoom every time the office lights change — so the theme effect below
+    // takes over from here.
+    tiles.current = createBasemap(isDark).addTo(instance);
 
     /**
      * Genuine network failures — a dead host, a 404 on a missing zoom level.
@@ -234,7 +314,25 @@ export function LiveMapCanvas({
   // instead of flashing empty grey underneath the night-mode transition playing
   // over the top of it.
   useEffect(() => {
-    tiles.current?.setUrl(isDark ? DARK_TILES : LIGHT_TILES);
+    const instance = map.current;
+    const current = tiles.current;
+    if (!instance || !current) return;
+
+    // A raster layer can be repointed in place, and that is worth keeping:
+    // Leaflet holds the painted tiles on screen until the replacements load,
+    // so the map cross-fades instead of flashing empty grey underneath the
+    // night-mode transition playing over the top of it.
+    if (!isArchive(LIGHT_TILES) && !isArchive(DARK_TILES)) {
+      (current as L.TileLayer).setUrl(isDark ? DARK_TILES : LIGHT_TILES);
+      return;
+    }
+
+    // A vector layer's flavour is fixed when it is built, so the layer itself
+    // has to be replaced. Added before the old one is removed, so there is
+    // never a frame with no basemap under the pins.
+    const next = createBasemap(isDark).addTo(instance);
+    tiles.current = next;
+    instance.removeLayer(current);
   }, [isDark]);
 
   // ── Ask whether the provider will serve us ───────────────────────────────
@@ -457,6 +555,7 @@ export function isFlagged(order: MapOrder, now: string): boolean {
   // Same thresholds the live board uses: an unassigned order is a dispatch
   // failure in five minutes, a trip in progress is usually just a long trip.
   if (order.status === "pending") return mins >= 5;
-  if (order.status === "assigned" || order.status === "arriving_pickup") return mins >= 15;
+  if (order.status === "assigned" || order.status === "arriving_pickup")
+    return mins >= 15;
   return mins >= 120;
 }
