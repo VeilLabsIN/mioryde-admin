@@ -665,6 +665,19 @@ export const api = {
 
   currentAgreement: () => request<Agreement>("/admin/agreement"),
 
+  /**
+   * What publishing would cost, asked for before it is paid.
+   *
+   * The publish response reports the same figure afterwards, which is the
+   * wrong moment for something that can never be undone.
+   */
+  agreementImpact: () =>
+    request<{
+      onlineNow: number;
+      activePartners: number;
+      currentVersion: string | null;
+    }>("/admin/agreement/impact"),
+
   publishAgreement: (body: {
     version: string;
     title: string;

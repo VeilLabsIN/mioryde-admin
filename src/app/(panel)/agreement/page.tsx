@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Button,
   Card,
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui";
 import { ApiError, type Agreement, api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
+import { diffLines, diffSummary } from "@/lib/textDiff";
 
 /**
  * Publishing partner agreement terms.
@@ -41,6 +42,18 @@ export default function AgreementPage() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState("");
+  /**
+   * Whether the operator has opened the comparison against the terms in force.
+   *
+   * A gate, not a record: Publish stays disabled until it has been opened, the
+   * same shape as the verification screen's "the document has to have
+   * rendered". Typing the version number was the only guard, and the version
+   * number is in a field four inches above the box asking for it — which makes
+   * it a transcription exercise rather than a decision. What is actually worth
+   * confirming is the text, and the text was nowhere on the page.
+   */
+  const [diffOpen, setDiffOpen] = useState(false);
 
   const {
     data: current,
@@ -63,6 +76,27 @@ export default function AgreementPage() {
     { fallback: "Could not load the current agreement." },
   );
 
+  /*
+   * Who is working right now, which is who this would stop.
+   *
+   * Its own request rather than a field on the agreement, so it can be
+   * refreshed against the moment of the decision. A figure fetched when the
+   * page opened and confirmed against an hour later is worse than none: it
+   * reads as current and is not.
+   */
+  const { data: impact, reload: reloadImpact } = useAsync(
+    () => api.agreementImpact(),
+    [],
+    { fallback: "Could not count who is online." },
+  );
+
+  const scheduled = effectiveFrom.trim() !== "";
+  const diff = useMemo(
+    () => diffLines(current?.body ?? "", body),
+    [current?.body, body],
+  );
+  const changes = useMemo(() => diffSummary(diff), [diff]);
+
   // A refused publish is not a failed load, and the two used to overwrite each
   // other: publishing reloads, and the reload cleared the message saying why
   // the publish had been refused before the operator could read it.
@@ -79,6 +113,8 @@ export default function AgreementPage() {
     // not terms.
     body.trim().length >= 200 &&
     confirmed &&
+    // Nothing is published that has not been compared with what it replaces.
+    diffOpen &&
     !publishing;
 
   const publish = async () => {
@@ -89,6 +125,12 @@ export default function AgreementPage() {
         version: version.trim(),
         title: title.trim(),
         body,
+        // Sent only when one was chosen. An empty string would fail ISO
+        // validation, and sending "now" explicitly would differ from omitting
+        // it the moment the request is slow.
+        ...(scheduled
+          ? { effectiveFrom: new Date(effectiveFrom).toISOString() }
+          : {}),
       });
       setResult({
         version: published.version,
@@ -98,7 +140,10 @@ export default function AgreementPage() {
       setTitle("");
       setBody("");
       setConfirm("");
+      setEffectiveFrom("");
+      setDiffOpen(false);
       load();
+      reloadImpact();
     } catch (caught) {
       setPublishError(
         caught instanceof ApiError ? caught.message : "Could not publish.",
@@ -173,7 +218,10 @@ export default function AgreementPage() {
         <div className="mt-4 space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="text-fg-faint mb-1 block text-xs" htmlFor="version">
+              <label
+                className="text-fg-faint mb-1 block text-xs"
+                htmlFor="version"
+              >
                 Version
               </label>
               <Input
@@ -184,7 +232,10 @@ export default function AgreementPage() {
               />
             </div>
             <div>
-              <label className="text-fg-faint mb-1 block text-xs" htmlFor="title">
+              <label
+                className="text-fg-faint mb-1 block text-xs"
+                htmlFor="title"
+              >
                 Title
               </label>
               <Input
@@ -199,7 +250,9 @@ export default function AgreementPage() {
           <div>
             <label className="text-fg-faint mb-1 block text-xs" htmlFor="body">
               Full text{" "}
-              <span className="font-mono">({body.trim().length} characters)</span>
+              <span className="font-mono">
+                ({body.trim().length} characters)
+              </span>
             </label>
             <textarea
               id="body"
@@ -216,8 +269,96 @@ export default function AgreementPage() {
             ) : null}
           </div>
 
+          <div>
+            <label
+              className="text-fg-faint mb-1 block text-xs"
+              htmlFor="effective-from"
+            >
+              Take effect (optional — leave blank for immediately)
+            </label>
+            <input
+              id="effective-from"
+              type="datetime-local"
+              value={effectiveFrom}
+              onChange={(event) => setEffectiveFrom(event.target.value)}
+              className="border-edge bg-bg rounded border px-3 py-2 font-mono text-xs"
+            />
+            <p className="text-fg-faint mt-1 text-xs">
+              {/* The server has accepted `effectiveFrom` all along and this
+                  panel never sent it, so the only way to publish was to do it
+                  now — mid-shift, with the fleet on the road. */}
+              {scheduled
+                ? "Scheduled. Nobody is taken offline until then, and the version is still permanent from the moment it is created."
+                : "Immediate. Everyone working right now stops until they accept."}
+            </p>
+          </div>
+
+          <div className="border-edge rounded border p-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-sm font-medium">
+                Compare with{" "}
+                {current ? `version ${current.version}` : "nothing published"}
+              </p>
+              <GhostButton onClick={() => setDiffOpen((open) => !open)}>
+                {diffOpen ? "Hide comparison" : "Review the changes"}
+              </GhostButton>
+            </div>
+            <p className="text-fg-faint mt-1 text-xs">
+              {body.trim().length === 0
+                ? "Paste the new text to compare it."
+                : `${changes.added} lines added · ${changes.removed} removed · ${changes.unchanged} unchanged.`}
+            </p>
+            {diffOpen ? (
+              <pre className="border-edge bg-bg mt-2 max-h-80 overflow-auto rounded border p-2 font-mono text-[11px] leading-relaxed">
+                {diff.map((line, index) => (
+                  <div
+                    key={index}
+                    className={
+                      line.kind === "added"
+                        ? "text-ok"
+                        : line.kind === "removed"
+                          ? "text-danger line-through"
+                          : "text-fg-faint"
+                    }
+                  >
+                    {line.kind === "added"
+                      ? "+ "
+                      : line.kind === "removed"
+                        ? "- "
+                        : "  "}
+                    {line.text || " "}
+                  </div>
+                ))}
+              </pre>
+            ) : null}
+          </div>
+
           <div className="border-warn/40 bg-warn/5 rounded border p-3">
             <p className="text-sm font-medium">This cannot be undone.</p>
+
+            {/* The blast radius, before it is the blast radius. The publish
+                response already reported this number; saying it afterwards is
+                not information, it is a receipt. */}
+            <p className="mt-2 text-sm">
+              {impact === null || impact === undefined ? (
+                <span className="text-fg-faint">Counting who is online…</span>
+              ) : scheduled ? (
+                <>
+                  Nobody is taken offline now. At the scheduled time, whoever is
+                  working — currently {impact.onlineNow} of{" "}
+                  {impact.activePartners} active partners — stops until they
+                  accept.
+                </>
+              ) : (
+                <>
+                  <strong>
+                    {impact.onlineNow} of {impact.activePartners} active
+                    partners
+                  </strong>{" "}
+                  are working right now and will be taken offline immediately.
+                </>
+              )}
+            </p>
             <ul className="text-fg-faint mt-2 space-y-1 text-sm">
               <li>
                 • The version is permanent. It can never be edited or deleted —
@@ -234,7 +375,10 @@ export default function AgreementPage() {
             </ul>
 
             <div className="mt-3">
-              <label className="text-fg-faint mb-1 block text-xs" htmlFor="confirm">
+              <label
+                className="text-fg-faint mb-1 block text-xs"
+                htmlFor="confirm"
+              >
                 Type the version number to confirm
               </label>
               <Input
@@ -250,6 +394,11 @@ export default function AgreementPage() {
             <Button onClick={publish} disabled={!ready}>
               {publishing ? "Publishing…" : "Publish these terms"}
             </Button>
+            {!diffOpen && body.trim().length >= 200 ? (
+              <p className="text-fg-faint self-center text-xs">
+                Review the changes first.
+              </p>
+            ) : null}
             {version || title || body || confirm ? (
               <GhostButton
                 onClick={() => {
@@ -257,6 +406,8 @@ export default function AgreementPage() {
                   setTitle("");
                   setBody("");
                   setConfirm("");
+                  setEffectiveFrom("");
+                  setDiffOpen(false);
                 }}
                 disabled={publishing}
               >
