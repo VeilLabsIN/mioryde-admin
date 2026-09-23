@@ -815,6 +815,15 @@ function DocumentReview({
   const [isBusy, setIsBusy] = useState(false);
   const [actionProblem, setActionProblem] = useState<string | null>(null);
   const [expiry, setExpiry] = useState("");
+  /**
+   * Whether the reviewer says they have read the pages that are not on screen.
+   *
+   * Separate from `hasRendered`, which is the strong gate — the browser told
+   * us pixels arrived. This is the weak one, and keeping them apart is the
+   * point: only one document kind needs it now, and it is obvious in the code
+   * which assurance any given approval rested on.
+   */
+  const [restRead, setRestRead] = useState(false);
 
   /**
    * The document itself, fetched as soon as the drawer opens.
@@ -847,7 +856,31 @@ function DocumentReview({
     setHasRendered(false);
   }
 
-  const canApprove = !isBusy && hasRendered && !(expiryRequired && !expiry);
+  /**
+   * Whether anything of this document is unseen after page one.
+   *
+   * A23 rasterises page one of a PDF, so a one-page insurance schedule now
+   * gets exactly the gate an image gets and the acknowledgement disappears.
+   * A three-page permit does not: showing page one and unlocking Approve
+   * would be a *worse* control than the checkbox, because it looks like the
+   * whole document has been seen.
+   *
+   * `null` is unknown — a rendition produced before the server recorded a page
+   * count. Treated as "there may be more", which is the safe direction.
+   */
+  const unseenPages =
+    view?.renderable && view.pageCount !== 1
+      ? view.pageCount === null
+        ? "unknown"
+        : view.pageCount - 1
+      : 0;
+  const needsPageAck = unseenPages !== 0;
+
+  const canApprove =
+    !isBusy &&
+    hasRendered &&
+    (!needsPageAck || restRead) &&
+    !(expiryRequired && !expiry);
 
   /**
    * What to tell the reviewer, in the order it matters.
@@ -1033,9 +1066,46 @@ function DocumentReview({
             {/* A weaker gate than the rendered one, and deliberately so: the
                 panel cannot observe a file opened outside the browser, so for
                 these it has to take the reviewer's word. Recorded here so
-                nobody mistakes it for the same assurance. Removed once PDFs
-                rasterise server-side (A23). */}
+                nobody mistakes it for the same assurance.
+
+                A23 rasterised PDFs, which was most of what landed here. What
+                is left is a file that would not decode at all — and for those
+                the reviewer's word is the only thing there is. */}
             <span>I have opened this file and read it.</span>
+          </label>
+        </div>
+      ) : null}
+
+      {needsPageAck ? (
+        <div className="border-warn/40 bg-warn/5 rounded border p-3">
+          <p className="text-sm">
+            {unseenPages === "unknown"
+              ? "Only the first page has been rendered, and how many more there are is not recorded."
+              : `This document has ${unseenPages + 1} pages. Only the first is shown.`}
+          </p>
+          {/* The original, not `view.url` — on this path that is the page-one
+              image, and offering it as "the full document" would hand back a
+              screenshot of the page they can already see. */}
+          {view?.originalUrl ? (
+            <a
+              href={view.originalUrl}
+              className="border-edge mt-2 inline-flex items-center gap-2 rounded border px-3 py-2 text-sm"
+            >
+              Download the full document
+            </a>
+          ) : null}
+          <label className="mt-3 flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={restRead}
+              onChange={(event) => setRestRead(event.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              {unseenPages === "unknown"
+                ? "I have read the whole document."
+                : `I have read the other ${unseenPages === 1 ? "page" : `${unseenPages} pages`}.`}
+            </span>
           </label>
         </div>
       ) : null}

@@ -904,6 +904,22 @@ export interface KycDocumentView {
   expiresInSeconds: number;
   /** Shown to the reviewer when a document could not be rendered. */
   renditionError: string | null;
+  /**
+   * The original, as a download — issued only when page one is not the whole
+   * document, because that is the only time anybody needs it. Null otherwise,
+   * and null on the non-renderable path where `url` already is the original.
+   */
+  originalUrl: string | null;
+  /**
+   * How many pages the source had. 1 for an image and for a single-page PDF;
+   * more when only page one of several has been rendered.
+   *
+   * Null means unknown — no rendition, or one produced before the server
+   * recorded this. The panel keeps its acknowledgement for null, which is the
+   * safe direction: a reviewer ticks a box they may not have needed to,
+   * instead of approving pages nobody saw.
+   */
+  pageCount: number | null;
 }
 
 export interface KycQueueItem {
