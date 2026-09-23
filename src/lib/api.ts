@@ -1919,7 +1919,17 @@ export interface MapRider {
   lng: number;
   /** Degrees clockwise from north, when the device reported one. */
   heading: number | null;
-  secondsAgo: number;
+  /**
+   * When this position was reported, as an instant.
+   *
+   * **Not** an age. The server used to compute the seconds elapsed and send
+   * that, which made every response differ from the last one and meant an
+   * ETag could never match — an idle fleet paid for a full body every four
+   * seconds to say nothing had changed. The age is derived in the panel now;
+   * see `secondsSinceFix` in lib/mapPolling.ts, which measures it against the
+   * server clock rather than the dispatcher's.
+   */
+  lastFixAt: string;
   status: RiderMapStatus;
   activeOrderId: string | null;
   activeOrderCode: string | null;

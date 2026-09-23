@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAttention } from "@/components/Banner";
+import { useVisiblePoll } from "@/lib/useVisiblePoll";
 import { Freshness } from "@/components/Freshness";
 import { LiveValue } from "@/components/LiveValue";
 import { Delta, Sparkline } from "@/components/Sparkline";
@@ -61,25 +62,42 @@ export default function OverviewPage() {
   const [countsAt, setCountsAt] = useState<number | null>(null);
   const { items: alerts } = useAttention();
 
+  /**
+   * The figures, refetched on a schedule.
+   *
+   * Hoisted out of the mount effect so the shared poll hook can drive it. The
+   * request id replaces the old `cancelled` flag and is strictly stronger: it
+   * drops a slow response that would otherwise land after a newer one and
+   * paint yesterday's numbers over today's, as well as one arriving after
+   * unmount.
+   */
+  const requestId = useRef(0);
+
+  const loadCounts = useCallback(async () => {
+    const id = ++requestId.current;
+    try {
+      const next = await api.dashboard();
+      if (id !== requestId.current) return;
+      setData(next);
+      setCountsAt(Date.now());
+      setError(null);
+    } catch (e) {
+      if (id !== requestId.current) return;
+      setError(e instanceof Error ? e.message : "Could not load data.");
+    }
+  }, []);
+
+  // The shared hook, not a hand-rolled interval (A14). The old one kept the
+  // timer running while the tab was hidden and returned early inside it, so a
+  // background tab still woke every twenty seconds to do nothing.
+  // `loadOnMount` so the figures are fetched once here rather than from the
+  // effect below — a synchronous setState inside an effect body is a cascading
+  // render, and the hook calls this through a ref instead.
+  useVisiblePoll(() => void loadCounts(), POLL_MS, { loadOnMount: true });
+
   useEffect(() => {
     let cancelled = false;
 
-    const loadCounts = async () => {
-      try {
-        const next = await api.dashboard();
-        if (!cancelled) {
-          setData(next);
-          setCountsAt(Date.now());
-          setError(null);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Could not load data.");
-        }
-      }
-    };
-
-    void loadCounts();
     void api
       .orders({})
       .then((o) => {
@@ -89,13 +107,10 @@ export default function OverviewPage() {
         // The list is secondary. Losing it should not blank the figures.
       });
 
-    const timer = setInterval(() => {
-      if (!document.hidden) void loadCounts();
-    }, POLL_MS);
     return () => {
       cancelled = true;
-      clearInterval(timer);
     };
+    // The one-off load, once. Repeats are the poll hook's job above.
   }, []);
 
   if (error && !data) {
@@ -198,7 +213,10 @@ export default function OverviewPage() {
 
       <Card className="overflow-hidden">
         {recent.length === 0 ? (
-          <EmptyState title="No deliveries yet" hint="Bookings will appear here." />
+          <EmptyState
+            title="No deliveries yet"
+            hint="Bookings will appear here."
+          />
         ) : (
           <ul className="divide-y divide-line">
             {recent.map((order) => (
@@ -269,7 +287,9 @@ function Kpi({
                    transition-colors group-hover:border-accent"
       >
         <div className="flex items-baseline justify-between gap-2">
-          <p className="font-mono text-micro uppercase text-fg-muted">{label}</p>
+          <p className="font-mono text-micro uppercase text-fg-muted">
+            {label}
+          </p>
           {delta && !loading && (
             <Delta current={delta.current} previous={delta.previous} />
           )}

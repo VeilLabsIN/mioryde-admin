@@ -2,11 +2,14 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { RiderDetail } from "@/components/RiderDetail";
 import { Freshness } from "@/components/Freshness";
 import { LiveValue } from "@/components/LiveValue";
 import { Spinner } from "@/components/ui";
+import { useNow } from "@/lib/useNow";
+import { useVisiblePoll } from "@/lib/useVisiblePoll";
+import { pollIntervalFor, secondsSinceFix } from "@/lib/mapPolling";
 import {
   type LiveMapSnapshot,
   type MapOrder,
@@ -43,16 +46,6 @@ const LiveMapCanvas = dynamic(
   },
 );
 
-/**
- * How often the snapshot is refetched.
- *
- * Four seconds. The rider app heartbeats every few seconds, so polling faster
- * buys nothing but load, and polling slower makes a pin visibly lag the vehicle
- * it represents. The request is one query returning the active fleet — small
- * enough that this is cheap, and the interval pauses when the tab is hidden.
- */
-const POLL_MS = 4000;
-
 const STATUS_DOT: Record<RiderMapStatus, string> = {
   delivering: "bg-accent-alt",
   idle: "bg-accent-bright",
@@ -71,60 +64,52 @@ export default function MapPage() {
   // When the last snapshot landed. A map whose polling has quietly stopped
   // looks exactly like a city where nothing is moving.
   const [receivedAt, setReceivedAt] = useState<number | null>(null);
+  // A ticking clock, shared across the panel, so the ages in the rail count up
+  // between polls rather than freezing until the next snapshot lands.
+  const now = useNow();
 
-  useEffect(() => {
-    let cancelled = false;
+  /**
+   * One load, shared by the interval and by the tab becoming visible again.
+   *
+   * `cancelled` is gone: the request id lives in a ref instead, so a slow
+   * response cannot overwrite a newer one that already landed. The old effect
+   * only guarded unmount, which meant two in-flight polls could still settle
+   * out of order and paint stale pins over fresh ones.
+   */
+  const requestId = useRef(0);
 
-    const load = async () => {
-      try {
-        const next = await api.liveMap();
-        if (!cancelled) {
-          setSnapshot(next);
-          setReceivedAt(Date.now());
-          setError(null);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Lost contact with the server.");
-        }
-      }
-    };
-
-    /**
-     * Repeat polls only.
-     *
-     * A hidden tab is a dispatcher who has gone to look at something else, and
-     * polling it keeps a connection warm for nobody. But the *first* load must
-     * happen regardless: opening this in a background tab and gating that one
-     * too leaves an empty map behind, and switching to the tab shows nothing
-     * until the next tick — or, if the browser throttles timers in background
-     * tabs, for as long as it feels like. That was a real bug, found by
-     * loading the page in a pane the browser reported as hidden and watching
-     * it stay blank forever.
-     */
-    const poll = () => {
-      if (document.hidden) return;
-      void load();
-    };
-
-    // Unconditional, and first.
-    void load();
-    const timer = setInterval(poll, POLL_MS);
-
-    // Coming back to the tab refetches immediately rather than waiting out the
-    // remainder of an interval. Four seconds of staring at stale pins is four
-    // seconds of not trusting the map.
-    const onVisible = () => {
-      if (!document.hidden) void load();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
+  const load = useCallback(async () => {
+    const id = ++requestId.current;
+    try {
+      const next = await api.liveMap();
+      if (id !== requestId.current) return;
+      setSnapshot(next);
+      setReceivedAt(Date.now());
+      setError(null);
+    } catch (e) {
+      if (id !== requestId.current) return;
+      setError(
+        e instanceof Error ? e.message : "Lost contact with the server.",
+      );
+    }
   }, []);
+
+  /**
+   * How fast to ask, decided by what the fleet is doing.
+   *
+   * Four seconds while anything is moving; ten while somebody is on duty with
+   * nothing to do; thirty when the city is asleep. See lib/mapPolling.ts for
+   * why it does not stop altogether.
+   */
+  const everyMs = pollIntervalFor(snapshot);
+
+  // The shared hook rather than a hand-rolled interval (A14). It skips ticks
+  // while the tab is hidden, fires once on return instead of waiting out the
+  // remainder, and re-times itself when `everyMs` changes. `loadOnMount`
+  // covers the one thing this page needs that the others do not: something on
+  // screen even when it opens in a background pane, because an empty map that
+  // stays empty until somebody switches to the tab was a real bug.
+  useVisiblePoll(() => void load(), everyMs, { loadOnMount: true });
 
   const onSelectOrder = useCallback((id: string | null) => setFocused(id), []);
 
@@ -138,7 +123,8 @@ export default function MapPage() {
       // the offline tally is a dark partner nobody looks at — which is the
       // whole failure this status was added to surface.
       dark: riders.filter((r) => r.status === "dark").length,
-      unassigned: (snapshot?.orders ?? []).filter((o) => o.status === "pending").length,
+      unassigned: (snapshot?.orders ?? []).filter((o) => o.status === "pending")
+        .length,
     };
   }, [snapshot]);
 
@@ -185,12 +171,21 @@ export default function MapPage() {
         {/* Floating summary. Over the map rather than above it, so the map
             keeps the full height of the frame. */}
         <div className="pointer-events-none absolute left-3 top-3 z-[400] flex flex-wrap gap-2">
-          <Tally label="Delivering" value={counts.delivering} dot="bg-accent-alt" />
+          <Tally
+            label="Delivering"
+            value={counts.delivering}
+            dot="bg-accent-alt"
+          />
           <Tally label="Idle" value={counts.idle} dot="bg-accent-bright" />
           <Tally label="Offline" value={counts.offline} dot="bg-fg-faint" />
           <Tally label="Dark" value={counts.dark} dot="bg-danger" />
           {counts.unassigned > 0 && (
-            <Tally label="Unassigned" value={counts.unassigned} dot="bg-danger" alarm />
+            <Tally
+              label="Unassigned"
+              value={counts.unassigned}
+              dot="bg-danger"
+              alarm
+            />
           )}
           <Freshness at={receivedAt} className="bg-surface" />
         </div>
@@ -222,7 +217,9 @@ export default function MapPage() {
         <aside className="flex w-[340px] shrink-0 flex-col border-l border-line bg-surface">
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <div>
-              <p className="font-mono text-micro uppercase text-fg-faint">In flight</p>
+              <p className="font-mono text-micro uppercase text-fg-faint">
+                In flight
+              </p>
               <p className="text-label font-medium text-fg">
                 {orders.length} deliver{orders.length === 1 ? "y" : "ies"}
               </p>
@@ -291,7 +288,9 @@ export default function MapPage() {
                       onClick={() => setOpenRiderId(r.id)}
                       className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-panel"
                     >
-                      <span className={`size-1.5 shrink-0 rounded-full ${STATUS_DOT[r.status]}`} />
+                      <span
+                        className={`size-1.5 shrink-0 rounded-full ${STATUS_DOT[r.status]}`}
+                      />
                       <span className="min-w-0 flex-1 truncate text-meta text-fg-muted">
                         {r.name}
                       </span>
@@ -302,9 +301,21 @@ export default function MapPage() {
                             : "font-mono text-micro text-fg-faint"
                         }
                       >
-                        {r.secondsAgo < 60
-                          ? `${r.secondsAgo}s`
-                          : `${Math.floor(r.secondsAgo / 60)}m`}
+                        {(() => {
+                          // Aged against the server's clock plus how long the
+                          // browser has held the snapshot, never against the
+                          // dispatcher's own clock — a machine ten minutes out
+                          // would otherwise paint the whole fleet as dark.
+                          const age = secondsSinceFix(
+                            r.lastFixAt,
+                            snapshot.now,
+                            receivedAt ?? now,
+                            now,
+                          );
+                          return age < 60
+                            ? `${age}s`
+                            : `${Math.floor(age / 60)}m`;
+                        })()}
                       </span>
                     </button>
                   ))}
@@ -347,7 +358,9 @@ function Tally({
       <span
         className={`size-1.5 rounded-full ${dot} ${alarm ? "motion-safe:animate-pulse" : ""}`}
       />
-      <span className="font-mono text-micro uppercase text-fg-muted">{label}</span>
+      <span className="font-mono text-micro uppercase text-fg-muted">
+        {label}
+      </span>
       {/* Flashed on change. The map polls every four seconds and a
           dispatcher is watching pins, not chips — a count that moves without
           saying so may as well not have moved. */}
@@ -371,7 +384,9 @@ function OrderRow({
 }) {
   const mins = Math.max(
     0,
-    Math.round((new Date(now).getTime() - new Date(order.statusSince).getTime()) / 60000),
+    Math.round(
+      (new Date(now).getTime() - new Date(order.statusSince).getTime()) / 60000,
+    ),
   );
   const flagged =
     order.status === "pending"
@@ -391,7 +406,9 @@ function OrderRow({
                   }`}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <span className="font-mono text-meta font-medium text-fg">{order.code}</span>
+        <span className="font-mono text-meta font-medium text-fg">
+          {order.code}
+        </span>
         <span
           className={`font-mono text-micro tabular-nums ${
             flagged ? "text-danger" : "text-fg-faint"
@@ -407,7 +424,9 @@ function OrderRow({
         {order.riderName ? ` · ${order.riderName}` : " · unassigned"}
       </p>
 
-      <p className="mt-1 truncate text-meta text-fg-muted">{order.pickupAddress}</p>
+      <p className="mt-1 truncate text-meta text-fg-muted">
+        {order.pickupAddress}
+      </p>
       <p className="truncate text-meta text-fg-faint">→ {order.dropAddress}</p>
 
       {selected && (
