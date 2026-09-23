@@ -587,6 +587,7 @@ function ReviewQueue({
                     }}
                     onOpen={() => onOpen(index)}
                     onFocus={() => onFocusRow(index)}
+                    gutter
                     selection={
                       isBulkApprovable({
                         documentId: document.id,
@@ -688,6 +689,7 @@ function DocumentRow({
   rowRef,
   onOpen,
   onFocus,
+  gutter = false,
   selection = null,
 }: {
   label: string;
@@ -697,6 +699,11 @@ function DocumentRow({
   rowRef: (element: HTMLButtonElement | null) => void;
   onOpen: () => void;
   onFocus: () => void;
+  /**
+   * Whether this list reserves a column for the batch checkbox at all. The
+   * countersign queue offers no batch, so it reserves nothing.
+   */
+  gutter?: boolean;
   /**
    * The batch checkbox, on the kinds that may be batched. Null on the rest,
    * rather than a disabled box — a disabled control on every identity document
@@ -741,17 +748,33 @@ function DocumentRow({
     </button>
   );
 
-  if (!selection) return row;
+  if (!gutter) return row;
 
+  /*
+   * The gutter belongs to the list, not to the row.
+   *
+   * Rendered on every row of a list that offers selection, even where this
+   * particular row cannot be selected — because a checkbox that appears on
+   * some rows and not others shifts those rows right by its own width, and a
+   * queue where one line is indented and the rest are not reads as a rendering
+   * fault rather than as a distinction. Which is exactly how it looked.
+   *
+   * The space is held by an element of the checkbox's size rather than by
+   * padding, so the two can never drift apart.
+   */
   return (
     <div className="flex items-center gap-2">
-      <input
-        type="checkbox"
-        checked={selection.checked}
-        onChange={selection.onChange}
-        aria-label={selection.label}
-        className="accent-ok ml-1 h-3.5 w-3.5 shrink-0"
-      />
+      {selection ? (
+        <input
+          type="checkbox"
+          checked={selection.checked}
+          onChange={selection.onChange}
+          aria-label={selection.label}
+          className="accent-ok ml-1 h-3.5 w-3.5 shrink-0"
+        />
+      ) : (
+        <span aria-hidden className="ml-1 h-3.5 w-3.5 shrink-0" />
+      )}
       <div className="min-w-0 flex-1">{row}</div>
     </div>
   );
@@ -971,8 +994,20 @@ function DocumentReview({
           onLoad={() => setHasRendered(true)}
           onError={() => {
             setHasRendered(false);
+            /*
+             * What is known, not a diagnosis.
+             *
+             * This said the link had probably expired, which is one cause out
+             * of several — the object can be missing from storage, the bucket
+             * can be unreachable, the request can be blocked. Naming the
+             * expiry sends the reviewer round a loop that cannot succeed when
+             * it is any of the others, and "reopen it" then looks like the
+             * panel lying twice. The fresh link is still one button away.
+             */
             setActionProblem(
-              "The preview did not load. The link may have expired — reopen it.",
+              "The document could not be displayed. A fresh link may help; " +
+                "if it does not, the file itself is unreadable and the " +
+                "partner needs to upload it again.",
             );
           }}
         />

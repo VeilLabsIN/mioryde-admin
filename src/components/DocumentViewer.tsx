@@ -54,7 +54,18 @@ export function DocumentViewer({
   const [scale, setScale] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [loaded, setLoaded] = useState(false);
+  /**
+   * Three states, not two.
+   *
+   * This was a boolean, and a failed load left it false — so the centred
+   * "Loading the document…" stayed on screen forever, on top of the browser's
+   * broken-image placeholder and its alt text. The two overlapped into an
+   * unreadable smear, and the one thing the panel said out loud was that it
+   * was still trying, which it was not.
+   */
+  const [phase, setPhase] = useState<"loading" | "loaded" | "failed">(
+    "loading",
+  );
   const dragFrom = useRef<{ x: number; y: number } | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
 
@@ -79,7 +90,7 @@ export function DocumentViewer({
     setScale(1);
     setRotation(0);
     setOffset({ x: 0, y: 0 });
-    setLoaded(false);
+    setPhase("loading");
   }
 
   useEffect(() => {
@@ -201,19 +212,24 @@ export function DocumentViewer({
             draggable={false}
             className="max-h-full max-w-full object-contain select-none"
             onLoad={() => {
-              setLoaded(true);
+              setPhase("loaded");
               onLoad();
             }}
             onError={() => {
-              setLoaded(false);
+              setPhase("failed");
               onError();
             }}
           />
         </div>
 
-        {!loaded ? (
-          <div className="text-fg-faint absolute inset-0 grid place-items-center text-sm">
-            Loading the document…
+        {phase !== "loaded" ? (
+          // Covers the broken-image placeholder rather than sitting beside it.
+          // A failed <img> still paints its alt text, and two messages layered
+          // over each other is worse than either alone.
+          <div className="bg-bg text-fg-faint absolute inset-0 grid place-items-center px-6 text-center text-sm">
+            {phase === "loading"
+              ? "Loading the document…"
+              : "This document could not be displayed."}
           </div>
         ) : null}
       </div>

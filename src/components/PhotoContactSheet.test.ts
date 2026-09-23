@@ -40,6 +40,19 @@ describe("approving photos together", () => {
     expect(sheet).toContain("approved, then");
   });
 
+  it("asks for the triage rendition, not the 8x-zoom preview", () => {
+    // Forty full previews painted at 160px is the page's whole bandwidth for
+    // nothing; `thumbnailUrl` exists for exactly this.
+    expect(sheet).toContain("sheet.view.thumbnailUrl ?? sheet.view.url");
+  });
+
+  it("says why a tile is not a photograph, per tile", () => {
+    // One message under forty tiles cannot say which one went wrong.
+    expect(sheet).toContain("onError={");
+    expect(sheet).toContain("sheet.view.renditionError");
+    expect(sheet).toContain("None of these could be displayed");
+  });
+
   it("offers the batch only where the rule allows it", () => {
     expect(page).toContain("isBulkApprovable(");
     // The bar is a review-queue affordance; countersigning thirty documents at

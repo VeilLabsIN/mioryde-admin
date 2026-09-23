@@ -10,6 +10,16 @@ interface Sheet {
   view: KycDocumentView | null;
   /** Set from the image's own `onLoad` — pixels, not a successful fetch. */
   rendered: boolean;
+  /**
+   * Why this tile is not a photograph: the open was refused, the document has
+   * no rendition, or the image itself would not load. Null while it is still
+   * arriving.
+   *
+   * Carried per photo rather than once for the sheet. Forty tiles and one
+   * message at the bottom cannot say which of them went wrong, and "Approve 0
+   * photos" with no tile explaining itself is the sheet looking broken when it
+   * is in fact working exactly as it should.
+   */
   problem: string | null;
   outcome: "approved" | null;
 }
@@ -150,20 +160,37 @@ export function PhotoContactSheet({
             className="border-line rounded-xs border p-2"
           >
             <div className="bg-panel flex aspect-square items-center justify-center overflow-hidden">
-              {sheet.view && sheet.view.renderable ? (
+              {sheet.view && sheet.view.renderable && !sheet.problem ? (
                 // A short-lived signed URL on another origin, so the image
                 // optimiser cannot fetch it — and would be caching an
                 // identity document at the edge if it could.
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={sheet.view.url}
+                  // The triage rendition, which is what this grid is. The
+                  // full preview is sized for the single-document viewer at
+                  // 8x zoom, and fetching forty of those to paint them at
+                  // 160px is the whole page's bandwidth for nothing.
+                  src={sheet.view.thumbnailUrl ?? sheet.view.url}
                   alt={`${sheet.row.riderName} — profile photo`}
                   className="h-full w-full object-cover"
                   onLoad={() =>
                     setSheets((prev) =>
                       prev.map((s) =>
                         s.row.documentId === sheet.row.documentId
-                          ? { ...s, rendered: true }
+                          ? { ...s, rendered: true, problem: null }
+                          : s,
+                      ),
+                    )
+                  }
+                  onError={() =>
+                    setSheets((prev) =>
+                      prev.map((s) =>
+                        s.row.documentId === sheet.row.documentId
+                          ? {
+                              ...s,
+                              rendered: false,
+                              problem: "Could not be displayed.",
+                            }
                           : s,
                       ),
                     )
@@ -172,7 +199,10 @@ export function PhotoContactSheet({
               ) : (
                 <span className="text-fg-faint px-2 text-center text-xs">
                   {sheet.problem ??
-                    (sheet.view ? "Cannot be shown here" : "Opening…")}
+                    (sheet.view
+                      ? (sheet.view.renditionError ??
+                        "This file is not an image the panel can show.")
+                      : "Opening…")}
                 </span>
               )}
             </div>
@@ -203,11 +233,18 @@ export function PhotoContactSheet({
         <GhostButton onClick={onClose}>
           {pending.length === 0 ? "Done" : "Cancel"}
         </GhostButton>
-        {ready.length < pending.length && (
+        {ready.length === 0 && sheets.every((s) => s.problem) ? (
+          // Every tile failed. "Approve 0 photos" on its own reads as the
+          // panel being broken, when it is refusing for the right reason.
+          <span className="text-fg-faint text-xs">
+            None of these could be displayed, so none can be approved here.
+            Open one on its own to see why.
+          </span>
+        ) : ready.length < pending.length ? (
           <span className="text-fg-faint text-xs">
             {pending.length - ready.length} not shown yet, and not included.
           </span>
-        )}
+        ) : null}
       </div>
     </div>
   );
