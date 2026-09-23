@@ -93,7 +93,23 @@ export default function AccessPage() {
     reason: "created" | "reset";
   } | null>(null);
 
-  const owners = (admins ?? []).filter((a) => a.role === "owner" && a.isActive);
+  const active = (admins ?? []).filter((a) => a.isActive);
+  const owners = active.filter((a) => a.role === "owner");
+
+  /**
+   * Least privilege is not in effect when everyone is an owner.
+   *
+   * The API is built for this — `@Roles('ops', 'support', 'finance')` guards
+   * run throughout it, and the verification screen reasons carefully about who
+   * may see an identity document. All of that is bypassed by giving every
+   * account the role that holds every capability, and the page said so only by
+   * printing "5 active · 5 owners", which reads as a fact rather than a
+   * finding.
+   *
+   * Said out loud from two accounts up: with one there is nothing to
+   * distribute, and with two the second is often the genuine co-owner.
+   */
+  const everyoneIsOwner = active.length >= 3 && owners.length === active.length;
 
   return (
     <div className="mx-auto max-w-[1100px] space-y-6">
@@ -102,7 +118,7 @@ export default function AccessPage() {
         subtitle={
           admins === null
             ? "Loading…"
-            : `${admins.filter((a) => a.isActive).length} active · ${owners.length} owner${owners.length === 1 ? "" : "s"}`
+            : `${active.length} active · ${owners.length} owner${owners.length === 1 ? "" : "s"}`
         }
         actions={
           <Button onClick={() => setCreating((v) => !v)}>
@@ -110,6 +126,28 @@ export default function AccessPage() {
           </Button>
         }
       />
+
+      {everyoneIsOwner && (
+        <Card className="border-warn/40 bg-warn/5">
+          <p className="text-sm font-medium">
+            Every account is an owner, so no restriction applies to anyone.
+          </p>
+          <p className="text-fg-muted mt-2 text-sm">
+            An owner can create admins, change roles, publish the partner
+            agreement and read every partner&rsquo;s identity documents. The
+            rules limiting who may do each of those are enforced by role, and
+            with {owners.length} owners there is nothing for them to limit — a
+            single compromised session is every capability at once.
+          </p>
+          <p className="text-fg-muted mt-2 text-sm">
+            Move each account to the role matching the job it does:{" "}
+            <strong>ops</strong> for deliveries, partners and verification,{" "}
+            <strong>finance</strong> for money, <strong>support</strong> for
+            customer queries. Owner is for the people who genuinely administer
+            the platform.
+          </p>
+        </Card>
+      )}
 
       {issued && (
         <IssuedPassword issued={issued} onDismiss={() => setIssued(null)} />
