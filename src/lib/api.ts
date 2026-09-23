@@ -19,6 +19,17 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /**
+     * The parsed error body, when there was one.
+     *
+     * Kept whole rather than picked apart here. A refusal sometimes carries
+     * more than a sentence — the approval blocker names which halves of a
+     * partner's setup are missing, so the panel can offer to fix one in place
+     * — and the alternative is matching on the prose, which breaks silently
+     * the first time somebody rewords it. Reading it is the caller's job; a
+     * typed accessor per case lives next to the code that cares.
+     */
+    readonly body: Record<string, unknown> = {},
   ) {
     super(message);
     this.name = "ApiError";
@@ -138,14 +149,16 @@ async function request<T>(
 
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
+    let body: Record<string, unknown> = {};
     try {
-      const body = (await res.json()) as { message?: string | string[] };
-      if (Array.isArray(body.message)) message = body.message.join(", ");
-      else if (body.message) message = body.message;
+      body = (await res.json()) as Record<string, unknown>;
+      const raw = body.message;
+      if (Array.isArray(raw)) message = raw.join(", ");
+      else if (typeof raw === "string" && raw) message = raw;
     } catch {
       /* non-JSON error body */
     }
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, body);
   }
 
   if (res.status === 204) return undefined as T;
