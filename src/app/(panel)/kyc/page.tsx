@@ -12,6 +12,9 @@ import {
   PageHeader,
 } from "@/components/ui";
 import { DetailDrawer } from "@/components/DetailDrawer";
+import { PhotoContactSheet } from "@/components/PhotoContactSheet";
+import { SelectionBar } from "@/components/SelectionBar";
+import { isBulkApprovable } from "@/lib/bulkReview";
 import { DocumentViewer } from "@/components/DocumentViewer";
 import {
   ApiError,
@@ -240,6 +243,39 @@ export default function KycPage() {
     load();
   }, [load]);
 
+  /*
+   * A10 — several photos, seen together and approved once.
+   *
+   * The selection is document ids rather than indexes. Indexes shift the
+   * moment anything is approved and the queue reloads, and a selection that
+   * silently slides onto different documents on a screen that approves
+   * identity paperwork is not a bug worth risking for the convenience of an
+   * array lookup.
+   */
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const selectable = useMemo(
+    () => reviewRows.filter(isBulkApprovable),
+    [reviewRows],
+  );
+  // Only ids still on screen. A document approved elsewhere, or paged away
+  // from, must not stay counted in a bar that offers to act on it.
+  const chosen = useMemo(
+    () => selectable.filter((row) => selected.has(row.documentId)),
+    [selectable, selected],
+  );
+
+  const toggleSelected = useCallback((documentId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(documentId)) next.add(documentId);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -298,6 +334,8 @@ export default function KycPage() {
           rowRefs={rowRefs}
           onOpen={setOpenIndex}
           onFocusRow={setActiveIndex}
+          selected={selected}
+          onToggleSelected={toggleSelected}
         />
       ) : tab === "countersign" ? (
         <CountersignQueue
@@ -327,6 +365,46 @@ export default function KycPage() {
           onChange={setPage}
         />
       )}
+
+      {tab === "review" && !sheetOpen && (
+        <SelectionBar
+          count={chosen.length}
+          noun="photo"
+          onClear={clearSelection}
+        >
+          <GhostButton
+            className="border-ok/50 text-ok hover:border-ok"
+            onClick={() => setSheetOpen(true)}
+          >
+            Review together
+          </GhostButton>
+        </SelectionBar>
+      )}
+
+      <DetailDrawer
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        title="Profile photos"
+        subtitle="Approving these records a decision against each one."
+      >
+        {sheetOpen ? (
+          <PhotoContactSheet
+            // Keyed on exactly which documents, so a reload that changes the
+            // set rebuilds the sheet rather than leaving approved photos in it.
+            key={chosen.map((row) => row.documentId).join(",")}
+            rows={chosen}
+            onClose={() => setSheetOpen(false)}
+            onFinished={(approved) => {
+              clearSelection();
+              setSheetOpen(false);
+              addNotice(
+                `${approved} profile ${approved === 1 ? "photo" : "photos"} approved.`,
+              );
+              load();
+            }}
+          />
+        ) : null}
+      </DetailDrawer>
 
       <DetailDrawer
         open={openRow !== null}
@@ -414,12 +492,16 @@ function ReviewQueue({
   rowRefs,
   onOpen,
   onFocusRow,
+  selected,
+  onToggleSelected,
 }: {
   partners: KycPartnerGroup[] | null;
   activeIndex: number;
   rowRefs: React.RefObject<(HTMLButtonElement | null)[]>;
   onOpen: (index: number) => void;
   onFocusRow: (index: number) => void;
+  selected: ReadonlySet<string>;
+  onToggleSelected: (documentId: string) => void;
 }) {
   if (partners === null) return <SkeletonRows />;
   if (partners.length === 0) {
@@ -477,6 +559,23 @@ function ReviewQueue({
                     }}
                     onOpen={() => onOpen(index)}
                     onFocus={() => onFocusRow(index)}
+                    selection={
+                      isBulkApprovable({
+                        documentId: document.id,
+                        kind: document.kind,
+                        label: document.label,
+                        riderName: partner.riderName,
+                        meta: "",
+                        expiryRequired: document.expiryRequired,
+                        mode: "review",
+                      })
+                        ? {
+                            checked: selected.has(document.id),
+                            onChange: () => onToggleSelected(document.id),
+                            label: `Select ${partner.riderName}'s ${document.label.toLowerCase()} for batch approval`,
+                          }
+                        : null
+                    }
                   />
                 </li>
               );
@@ -561,6 +660,7 @@ function DocumentRow({
   rowRef,
   onOpen,
   onFocus,
+  selection = null,
 }: {
   label: string;
   meta: string;
@@ -569,12 +669,27 @@ function DocumentRow({
   rowRef: (element: HTMLButtonElement | null) => void;
   onOpen: () => void;
   onFocus: () => void;
+  /**
+   * The batch checkbox, on the kinds that may be batched. Null on the rest,
+   * rather than a disabled box — a disabled control on every identity document
+   * in the queue reads as something that might become available, and it never
+   * will.
+   *
+   * A sibling of the row button, never inside it: a control nested in a button
+   * is not reachable by keyboard in the way it appears to be, and clicking it
+   * would also open the drawer.
+   */
+  selection?: {
+    checked: boolean;
+    onChange: () => void;
+    label: string;
+  } | null;
 }) {
   const activeClasses = isActive
     ? "border-accent bg-panel"
     : "border-transparent hover:bg-panel";
 
-  return (
+  const row = (
     <button
       ref={rowRef}
       type="button"
@@ -596,6 +711,21 @@ function DocumentRow({
         <span className="text-fg-faint shrink-0 text-xs">needs expiry</span>
       ) : null}
     </button>
+  );
+
+  if (!selection) return row;
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="checkbox"
+        checked={selection.checked}
+        onChange={selection.onChange}
+        aria-label={selection.label}
+        className="accent-ok ml-1 h-3.5 w-3.5 shrink-0"
+      />
+      <div className="min-w-0 flex-1">{row}</div>
+    </div>
   );
 }
 

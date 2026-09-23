@@ -36,6 +36,14 @@ export function documentLabel(label: string, side: string): string {
  */
 export interface ReviewRow {
   documentId: string;
+  /**
+   * The server's kind slug, not the label.
+   *
+   * Carried because eligibility for a batch is a property of the kind, and
+   * deciding it from the human label would mean matching on a translated,
+   * reworded string — see `isBulkApprovable`.
+   */
+  kind: string;
   label: string;
   riderName: string;
   /** The line under the name: when it arrived, or who signed it first. */
@@ -60,6 +68,7 @@ export function flattenPartnerRows(
   return partners.flatMap((partner) =>
     partner.documents.map((document) => ({
       documentId: document.id,
+      kind: document.kind,
       label: documentLabel(document.label, document.side),
       riderName: partner.riderName,
       meta: `Uploaded ${describeAge(document.uploadedAt)}`,
@@ -76,6 +85,7 @@ export function flattenCountersignRows(
 ): ReviewRow[] {
   return items.map((item) => ({
     documentId: item.id,
+    kind: item.kind,
     label: documentLabel(item.label, item.side),
     riderName: item.riderName,
     meta: `First approved by ${item.firstReviewerName ?? "a colleague"} ${describeAge(item.firstReviewedAt)}`,
