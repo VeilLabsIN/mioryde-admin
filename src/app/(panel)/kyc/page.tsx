@@ -71,6 +71,17 @@ const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
  * is a decision about a van's paperwork. Merging them would mean an operator
  * never knows which of the three they are doing.
  */
+interface Notice {
+  id: number;
+  message: string;
+}
+
+/**
+ * Module scope rather than a ref: this only has to be unique within a page's
+ * lifetime, and a counter that survives remounts is one fewer thing to reset.
+ */
+let nextNoticeId = 0;
+
 export default function KycPage() {
   // The tab is in the URL, so "the countersign queue" is a link somebody can
   // send. "review" is the fallback, so the default view has a clean address.
@@ -93,7 +104,7 @@ export default function KycPage() {
    * it means opening that partner's other documents, which takes longer than a
    * toast.
    */
-  const [notices, setNotices] = useState<string[]>([]);
+  const [notices, setNotices] = useState<Notice[]>([]);
 
   /*
    * One request, one queue.
@@ -149,13 +160,29 @@ export default function KycPage() {
   const countersign = shown?.tab === "countersign" ? shown.results : null;
   const vehicles = shown?.tab === "vehicles" ? shown.results : null;
 
-  const addNotice = useCallback((message: string) => {
-    // Deduplicated: re-deciding the same document should not stack two
-    // identical warnings the operator then has to dismiss twice.
-    setNotices((current) =>
-      current.includes(message) ? current : [...current, message],
-    );
-  }, []);
+  /**
+   * Something worth saying that is not an error.
+   *
+   * `repeatable` is the difference between a warning and a confirmation, and
+   * the two genuinely differ. Re-deciding a document should not stack two
+   * identical warnings for the operator to dismiss twice, so warnings
+   * deduplicate. A confirmation must not: "3 photos approved" the second time
+   * is a different event, and suppressing it reads as the action having done
+   * nothing — which is exactly the wrong thing to say after it worked.
+   *
+   * Identified rather than keyed by their text, so two notices reading the
+   * same thing are two notices and Dismiss removes the one that was clicked.
+   */
+  const addNotice = useCallback(
+    (message: string, { repeatable = false } = {}) => {
+      setNotices((current) =>
+        !repeatable && current.some((n) => n.message === message)
+          ? current
+          : [...current, { id: nextNoticeId++, message }],
+      );
+    },
+    [],
+  );
 
   /**
    * Every document on this page, in the order it is painted.
@@ -313,13 +340,13 @@ export default function KycPage() {
         </Card>
       ) : null}
 
-      {notices.map((notice, index) => (
-        <Card key={notice}>
-          <p className="text-warn text-sm">{notice}</p>
+      {notices.map((notice) => (
+        <Card key={notice.id}>
+          <p className="text-warn text-sm">{notice.message}</p>
           <GhostButton
             className="mt-3"
             onClick={() =>
-              setNotices((current) => current.filter((_, at) => at !== index))
+              setNotices((current) => current.filter((n) => n.id !== notice.id))
             }
           >
             Dismiss
@@ -399,6 +426,7 @@ export default function KycPage() {
               setSheetOpen(false);
               addNotice(
                 `${approved} profile ${approved === 1 ? "photo" : "photos"} approved.`,
+                { repeatable: true },
               );
               load();
             }}
