@@ -262,7 +262,15 @@ export function EmptyState({
   hint,
 }: {
   title: string;
-  hint?: string;
+  /**
+   * What would put something here, and where to go and do it.
+   *
+   * A node rather than a string so the sentence can carry a link. An empty
+   * panel that names the next step without offering it is only marginally
+   * better than one that says nothing, and several of these have a screen
+   * that is exactly where the operator should go next.
+   */
+  hint?: React.ReactNode;
 }) {
   return (
     // The grid is what stops a large blank region reading as a panel that

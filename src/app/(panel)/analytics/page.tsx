@@ -436,7 +436,20 @@ export default function AnalyticsPage() {
         <div className="mt-3">
           {data ? (
             data.partners.length === 0 ? (
-              <EmptyState title="Nobody delivered in this period" />
+              <EmptyState
+                title="Nobody delivered in this period"
+                hint={
+                  <>
+                    A partner appears here once one of their deliveries is
+                    marked delivered in the selected range. Try a wider range,
+                    or see what state the work is in on{" "}
+                    <Link href="/orders" className="text-accent underline-offset-2 hover:underline">
+                      deliveries
+                    </Link>
+                    .
+                  </>
+                }
+              />
             ) : (
               <PartnerTable partners={data.partners} rupees={rupees} />
             )
@@ -720,7 +733,26 @@ const PURPOSES: Record<string, string> = {
 
 function LedgerMovement({ breakdown }: { breakdown: MoneyBreakdown }) {
   if (breakdown.accounts.length === 0) {
-    return <EmptyState title="No postings in this period" />;
+    return (
+      <EmptyState
+        title="No postings in this period"
+        hint={
+          <>
+            The ledger moves when an order is paid for, a refund is issued or a
+            payout settles. None of those happened in this range — try a wider
+            one, or check{" "}
+            <Link href="/payments" className="text-accent underline-offset-2 hover:underline">
+              payments
+            </Link>{" "}
+            and{" "}
+            <Link href="/payouts" className="text-accent underline-offset-2 hover:underline">
+              payouts
+            </Link>
+            .
+          </>
+        }
+      />
+    );
   }
 
   return (

@@ -172,7 +172,10 @@ export default function AccessPage() {
             <SkeletonRows rows={5} />
           )
         ) : admins.length === 0 ? (
-          <EmptyState title="No admin accounts" />
+          <EmptyState
+            title="No admin accounts"
+            hint="Use Add admin above. Only an owner can create one."
+          />
         ) : (
           <DataTable
             caption="Admin accounts, owners first"
