@@ -66,6 +66,22 @@ export function DocumentViewer({
   const [phase, setPhase] = useState<"loading" | "loaded" | "failed">(
     "loading",
   );
+
+  /**
+   * Whether the browser refused to load it, rather than failing to.
+   *
+   * A blocked image and a missing one are indistinguishable from `onerror`:
+   * both give a broken placeholder and no reason. The difference matters
+   * enormously — one is a document to chase the partner about, the other is a
+   * header on the panel — and getting it wrong sent somebody round the
+   * storage configuration for an afternoon while every check there passed.
+   *
+   * `securitypolicyviolation` fires on the document with the directive and
+   * the URI that was refused, so the panel can say which it is instead of
+   * guessing. Scoped to img-src and to this src, so a blocked script or
+   * somebody else's image cannot claim to be this document.
+   */
+  const [blockedOrigin, setBlockedOrigin] = useState<string | null>(null);
   const dragFrom = useRef<{ x: number; y: number } | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
 
@@ -91,7 +107,27 @@ export function DocumentViewer({
     setRotation(0);
     setOffset({ x: 0, y: 0 });
     setPhase("loading");
+    setBlockedOrigin(null);
   }
+
+  useEffect(() => {
+    function onViolation(event: SecurityPolicyViolationEvent) {
+      if (event.effectiveDirective !== "img-src") return;
+      // The browser may truncate the blocked URI to its origin, which is all
+      // that is wanted here anyway.
+      if (!src.startsWith(event.blockedURI)) return;
+      try {
+        setBlockedOrigin(new URL(event.blockedURI).origin);
+      } catch {
+        setBlockedOrigin(event.blockedURI);
+      }
+      setPhase("failed");
+    }
+
+    document.addEventListener("securitypolicyviolation", onViolation);
+    return () =>
+      document.removeEventListener("securitypolicyviolation", onViolation);
+  }, [src]);
 
   useEffect(() => {
     if (secondsLeft <= 0) return;
@@ -229,7 +265,9 @@ export function DocumentViewer({
           <div className="bg-bg text-fg-faint absolute inset-0 grid place-items-center px-6 text-center text-sm">
             {phase === "loading"
               ? "Loading the document…"
-              : "This document could not be displayed."}
+              : blockedOrigin
+                ? `The browser blocked this image: ${blockedOrigin} is not allowed by the panel's img-src policy. Add it to NEXT_PUBLIC_DOCUMENT_ORIGIN — the document itself is fine.`
+                : "This document could not be displayed."}
           </div>
         ) : null}
       </div>

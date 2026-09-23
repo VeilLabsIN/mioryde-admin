@@ -27,8 +27,22 @@ describe("a document that will not display", () => {
   });
 
   it("keeps the approval gate shut when the image fails", () => {
-    // The whole point of the gate: no pixels, no approval.
-    expect(viewer).toContain('setPhase("loaded");\n              onLoad();');
+    // The whole point of the gate: no pixels, no approval. Asserted on the
+    // handlers rather than on their exact indentation — the first version of
+    // this test matched a literal newline and broke on a CRLF checkout,
+    // which says nothing about the gate.
+    const onLoadHandler = viewer.slice(
+      viewer.indexOf("onLoad={"),
+      viewer.indexOf("onError={"),
+    );
+    expect(onLoadHandler).toContain('setPhase("loaded")');
+    expect(onLoadHandler).toContain("onLoad()");
+
+    const onErrorHandler = viewer.slice(viewer.indexOf("onError={() => {"));
+    expect(onErrorHandler.slice(0, 200)).toContain('setPhase("failed")');
+    expect(onErrorHandler.slice(0, 200)).toContain("onError()");
+    // The failure path must not be able to open the gate.
+    expect(onErrorHandler.slice(0, 200)).not.toContain("onLoad()");
   });
 
   it("does not diagnose a cause it cannot know", () => {

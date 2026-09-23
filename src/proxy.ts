@@ -124,6 +124,35 @@ export function proxy(request: NextRequest) {
     tileOrigin = "";
   }
 
+  /**
+   * Where document renditions are served from.
+   *
+   * The panel's whole purpose on the verification screen is to display an
+   * identity document, and the bytes come from the object store on a signed
+   * URL — a second external image origin that this policy did not have.
+   * Everything else was right: the API is reachable, the bucket is healthy,
+   * the signed URL is valid and serves inline. The browser refused to paint
+   * it, `onerror` fired, and the panel reported a document that would not
+   * load. `check-storage` passes every check from the server, because the
+   * server is not the one being refused.
+   *
+   * Configured rather than derived: the API signs these URLs and the panel
+   * never sees one until it is too late to set a header. For AWS that is
+   * `https://<bucket>.s3.<region>.amazonaws.com`; for R2 or MinIO it is
+   * whatever `S3_ENDPOINT` is set to on the API.
+   *
+   * Left unset, documents do not render and nothing says why — which is the
+   * failure this comment exists to stop happening twice. `DocumentViewer`
+   * listens for the violation and names this directive when it fires.
+   */
+  let documentOrigin = "";
+  try {
+    const configured = process.env["NEXT_PUBLIC_DOCUMENT_ORIGIN"];
+    if (configured) documentOrigin = new URL(configured).origin;
+  } catch {
+    documentOrigin = "";
+  }
+
   const csp = [
     "default-src 'self'",
     // 'unsafe-inline' is here reluctantly, and it is the weakest line in this
@@ -141,10 +170,13 @@ export function proxy(request: NextRequest) {
     // Tailwind injects styles inline. Nonces do not help here — the framework
     // emits style attributes, not one script tag we can mark.
     "style-src 'self' 'unsafe-inline'",
-    // The tile host is the one external image source. Everything else stays
-    // first-party: an operations panel has no reason to load a picture from
-    // somewhere nobody chose.
-    `img-src 'self' data: blob:${tileOrigin ? ` ${tileOrigin}` : ""}`,
+    // Two external image sources, both chosen deliberately: the tile host and
+    // the object store the documents themselves come from. Everything else
+    // stays first-party — an operations panel has no reason to load a picture
+    // from somewhere nobody picked.
+    `img-src 'self' data: blob:${tileOrigin ? ` ${tileOrigin}` : ""}${
+      documentOrigin ? ` ${documentOrigin}` : ""
+    }`,
     "font-src 'self' data:",
     // The API **origin**, not the full URL.
     //
