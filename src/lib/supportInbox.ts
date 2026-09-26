@@ -49,6 +49,44 @@ export interface AgentTicket {
   assignedTo: { id: string; name: string | null } | null;
   goodwill: Money;
   unread: number;
+  /** What the signed-in agent may do here — the server's rule, not a guess. */
+  control: TicketControl;
+}
+
+/**
+ * One conversation, one voice (`support-ownership.ts` on the server).
+ *
+ * The owner replies; colleagues add internal notes. A supervisor, or anybody
+ * once the owner has left a waiting customer for 15 minutes, may take over.
+ */
+export interface TicketControl {
+  owner: "none" | "me" | "other";
+  ownerAway: boolean;
+  canReply: boolean;
+  canManage: boolean;
+  canTakeOver: boolean;
+  canReassign: boolean;
+}
+
+export interface DeskAgent {
+  id: string;
+  name: string;
+  role: string;
+}
+
+/** The line under the ticket title: whose conversation this is. */
+export function ownerText(ticket: Pick<AgentTicket, "assignedTo" | "control">): string {
+  const name = ticket.assignedTo?.name?.trim() || "A colleague";
+  switch (ticket.control.owner) {
+    case "none":
+      return "Unassigned — replying picks it up";
+    case "me":
+      return "You are handling this";
+    case "other":
+      return ticket.control.ownerAway
+        ? `${name} is handling this, but has not answered for a while`
+        : `${name} is handling this`;
+  }
 }
 
 export interface AgentMessage {
@@ -186,6 +224,11 @@ export const SUPPORT_STREAM_TOPICS = [
   "support.ticket.created",
   "support.message.received",
   "support.escalated",
+  // A colleague answered, took it, or resolved it: every open screen has to
+  // see that at once, or somebody replies into a conversation that moved on.
+  "support.reply",
+  "support.assigned",
+  "support.updated",
 ] as const;
 
 export function isSupportTopic(topic: string): boolean {

@@ -17,6 +17,7 @@ import { readPanelLocale } from "@/components/LanguagePreference";
 import type {
   AgentTicket,
   AgentTicketDetail,
+  DeskAgent,
   InboxCounts,
   InboxView,
   TicketPriority,
@@ -486,6 +487,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ amountPaise, ...(note ? { note } : {}) }),
     }),
+  supportAgents: () =>
+    request<{ results: DeskAgent[] }>("/admin/support/agents"),
   supportAttachment: (id: string, messageId: string) =>
     request<{ url: string }>(
       `/admin/support/tickets/${id}/messages/${messageId}/attachment`,

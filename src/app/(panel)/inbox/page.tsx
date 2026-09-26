@@ -20,12 +20,14 @@ import {
   type AgentMessage,
   type AgentTicket,
   type AgentTicketDetail,
+  type DeskAgent,
   INBOX_TABS,
   type InboxCounts,
   type InboxView,
   STATUS_LABEL,
   categoryLabel,
   isSupportTopic,
+  ownerText,
   slaText,
   systemText,
 } from "@/lib/supportInbox";
@@ -65,6 +67,11 @@ export default function SupportInboxPage() {
     [openId],
     { enabled: openId !== null },
   );
+  // Who a conversation can be handed to. Loaded once; a colleague added
+  // mid-shift appears on the next page load.
+  const agents = useAsync(() => api.supportAgents(), [], {
+    fallback: "Could not load colleagues.",
+  });
   const tickets = inbox.data?.results ?? null;
   const counts: InboxCounts = inbox.data?.counts ?? {};
   const detail = openId ? thread.data : null;
@@ -93,12 +100,20 @@ export default function SupportInboxPage() {
     heard.current = newest.at;
     if (!isSupportTopic(newest.topic)) return;
 
+    const handedToMe =
+      newest.topic === "support.assigned" &&
+      newest.payload["assignedAdminId"] === me?.id &&
+      newest.payload["byAdminId"] !== me?.id;
     const kind =
-      newest.payload["priority"] === "urgent" ? "urgent" : TOPIC_ALERTS[newest.topic];
+      newest.payload["priority"] === "urgent"
+        ? "urgent"
+        : handedToMe
+          ? "placed"
+          : TOPIC_ALERTS[newest.topic];
     if (kind) playAlert(kind);
     reloadInbox();
     if (openId && newest.payload["ticketId"] === openId) reloadThread();
-  }, [events, openId, reloadInbox, reloadThread]);
+  }, [events, openId, reloadInbox, reloadThread, me?.id]);
 
   const refreshBoth = async () => {
     reloadInbox();
@@ -164,6 +179,7 @@ export default function SupportInboxPage() {
             key={detail.ticket.id}
             detail={detail}
             myId={me?.id ?? null}
+            agents={agents.data?.results ?? []}
             onChanged={refreshBoth}
           />
         ) : (
@@ -227,10 +243,12 @@ function TicketRow({
 function Thread({
   detail,
   myId,
+  agents,
   onChanged,
 }: {
   detail: AgentTicketDetail;
   myId: string | null;
+  agents: DeskAgent[];
   onChanged: () => Promise<void>;
 }) {
   const { ticket, messages } = detail;
@@ -263,12 +281,28 @@ function Thread({
   async function send() {
     const text = body.trim();
     if (!text) return;
-    if (await act(() => api.supportReply(ticket.id, text, internal))) {
+    if (await act(() => api.supportReply(ticket.id, text, asNote))) {
       setBody("");
     }
   }
 
   const closed = ticket.status === "closed";
+  const { control } = ticket;
+  // Somebody else's conversation: anything typed here is a note to them.
+  const notesOnly = !control.canReply;
+  const asNote = internal || notesOnly;
+  const holder = ticket.assignedTo?.name?.trim() || "a colleague";
+
+  async function takeOver() {
+    if (
+      !window.confirm(
+        `Take this conversation over from ${holder}? The thread will show that you did.`,
+      )
+    ) {
+      return;
+    }
+    await act(() => api.supportUpdate(ticket.id, { assignTo: myId }));
+  }
 
   return (
     <Card className="flex max-h-[75vh] flex-col">
@@ -279,26 +313,59 @@ function Thread({
           </p>
           <p className="text-micro text-fg-muted">
             {STATUS_LABEL[ticket.status]}
-            {ticket.escalated ? " · escalated" : ""}
-            {ticket.assignedTo
-              ? ` · ${ticket.assignedTo.name ?? "assigned"}`
-              : " · unassigned"}
+            {ticket.escalated ? " · escalated" : ""} · {ownerText(ticket)}
           </p>
         </div>
-        {myId && ticket.assignedTo?.id !== myId && (
+        {myId && control.owner === "none" && !closed && (
           <GhostButton
             disabled={busy}
             onClick={() =>
               void act(() => api.supportUpdate(ticket.id, { assignTo: myId }))
             }
           >
-            Assign to me
+            Pick up
           </GhostButton>
+        )}
+        {myId && control.canTakeOver && !closed && (
+          <GhostButton disabled={busy} onClick={() => void takeOver()}>
+            Take over
+          </GhostButton>
+        )}
+        {control.owner === "me" && !closed && (
+          <GhostButton
+            disabled={busy}
+            onClick={() =>
+              void act(() => api.supportUpdate(ticket.id, { assignTo: null }))
+            }
+          >
+            Return to queue
+          </GhostButton>
+        )}
+        {control.canReassign && !closed && agents.length > 0 && (
+          <select
+            aria-label="Hand to a colleague"
+            value=""
+            disabled={busy}
+            onChange={(e) => {
+              const to = e.target.value;
+              if (to) void act(() => api.supportUpdate(ticket.id, { assignTo: to }));
+            }}
+            className="h-9 rounded-xs border border-edge bg-panel px-2 text-body text-fg"
+          >
+            <option value="">Hand to…</option>
+            {agents
+              .filter((a) => a.id !== ticket.assignedTo?.id)
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+          </select>
         )}
         <select
           aria-label="Priority"
           value={ticket.priority}
-          disabled={busy}
+          disabled={busy || !control.canManage}
           onChange={(e) =>
             void act(() =>
               api.supportUpdate(ticket.id, {
@@ -314,7 +381,7 @@ function Thread({
             </option>
           ))}
         </select>
-        {ticket.status !== "resolved" && !closed && (
+        {ticket.status !== "resolved" && !closed && control.canManage && (
           <GhostButton
             disabled={busy}
             onClick={() =>
@@ -324,7 +391,7 @@ function Thread({
             Resolve
           </GhostButton>
         )}
-        {!closed && (
+        {!closed && control.canManage && (
           <GhostButton
             disabled={busy}
             onClick={() =>
@@ -335,6 +402,18 @@ function Thread({
           </GhostButton>
         )}
       </div>
+
+      {control.owner === "other" && !closed && (
+        <p className="border-b border-edge bg-warn/5 px-4 py-2 text-micro text-fg-muted">
+          {holder} is handling this conversation. Anything you write here is an
+          internal note to them — the customer will not see it.
+          {control.canTakeOver
+            ? control.ownerAway
+              ? " They have not answered for a while, so you can take over."
+              : " As a supervisor you can take over."
+            : ""}
+        </p>
+      )}
 
       <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
         {messages.map((m) => (
@@ -350,24 +429,25 @@ function Thread({
           onChange={(e) => setBody(e.target.value)}
           maxLength={2000}
           rows={3}
-          disabled={busy || (closed && !internal)}
-          aria-label={internal ? "Internal note" : "Reply"}
+          disabled={busy || (closed && !asNote)}
+          aria-label={asNote ? "Internal note" : "Reply"}
           placeholder={
-            internal
+            asNote
               ? "Note for the team — the customer never sees this"
               : closed
                 ? "Closed — only internal notes"
                 : "Reply to the customer"
           }
           className={`w-full rounded-xs border px-3 py-2 text-body text-fg ${
-            internal ? "border-warn bg-warn/5" : "border-edge bg-panel"
+            asNote ? "border-warn bg-warn/5" : "border-edge bg-panel"
           }`}
         />
         <div className="mt-2 flex items-center gap-3">
           <label className="flex items-center gap-2 text-micro text-fg-muted">
             <input
               type="checkbox"
-              checked={internal}
+              checked={asNote}
+              disabled={notesOnly}
               onChange={(e) => setInternal(e.target.checked)}
             />
             Internal note
@@ -375,10 +455,10 @@ function Thread({
           <Button
             className="ml-auto"
             loading={busy}
-            disabled={!body.trim() || (closed && !internal)}
+            disabled={!body.trim() || (closed && !asNote)}
             onClick={() => void send()}
           >
-            {internal ? "Add note" : "Send reply"}
+            {asNote ? "Add note" : "Send reply"}
           </Button>
         </div>
       </div>
@@ -552,7 +632,7 @@ function ContextRail({
         </Card>
       )}
 
-      {ticket.requesterType === "user" && order && (
+      {ticket.requesterType === "user" && order && ticket.control.canManage && (
         <Card tone="inset" className="p-3">
           <SectionLabel>Goodwill credit</SectionLabel>
           <p className="mt-1 text-micro text-fg-muted">

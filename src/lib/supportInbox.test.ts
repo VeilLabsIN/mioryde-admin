@@ -3,7 +3,9 @@ import { can } from "./permissions";
 import {
   INBOX_TABS,
   categoryLabel,
+  type TicketControl,
   isSupportTopic,
+  ownerText,
   slaText,
   systemText,
 } from "./supportInbox";
@@ -51,5 +53,45 @@ describe("support inbox", () => {
     expect(can("owner", "support.tickets")).toBe(true);
     expect(can("finance", "support.tickets")).toBe(false);
     expect(can("dev_admin", "support.tickets")).toBe(false);
+  });
+});
+
+describe("one conversation, one voice", () => {
+  const control = (over: Partial<TicketControl>): TicketControl => ({
+    owner: "none",
+    ownerAway: false,
+    canReply: true,
+    canManage: true,
+    canTakeOver: false,
+    canReassign: false,
+    ...over,
+  });
+  const ravi = { id: "r", name: "Ravi" };
+
+  it("says whose conversation it is", () => {
+    expect(ownerText({ assignedTo: null, control: control({}) })).toBe(
+      "Unassigned — replying picks it up",
+    );
+    expect(
+      ownerText({ assignedTo: ravi, control: control({ owner: "me" }) }),
+    ).toBe("You are handling this");
+    expect(
+      ownerText({
+        assignedTo: ravi,
+        control: control({ owner: "other", canReply: false }),
+      }),
+    ).toBe("Ravi is handling this");
+    expect(
+      ownerText({
+        assignedTo: ravi,
+        control: control({ owner: "other", ownerAway: true, canTakeOver: true }),
+      }),
+    ).toBe("Ravi is handling this, but has not answered for a while");
+  });
+
+  it("refreshes every open screen when a colleague replies, takes or resolves", () => {
+    expect(isSupportTopic("support.reply")).toBe(true);
+    expect(isSupportTopic("support.assigned")).toBe(true);
+    expect(isSupportTopic("support.updated")).toBe(true);
   });
 });
