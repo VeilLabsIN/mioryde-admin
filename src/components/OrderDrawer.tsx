@@ -6,6 +6,7 @@ import { DetailDrawer } from "@/components/DetailDrawer";
 import { RefundPanel } from "@/components/RefundPanel";
 import { Card, Fact, SectionLabel, SkeletonRows, StatusPill } from "@/components/ui";
 import { type OrderDetail, api, formatMoney } from "@/lib/api";
+import { describeParcel } from "@/lib/parcel";
 
 /**
  * One delivery, opened over the list it came from.
@@ -286,6 +287,10 @@ function RouteTab({ detail }: { detail: OrderDetail }) {
           <Fact label="Vehicle" value={route.vehicleName} />
           <Fact label="Zone" value={route.zoneName ?? "—"} />
           <Fact label="Goods" value={route.goodsCategory ?? "—"} />
+          <Fact
+            label="Declared load"
+            value={describeParcel(detail.parcel) ?? "Not declared"}
+          />
         </dl>
       </Card>
     </div>

@@ -20,6 +20,7 @@ import {
 } from "@/lib/api";
 import { ActionPanel } from "@/components/ActionPanel";
 import { formatElapsed } from "@/lib/elapsed";
+import { describeParcel } from "@/lib/parcel";
 import { noteOwnAction } from "@/lib/alertSound";
 
 /**
@@ -204,6 +205,13 @@ export default function OrderDetailPage() {
             </div>
             {order.route.goodsCategory && (
               <Field label="Goods" value={order.route.goodsCategory} />
+            )}
+            <Field
+              label="Declared load"
+              value={describeParcel(order.parcel) ?? "Not declared"}
+            />
+            {order.parcel?.note && (
+              <Field label="Customer's note" value={order.parcel.note} />
             )}
           </Card>
 

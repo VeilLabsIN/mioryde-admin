@@ -100,6 +100,14 @@ export type Capability =
    * this file exists to warn about.
    */
   | "platform.manage"
+  /**
+   * Working the support desk: reading conversations, replying, assigning,
+   * resolving, and crediting goodwill within the limit finance sets.
+   *
+   * Mirrors `@Roles('support', 'ops')` on `admin/support`. Not finance: they
+   * answer no customers, and they own the goodwill limit rather than the queue.
+   */
+  | "support.tickets"
   | "access.manage";
 
 const MATRIX: Record<AdminRole, readonly Capability[]> = {
@@ -128,8 +136,10 @@ const MATRIX: Record<AdminRole, readonly Capability[]> = {
     // admins can create an owner, and a role that can change roles can grant
     // itself one — there is no such thing as partial access to this.
     "access.manage",
+    "support.tickets",
   ],
   ops: [
+    "support.tickets",
     "orders.view",
     "payments.view",
     "notifications.manage",
@@ -173,7 +183,7 @@ const MATRIX: Record<AdminRole, readonly Capability[]> = {
     "pricing.edit",
     "metrics.view",
   ],
-  support: ["orders.view", "customers.view", "payments.view"],
+  support: ["orders.view", "customers.view", "payments.view", "support.tickets"],
   /*
    * Technical administration, and nothing else.
    *
@@ -216,6 +226,9 @@ export function canAny(
  */
 export const ROUTE_CAPABILITIES: ReadonlyArray<readonly [string, Capability]> = [
   ["/orders", "orders.view"],
+  // The support desk. Listed so an unlisted path does not default to open —
+  // see the notes on /notifications below.
+  ["/inbox", "support.tickets"],
   // Same right as reading deliveries, but listed *after* /orders on purpose:
   // this list decides where a role lands after signing in, and the live board
   // starts empty. Support arriving at "Waiting for activity" instead of their

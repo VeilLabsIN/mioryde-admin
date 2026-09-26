@@ -18,6 +18,7 @@ import {
 } from "@/lib/api";
 import { type Column, DataTable } from "@/components/DataTable";
 import { RateCardEditor } from "@/components/RateCardEditor";
+import { VehicleClasses } from "@/components/VehicleClasses";
 import { useCan } from "@/components/AdminProvider";
 
 
@@ -159,6 +160,9 @@ export default function PricingPage() {
     void load();
   }, [load]);
 
+  // Bumped after a vehicle class is changed, to re-read the list.
+  const [vehiclesVersion, setVehiclesVersion] = useState(0);
+
   // Only for the people who can publish: an operator who is here to read a
   // fare should not pay for two queries that only a form uses.
   useEffect(() => {
@@ -177,7 +181,7 @@ export default function PricingPage() {
     return () => {
       cancelled = true;
     };
-  }, [canEdit]);
+  }, [canEdit, vehiclesVersion]);
 
   // Grouped by zone: rates are set per zone, so that is the unit an operator
   // reasons about, not a flat list.
@@ -241,6 +245,14 @@ export default function PricingPage() {
           the client before taking real bookings.
         </p>
       </Card>
+
+      {canEdit && vehicles.length > 0 && (
+        <VehicleClasses
+          vehicles={vehicles}
+          liveCards={cards ?? []}
+          onChanged={() => setVehiclesVersion((n) => n + 1)}
+        />
+      )}
 
       {error ? (
         <EmptyState title="Could not load rate cards" hint={error} />

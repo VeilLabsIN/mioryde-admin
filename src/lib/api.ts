@@ -14,6 +14,13 @@ export interface AdminIdentity {
 }
 
 import { readPanelLocale } from "@/components/LanguagePreference";
+import type {
+  AgentTicket,
+  AgentTicketDetail,
+  InboxCounts,
+  InboxView,
+  TicketPriority,
+} from "@/lib/supportInbox";
 
 export class ApiError extends Error {
   constructor(
@@ -447,6 +454,59 @@ export const api = {
   vehicleTypes: () =>
     request<{ results: VehicleType[] }>("/admin/vehicle-types"),
 
+  // ── Support desk ─────────────────────────────────────────────────────────
+  supportInbox: (view: InboxView, q?: string) =>
+    request<{ results: AgentTicket[]; counts: InboxCounts }>(
+      `/admin/support/tickets?${new URLSearchParams({
+        view,
+        ...(q ? { q } : {}),
+      }).toString()}`,
+    ),
+  supportTicket: (id: string) =>
+    request<AgentTicketDetail>(`/admin/support/tickets/${id}`),
+  supportReply: (id: string, body: string, internal: boolean) =>
+    request<AgentTicketDetail>(`/admin/support/tickets/${id}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ body, internal }),
+    }),
+  supportUpdate: (
+    id: string,
+    change: {
+      assignTo?: string | null;
+      priority?: TicketPriority;
+      status?: "resolved" | "closed" | "awaiting_agent";
+    },
+  ) =>
+    request<AgentTicketDetail>(`/admin/support/tickets/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(change),
+    }),
+  supportGoodwill: (id: string, amountPaise: number, note?: string) =>
+    request<AgentTicketDetail>(`/admin/support/tickets/${id}/goodwill`, {
+      method: "POST",
+      body: JSON.stringify({ amountPaise, ...(note ? { note } : {}) }),
+    }),
+  supportAttachment: (id: string, messageId: string) =>
+    request<{ url: string }>(
+      `/admin/support/tickets/${id}/messages/${messageId}/attachment`,
+    ),
+
+  /**
+   * Updates a vehicle class. Omitted optional fields keep their stored value,
+   * so switching one on does not also reset its label or limit.
+   */
+  updateVehicleType: (body: {
+    code: string;
+    name: string;
+    isActive?: boolean;
+    maxWeightKg?: number;
+    capacityLabel?: string;
+  }) =>
+    request<{ id: string; created: boolean }>("/admin/vehicle-types", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   /**
    * Publishes a new rate card for a zone and vehicle.
    *
@@ -863,6 +923,22 @@ export const api = {
   pendingVehicles: (page = 0) =>
     request<Paged<PendingVehicle>>(`/admin/vehicles/pending?page=${page}`),
 
+  /** What Parivahan said about a partner's licence and vehicles. */
+  recordChecks: (riderId: string) =>
+    request<RecordChecks>(`/admin/kyc/record-checks/${riderId}`),
+
+  /** Looks the licence up again. Capped per partner per day by the server. */
+  rerunLicenceCheck: (riderId: string) =>
+    request<RecordChecks>(`/admin/kyc/record-checks/${riderId}/licence`, {
+      method: "POST",
+    }),
+
+  rerunVehicleCheck: (riderId: string, vehicleId: string) =>
+    request<RecordChecks>(
+      `/admin/kyc/record-checks/${riderId}/vehicles/${vehicleId}`,
+      { method: "POST" },
+    ),
+
   reviewVehicle: (
     id: string,
     riderId: string,
@@ -1244,6 +1320,32 @@ export interface PendingBankAccount {
   changeCount: number;
 }
 
+/** One lookup against Parivahan, cut down to the allow-listed facts. */
+export interface RecordCheck {
+  id: string;
+  kind: "dl" | "rc";
+  vehicleId: string | null;
+  provider: string;
+  /** The number looked up, masked: `****1234`. */
+  reference: string;
+  status: "pending" | "found" | "not_found" | "error";
+  /** Name on the record against the name on the account, 0-100. */
+  nameScore: number | null;
+  facts: Record<string, unknown>;
+  flags: string[];
+  requestedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface RecordChecks {
+  /** False while PARIVAHAN_PROVIDER is off. */
+  enabled: boolean;
+  provider: string;
+  threshold: number;
+  licence: RecordCheck | null;
+  vehicles: RecordCheck[];
+}
+
 export interface PendingVehicle {
   vehicleId: string;
   registrationNumber: string;
@@ -1316,6 +1418,14 @@ export interface VehicleType {
   code: string;
   name: string;
   capacityLabel: string;
+  /** The load limit orders are refused above. Null when not set yet. */
+  maxWeightKg: number | null;
+  sortOrder: number;
+  /**
+   * Whether customers and partners can see it. A new class is created off and
+   * priced before it is switched on, so this list includes inactive ones.
+   */
+  isActive: boolean;
 }
 
 /**
@@ -1706,6 +1816,18 @@ export interface OrderDetail {
     vehicleName: string;
     goodsCategory: string | null;
   };
+
+  /**
+   * What the customer declared at booking (migration 0056). Declared, never
+   * weighed. Null for orders placed before declarations existed — render as
+   * "not declared", never as zero.
+   */
+  parcel: {
+    weightKg: number;
+    count: number;
+    declaredValue: { minor: number; currency: string } | null;
+    note: string | null;
+  } | null;
 
   customer: { id: string; name: string; phone: string };
   /** The recipient. A third party, so masked on the same terms. */

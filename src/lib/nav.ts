@@ -70,6 +70,9 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       // next", the map is for geography "who is near this pickup".
       { href: "/map", label: "Map", mark: "MP", icon: "map", needs: ["orders.view"] },
       { href: "/orders", label: "Deliveries", mark: "DL", icon: "deliveries", needs: ["orders.view"] },
+      // Customers and partners asking for help, answered live. Named "Inbox"
+      // because the footer's "Support" is the staff troubleshooting page.
+      { href: "/inbox", label: "Support inbox", mark: "SI", icon: "help", needs: ["support.tickets"] },
     ],
   },
   {

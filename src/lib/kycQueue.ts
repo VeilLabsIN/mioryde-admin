@@ -45,6 +45,8 @@ export interface ReviewRow {
    */
   kind: string;
   label: string;
+  /** Whose document. Used to fetch the Parivahan record for a licence. */
+  riderId?: string;
   riderName: string;
   /** The line under the name: when it arrived, or who signed it first. */
   meta: string;
@@ -70,6 +72,7 @@ export function flattenPartnerRows(
       documentId: document.id,
       kind: document.kind,
       label: documentLabel(document.label, document.side),
+      riderId: partner.riderId,
       riderName: partner.riderName,
       meta: `Uploaded ${describeAge(document.uploadedAt)}`,
       expiryRequired: document.expiryRequired,
@@ -87,6 +90,7 @@ export function flattenCountersignRows(
     documentId: item.id,
     kind: item.kind,
     label: documentLabel(item.label, item.side),
+    riderId: item.riderId,
     riderName: item.riderName,
     meta: `First approved by ${item.firstReviewerName ?? "a colleague"} ${describeAge(item.firstReviewedAt)}`,
     expiryRequired: item.expiryRequired,

@@ -16,6 +16,8 @@ import { PhotoContactSheet } from "@/components/PhotoContactSheet";
 import { SelectionBar } from "@/components/SelectionBar";
 import { isBulkApprovable } from "@/lib/bulkReview";
 import { DocumentViewer } from "@/components/DocumentViewer";
+import { RegistryRecord } from "@/components/RegistryRecord";
+import { expiryDisagreement } from "@/lib/registryRecord";
 import {
   ApiError,
   type CountersignItem,
@@ -610,6 +612,7 @@ function ReviewQueue({
               );
             })}
           </ul>
+          <RegistryRecord riderId={partner.riderId} />
         </Card>
       ))}
     </div>
@@ -797,6 +800,18 @@ function DocumentReview({
   onNotice: (message: string) => void;
 }) {
   const { documentId, label, riderName, expiryRequired, mode } = row;
+
+  /**
+   * The registry's licence record, for one comparison only: after the reviewer
+   * has typed the expiry from the photograph, a registry date that disagrees
+   * is pointed out. Never shown before — see `expiryDisagreement`.
+   */
+  const isLicence = row.kind === "driving_licence" && Boolean(row.riderId);
+  const registry = useAsync(
+    () => (row.riderId ? api.recordChecks(row.riderId) : Promise.resolve(null)),
+    [row.riderId ?? "", isLicence],
+    { enabled: isLicence && expiryRequired },
+  );
 
   /**
    * Whether the preview has actually appeared on screen.
@@ -1127,6 +1142,19 @@ function DocumentReview({
             onChange={(event) => setExpiry(event.target.value)}
             className="border-edge bg-bg mt-1 rounded border px-3 py-2 text-sm"
           />
+          {(() => {
+            const registryDate = expiryDisagreement(
+              expiry,
+              registry.data?.licence ?? null,
+            );
+            return registryDate ? (
+              <p className="text-warn mt-1 text-xs">
+                Parivahan has this licence valid until {registryDate}. Check
+                the photograph again — if it is right, the registry may be
+                stale.
+              </p>
+            ) : null;
+          })()}
           <p className="text-fg-faint mt-1 text-xs">
             {/* Says why it is empty, so nobody reports it as a bug or goes
                 looking for the partner's answer to copy. */}
@@ -1271,6 +1299,7 @@ function VehicleQueue({
               </GhostButton>
             </div>
           </div>
+          <RegistryRecord riderId={item.riderId} vehicleId={item.vehicleId} />
         </Card>
       ))}
     </div>

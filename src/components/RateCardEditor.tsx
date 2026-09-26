@@ -491,6 +491,8 @@ export function RateCardEditor({
                 <option key={v.id} value={v.id}>
                   {v.name}
                   {v.capacityLabel ? ` · ${v.capacityLabel}` : ""}
+                  {/* Priced before it is switched on — see VehicleClasses. */}
+                  {v.isActive === false ? " · off" : ""}
                 </option>
               ))}
             </select>

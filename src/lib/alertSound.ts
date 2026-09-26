@@ -234,6 +234,14 @@ export const TOPIC_ALERTS: Record<string, AlertKind> = {
   // `withinOwnAction()`, and that is right here — an operator retrying
   // something is not a reason to go quiet about the retry failing.
   "outbox.dead_lettered": "urgent",
+  // Somebody asked for help and is waiting on a reply with a promised time.
+  // The same voice as a new delivery: work arrived. A safety ticket is raised
+  // to urgent by the inbox itself, from the payload's priority.
+  "support.ticket.created": "placed",
+  // A complaint taken to the grievance officer. Work arriving, not an alarm:
+  // the urgent voice belongs to one topic so that it keeps meaning something.
+  // A safety report is the exception, played by the inbox from its priority.
+  "support.escalated": "placed",
   // Still no entry for a failed ledger check. That one is not published to
   // the admin stream, and a topic name wired here on the guess that it might
   // be one day is a sound that can never fire and a test that can never fail.
